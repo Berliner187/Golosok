@@ -6,6 +6,14 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		C4F2FF3730165E28006F9170 /* HotKey in Frameworks */ = {isa = PBXBuildFile; productRef = C4F2FF3630165E28006F9170 /* HotKey */; };
+		C4F2FF393016646A006F9170 /* OverlayPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = C4F2FF383016646A006F9170 /* OverlayPanel.swift */; };
+		C4F2FF3B30166B56006F9170 /* PermissionManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = C4F2FF3A30166B56006F9170 /* PermissionManager.swift */; };
+		C4F2FF3D30166B6D006F9170 /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C4F2FF3C30166B6D006F9170 /* OnboardingView.swift */; };
+		C4F2FF3F30166DA8006F9170 /* README.md in Resources */ = {isa = PBXBuildFile; fileRef = C4F2FF3E30166DA1006F9170 /* README.md */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXContainerItemProxy section */
 		C4F2FF0830165038006F9170 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -27,6 +35,10 @@
 		C4F2FEF930165037006F9170 /* Golosok.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Golosok.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		C4F2FF0730165038006F9170 /* GolosokTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = GolosokTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		C4F2FF1130165038006F9170 /* GolosokUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = GolosokUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		C4F2FF383016646A006F9170 /* OverlayPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OverlayPanel.swift; sourceTree = "<group>"; };
+		C4F2FF3A30166B56006F9170 /* PermissionManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PermissionManager.swift; sourceTree = "<group>"; };
+		C4F2FF3C30166B6D006F9170 /* OnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingView.swift; sourceTree = "<group>"; };
+		C4F2FF3E30166DA1006F9170 /* README.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = README.md; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -52,6 +64,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				C4F2FF3730165E28006F9170 /* HotKey in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -75,9 +88,14 @@
 		C4F2FEF030165037006F9170 = {
 			isa = PBXGroup;
 			children = (
+				C4F2FF3E30166DA1006F9170 /* README.md */,
+				C4F2FF383016646A006F9170 /* OverlayPanel.swift */,
+				C4F2FF3A30166B56006F9170 /* PermissionManager.swift */,
+				C4F2FF3C30166B6D006F9170 /* OnboardingView.swift */,
 				C4F2FEFB30165037006F9170 /* Golosok */,
 				C4F2FF0A30165038006F9170 /* GolosokTests */,
 				C4F2FF1430165038006F9170 /* GolosokUITests */,
+				C4F2FF3530165E28006F9170 /* Frameworks */,
 				C4F2FEFA30165037006F9170 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -90,6 +108,13 @@
 				C4F2FF1130165038006F9170 /* GolosokUITests.xctest */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		C4F2FF3530165E28006F9170 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			name = Frameworks;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -112,6 +137,7 @@
 			);
 			name = Golosok;
 			packageProductDependencies = (
+				C4F2FF3630165E28006F9170 /* HotKey */,
 			);
 			productName = Golosok;
 			productReference = C4F2FEF930165037006F9170 /* Golosok.app */;
@@ -195,6 +221,9 @@
 			);
 			mainGroup = C4F2FEF030165037006F9170;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				C4F2FF3430165D42006F9170 /* XCRemoteSwiftPackageReference "HotKey" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = C4F2FEFA30165037006F9170 /* Products */;
 			projectDirPath = "";
@@ -212,6 +241,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				C4F2FF3F30166DA8006F9170 /* README.md in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -236,6 +266,9 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				C4F2FF393016646A006F9170 /* OverlayPanel.swift in Sources */,
+				C4F2FF3B30166B56006F9170 /* PermissionManager.swift in Sources */,
+				C4F2FF3D30166B6D006F9170 /* OnboardingView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -321,6 +354,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Голосок просит микрофон для транскрипции";
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
 				MACOSX_DEPLOYMENT_TARGET = 15.5;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
@@ -328,6 +362,7 @@
 				ONLY_ACTIVE_ARCH = YES;
 				SDKROOT = macosx;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_OBJC_BRIDGING_HEADER = "Golosok/MonoSTT-Bridging-Header.h";
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 			};
 			name = Debug;
@@ -378,12 +413,14 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Голосок просит микрофон для транскрипции";
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
 				MACOSX_DEPLOYMENT_TARGET = 15.5;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				SDKROOT = macosx;
 				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OBJC_BRIDGING_HEADER = "Golosok/MonoSTT-Bridging-Header.h";
 			};
 			name = Release;
 		};
@@ -392,13 +429,15 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				CODE_SIGN_ENTITLEMENTS = Golosok/Golosok.entitlements;
+				CODE_SIGN_ENTITLEMENTS = "";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_LSUIElement = NO;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Голосок просит микрофон для транскрипции";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
@@ -408,6 +447,7 @@
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
 				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_OBJC_BRIDGING_HEADER = "Golosok/MonoSTT-Bridging-Header.h";
 				SWIFT_VERSION = 5.0;
 			};
 			name = Debug;
@@ -417,13 +457,15 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				CODE_SIGN_ENTITLEMENTS = Golosok/Golosok.entitlements;
+				CODE_SIGN_ENTITLEMENTS = "";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_LSUIElement = NO;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Голосок просит микрофон для транскрипции";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
@@ -433,6 +475,7 @@
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
 				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_OBJC_BRIDGING_HEADER = "Golosok/MonoSTT-Bridging-Header.h";
 				SWIFT_VERSION = 5.0;
 			};
 			name = Release;
@@ -541,6 +584,25 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		C4F2FF3430165D42006F9170 /* XCRemoteSwiftPackageReference "HotKey" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/soffes/HotKey";
+			requirement = {
+				branch = main;
+				kind = branch;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		C4F2FF3630165E28006F9170 /* HotKey */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = C4F2FF3430165D42006F9170 /* XCRemoteSwiftPackageReference "HotKey" */;
+			productName = HotKey;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = C4F2FEF130165037006F9170 /* Project object */;
 }
