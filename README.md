@@ -79,10 +79,3 @@ curl -L -o Golosok/gigaam.gguf https://huggingface.co/memoravox/gigaam-v3-e2e-rn
 code
 Code
 ---
-
-### Итог: Как выкатывать обновления?
-
-1. Пишешь код в Xcode -> делаешь `git add .` -> `git commit` -> `git push` (заливается только легкий код за 2 секунды).
-2. Когда готов выкатить новую версию приложения -> нажимаешь в Xcode `Product -> Archive` -> делаешь `Golosok.dmg`.
-3. Заходишь на Гитхабе во вкладку **Releases** -> создаешь новый релиз `v1.0.0` -> **перетаскиваешь туда `Golosok.dmg` мышкой**.
-
