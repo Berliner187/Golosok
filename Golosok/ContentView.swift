@@ -9,7 +9,8 @@ struct ContentView: View {
     @ObservedObject var audioCapture = AudioCapture.shared
     @ObservedObject var permissions = PermissionManager.shared
     
-    @State private var currentTab: MainTab = .dashboard
+    // История по умолчанию
+    @State private var currentTab: MainTab = .history
     @State private var selectedItemId: UUID?
     @State private var showOnboarding = false
     
@@ -28,7 +29,7 @@ struct ContentView: View {
     
     var body: some View {
         Group {
-            if !permissions.isAllGranted || showOnboarding {
+            if !permissions.canContinue || !permissions.hasCompletedOnboarding {
                 OnboardingView(isPresented: $showOnboarding)
             } else {
                 mainInterface
@@ -36,25 +37,25 @@ struct ContentView: View {
         }
         .onAppear {
             permissions.checkPermissions()
-            if !permissions.isAllGranted { showOnboarding = true }
         }
     }
     
     var mainInterface: some View {
         HStack(spacing: 0) {
-            // ЛЕВАЯ ПАНЕЛЬ
+            // ЛЕВАЯ ПАНЕЛЬ: Сайдбар
             VStack(alignment: .leading, spacing: 16) {
                 // ШАПКА
                 HStack(spacing: 8) {
-                    Image(systemName: "waveform.circle.fill")
-                        .font(.system(size: 22))
-                        .foregroundColor(.uiInk)
+                    Image("AppLogo")
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .frame(width: 22, height: 22)
                     
                     VStack(alignment: .leading, spacing: -2) {
                         Text("Голосок")
                             .font(UIStyleFont.display(size: 16, weight: .bold))
                             .foregroundColor(.uiInk)
-                        Text("v1.1.0")
+                        Text("v1.2.0")
                             .font(UIStyleFont.body(size: 10, weight: .medium))
                             .foregroundColor(.uiMidGray)
                     }
@@ -171,7 +172,7 @@ struct ContentView: View {
                                         }
                                     }
                                     
-                                    // КРАСИВЫЕ ЦВЕТНЫЕ БЕЙДЖИ-ТАБЛЕТКИ ИЗ СКРИНШОТА
+                                    // ТАБЛЕТКИ МЕТРИК
                                     HStack(spacing: 8) {
                                         MetadataPill(icon: "waveform", text: selected.duration, color: Color.blue)
                                         MetadataPill(icon: "text.alignleft", text: "\(selected.text.count) зн", color: Color(hex: "#10B981"))
@@ -196,7 +197,7 @@ struct ContentView: View {
                                     .foregroundColor(.uiInk)
                                     .lineSpacing(6)
                                     .frame(maxWidth: .infinity, alignment: .leading)
-                                    .textSelection(.enabled) // ВЫДЕЛЕНИЕ МЫШЬЮ
+                                    .textSelection(.enabled)
                             }
                         }
                     }
@@ -239,9 +240,8 @@ struct ContentView: View {
     }
 }
 
-// MARK: - Вспомогательные компоненты (ВНЕ ContentView)
+// MARK: - ВСПОМОГАТЕЛЬНЫЕ КОМПОНЕНТЫ
 
-// Умная кнопка копирования
 struct CopyFeedbackButton: View {
     let textToCopy: String
     @State private var isCopied = false
@@ -275,7 +275,6 @@ struct CopyFeedbackButton: View {
     }
 }
 
-// Цветная таблетка
 struct MetadataPill: View {
     let icon: String
     let text: String
@@ -296,7 +295,6 @@ struct MetadataPill: View {
     }
 }
 
-// Кнопка сайдбара
 struct SidebarTabButton: View {
     let title: String
     let icon: String
@@ -323,7 +321,6 @@ struct SidebarTabButton: View {
     }
 }
 
-// Карточка истории
 struct HistoryCard: View {
     let item: TranscriptionItem
     let isSelected: Bool

@@ -4,7 +4,10 @@ struct OnboardingView: View {
     @ObservedObject var permissions = PermissionManager.shared
     @Binding var isPresented: Bool
     
-    // Таймер, который проверяет тумблеры в настройках macOS каждые 0.5 сек
+    var canContinue: Bool {
+        return permissions.isMicGranted
+    }
+    
     let timer = Timer.publish(every: 0.5, on: .main, in: .common).autoconnect()
     
     var body: some View {
@@ -12,33 +15,36 @@ struct OnboardingView: View {
             Color.uiCanvas.ignoresSafeArea()
             
             VStack(spacing: 24) {
-                // Заголовок
                 VStack(spacing: 8) {
                     Text("Настройка Голоска")
                         .font(UIStyleFont.display(size: 22, weight: .semibold))
                         .foregroundColor(.uiInk)
                     
-                    Text("Для работы фоновой диктовки и автоматической вставки необходимо выдать два системных разрешения.")
+                    Text("Для работы распознавания требуется доступ к микрофону. Авто-вставка Cmd+V настраивается по желанию.")
                         .font(UIStyleFont.body(size: 13, weight: .regular))
                         .foregroundColor(.uiMidGray)
                         .multilineTextAlignment(.center)
                 }
-                .frame(maxWidth: 400)
+                .frame(maxWidth: 420)
                 
-                // Карточка с шагами
                 UICard {
                     VStack(spacing: 20) {
-                        // ШАГ 1: Микрофон
+                        // Микрофон
                         HStack(spacing: 16) {
                             Circle()
-                                .fill(permissions.isMicGranted ? Color(hex: "#10B981") : Color.uiMidGray.opacity(0.3))
+                                .fill(permissions.isMicGranted ? Color(hex: "#10B981") : Color.uiEmber)
                                 .frame(width: 10, height: 10)
                             
                             VStack(alignment: .leading, spacing: 2) {
-                                Text("Доступ к микрофону")
-                                    .font(UIStyleFont.display(size: 14, weight: .medium))
-                                    .foregroundColor(.uiInk)
-                                Text("Требуется для записи и обработки голоса")
+                                HStack(spacing: 6) {
+                                    Text("Доступ к микрофону")
+                                        .font(UIStyleFont.display(size: 14, weight: .medium))
+                                        .foregroundColor(.uiInk)
+                                    Text("Обязательно")
+                                        .font(UIStyleFont.body(size: 10, weight: .bold))
+                                        .foregroundColor(.uiEmber)
+                                }
+                                Text("Требуется для записи и обработки речи")
                                     .font(UIStyleFont.body(size: 12, weight: .regular))
                                     .foregroundColor(.uiMidGray)
                             }
@@ -56,17 +62,22 @@ struct OnboardingView: View {
                         
                         Divider().background(Color.uiHairline)
                         
-                        // ШАГ 2: Вставка (Accessibility)
+                        // Автоматическая вставка
                         HStack(spacing: 16) {
                             Circle()
-                                .fill(permissions.isAccessibilityGranted ? Color(hex: "#10B981") : Color.uiMidGray.opacity(0.3))
+                                .fill(permissions.isAccessibilityGranted ? Color(hex: "#10B981") : Color.uiMidGray.opacity(0.4))
                                 .frame(width: 10, height: 10)
                             
                             VStack(alignment: .leading, spacing: 2) {
-                                Text("Универсальный доступ")
-                                    .font(UIStyleFont.display(size: 14, weight: .medium))
-                                    .foregroundColor(.uiInk)
-                                Text("Требуется для эмуляции нажатия Cmd + V")
+                                HStack(spacing: 6) {
+                                    Text("Автоматическая вставка")
+                                        .font(UIStyleFont.display(size: 14, weight: .medium))
+                                        .foregroundColor(.uiInk)
+                                    Text("Опционально")
+                                        .font(UIStyleFont.body(size: 10, weight: .regular))
+                                        .foregroundColor(.uiMidGray)
+                                }
+                                Text("Эмуляция Cmd+V для печати в место курсора")
                                     .font(UIStyleFont.body(size: 12, weight: .regular))
                                     .foregroundColor(.uiMidGray)
                             }
@@ -85,14 +96,14 @@ struct OnboardingView: View {
                 }
                 .frame(maxWidth: 480)
                 
-                // Кнопка продолжить
-                UIPrimaryButton(title: "Начать использование") {
-                    if permissions.isAllGranted {
+                UIPrimaryButton(title: canContinue ? "Начать использование" : "Сначала включите микрофон") {
+                    if canContinue {
+                        permissions.completeOnboarding()
                         isPresented = false
                     }
                 }
-                .disabled(!permissions.isAllGranted)
-                .opacity(permissions.isAllGranted ? 1.0 : 0.4)
+                .disabled(!canContinue)
+                .opacity(canContinue ? 1.0 : 0.4)
             }
             .padding(40)
         }

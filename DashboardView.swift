@@ -51,19 +51,27 @@ struct DashboardCalculator {
         let totalWords = history.reduce(0) { $0 + $1.text.components(separatedBy: .whitespacesAndNewlines).filter { !$0.isEmpty }.count }
         let calculatedWpm = totalMins > 0 ? Int(Double(totalWords) / totalMins) : 160
         
-        // ДЕТЕРМИНИРОВАННЫЙ РАСЧЕТ ГРАФИКА ПО ДАТАМ (без рандома!)
+        // ФИЛЬТРАЦИЯ СТРОГО ПО ТЕКУЩЕЙ НЕДЕЛЕ
         var dayCounts = Array(repeating: 0, count: 7)
         let formatter = DateFormatter()
         formatter.dateFormat = "dd.MM.yyyy, HH:mm"
-        let calendar = Calendar.current
         
-        for item in history {
-            if let date = formatter.date(from: item.date) {
-                let weekday = calendar.component(.weekday, from: date)
-                let idx = (weekday + 5) % 7 // Переводим 1=Вс..7=Сб в Пн=0..Вс=6
-                dayCounts[idx] += 1
-            } else {
-                dayCounts[0] += 1
+        var calendar = Calendar.current
+        calendar.firstWeekday = 2 // Устанавливаем Понедельник как 1-й день недели
+        
+        let now = Date()
+        
+        // Берем временной интервал ТЕКУЩЕЙ недели (с ПН 00:00 до ВС 23:59)
+        if let currentWeekInterval = calendar.dateInterval(of: .weekOfYear, for: now) {
+            for item in history {
+                if let date = formatter.date(from: item.date) {
+                    // Учитываем запись ТОЛЬКО если она была сделана на ЭТОЙ неделе!
+                    if currentWeekInterval.contains(date) {
+                        let weekday = calendar.component(.weekday, from: date)
+                        let idx = (weekday + 5) % 7 // Переводим 2(Пн)...7(Сб), 1(Вс) в индексы 0...6
+                        dayCounts[idx] += 1
+                    }
+                }
             }
         }
         

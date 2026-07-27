@@ -7,7 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		C4F2FF3730165E28006F9170 /* HotKey in Frameworks */ = {isa = PBXBuildFile; productRef = C4F2FF3630165E28006F9170 /* HotKey */; };
+		C457EFF53017853C007F26A1 /* NativeHotKeyManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = C457EFF43017853C007F26A1 /* NativeHotKeyManager.swift */; };
 		C4F2FF393016646A006F9170 /* OverlayPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = C4F2FF383016646A006F9170 /* OverlayPanel.swift */; };
 		C4F2FF3B30166B56006F9170 /* PermissionManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = C4F2FF3A30166B56006F9170 /* PermissionManager.swift */; };
 		C4F2FF3D30166B6D006F9170 /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C4F2FF3C30166B6D006F9170 /* OnboardingView.swift */; };
@@ -33,6 +33,7 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		C457EFF43017853C007F26A1 /* NativeHotKeyManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeHotKeyManager.swift; sourceTree = "<group>"; };
 		C4F2FEF930165037006F9170 /* Golosok.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Golosok.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		C4F2FF0730165038006F9170 /* GolosokTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = GolosokTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		C4F2FF1130165038006F9170 /* GolosokUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = GolosokUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -66,7 +67,6 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				C4F2FF3730165E28006F9170 /* HotKey in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -90,6 +90,7 @@
 		C4F2FEF030165037006F9170 = {
 			isa = PBXGroup;
 			children = (
+				C457EFF43017853C007F26A1 /* NativeHotKeyManager.swift */,
 				C4F2FF3E30166DA1006F9170 /* README.md */,
 				C4F2FF4030168DD0006F9170 /* DashboardView.swift */,
 				C4F2FF383016646A006F9170 /* OverlayPanel.swift */,
@@ -140,7 +141,6 @@
 			);
 			name = Golosok;
 			packageProductDependencies = (
-				C4F2FF3630165E28006F9170 /* HotKey */,
 			);
 			productName = Golosok;
 			productReference = C4F2FEF930165037006F9170 /* Golosok.app */;
@@ -225,7 +225,6 @@
 			mainGroup = C4F2FEF030165037006F9170;
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
-				C4F2FF3430165D42006F9170 /* XCRemoteSwiftPackageReference "HotKey" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = C4F2FEFA30165037006F9170 /* Products */;
@@ -272,6 +271,7 @@
 				C4F2FF393016646A006F9170 /* OverlayPanel.swift in Sources */,
 				C4F2FF4130168DD0006F9170 /* DashboardView.swift in Sources */,
 				C4F2FF3B30166B56006F9170 /* PermissionManager.swift in Sources */,
+				C457EFF53017853C007F26A1 /* NativeHotKeyManager.swift in Sources */,
 				C4F2FF3D30166B6D006F9170 /* OnboardingView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -446,7 +446,8 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 1.0;
+				MACOSX_DEPLOYMENT_TARGET = 13.5;
+				MARKETING_VERSION = 1.2;
 				PRODUCT_BUNDLE_IDENTIFIER = "kozak-developer.Golosok";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
@@ -474,7 +475,8 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 1.0;
+				MACOSX_DEPLOYMENT_TARGET = 13.5;
+				MARKETING_VERSION = 1.2;
 				PRODUCT_BUNDLE_IDENTIFIER = "kozak-developer.Golosok";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
@@ -588,25 +590,6 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
-
-/* Begin XCRemoteSwiftPackageReference section */
-		C4F2FF3430165D42006F9170 /* XCRemoteSwiftPackageReference "HotKey" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/soffes/HotKey";
-			requirement = {
-				branch = main;
-				kind = branch;
-			};
-		};
-/* End XCRemoteSwiftPackageReference section */
-
-/* Begin XCSwiftPackageProductDependency section */
-		C4F2FF3630165E28006F9170 /* HotKey */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = C4F2FF3430165D42006F9170 /* XCRemoteSwiftPackageReference "HotKey" */;
-			productName = HotKey;
-		};
-/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = C4F2FEF130165037006F9170 /* Project object */;
 }

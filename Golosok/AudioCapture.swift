@@ -9,7 +9,22 @@ struct TranscriptionItem: Identifiable, Codable {
     let duration: String
 }
 
+// MARK: - Системные звуки macOS
+struct SoundEffect {
+    static func playStart() {
+        NSSound(named: "Pop")?.play()
+    }
+    static func playSuccess() {
+        NSSound(named: "Tink")?.play()
+    }
+    static func playCancel() {
+        NSSound(named: "Basso")?.play()
+    }
+}
+
 class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
+    private var escMonitor: Any?
+
     static let shared = AudioCapture()
     
     private var audioRecorder: AVAudioRecorder?
@@ -41,12 +56,15 @@ class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
     
     // ОТМЕНА ЗАПИСИ ПО ESC
     func cancelRecording() {
+        removeEscMonitor()
         guard isRecording else { return }
+        
         timer?.invalidate()
         timer = nil
-        
         audioRecorder?.stop()
         audioRecorder = nil
+        
+        SoundEffect.playCancel()
         
         DispatchQueue.main.async {
             self.isRecording = false
@@ -54,9 +72,25 @@ class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
             self.transcribedText = "Запись отменена"
             OverlayPanelManager.shared.hideOverlay()
         }
+
     }
     
     func startRecording() {
+        startTime = Date()
+        SoundEffect.playStart()
+        
+        escMonitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            if event.keyCode == 53 {
+                self?.cancelRecording()
+            }
+        }
+        
+        DispatchQueue.main.async {
+            self.isRecording = true
+            self.transcribedText = "Запись идет..."
+            OverlayPanelManager.shared.showOverlay()
+        }
+        
         switch AVCaptureDevice.authorizationStatus(for: .audio) {
         case .notDetermined:
             AVCaptureDevice.requestAccess(for: .audio) { granted in
@@ -113,7 +147,15 @@ class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
         }
     }
     
+    private func removeEscMonitor() {
+         if let monitor = escMonitor {
+             NSEvent.removeMonitor(monitor)
+             escMonitor = nil
+         }
+     }
+    
     func stopRecording() {
+        removeEscMonitor()
         timer?.invalidate()
         timer = nil
         
@@ -239,9 +281,10 @@ class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
     
     // Эмуляция Cmd+V с запросом прав
     private func pasteToActiveApp() {
-        // Проверяем/запрашиваем права Универсального доступа (Accessibility)
         let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true]
         _ = AXIsProcessTrustedWithOptions(options as CFDictionary)
+        
+        SoundEffect.playSuccess() // 🔊 ЗВУК УСПЕШНОЙ ВСТАВКИ
         
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
             let source = CGEventSource(stateID: .combinedSessionState)
@@ -255,7 +298,7 @@ class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
             keyUp.post(tap: .cghidEventTap)
         }
     }
-    
+
     func deleteItem(at index: Int) {
         history.remove(at: index)
     }
