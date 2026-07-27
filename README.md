@@ -69,7 +69,7 @@
 
 1. Клонируйте репозиторий:
    ```bash
-   git clone https://github.com/ВАШ_НИК/Golosok.git
+   git clone https://github.com/Berliner187/Golosok.git
    cd Golosok
 Скачайте веса модели gigaam.gguf прямо в папку проекта:
 code
