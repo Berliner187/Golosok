@@ -26,7 +26,7 @@ class OverlayPanelManager {
                 let hostingView = NSHostingView(rootView: view)
                 hostingView.wantsLayer = true
                 hostingView.layer?.backgroundColor = NSColor.clear.cgColor
-                hostingView.layer?.isOpaque = false // ВАЖНО: Делаем сам слой полностью прозрачным
+                hostingView.layer?.isOpaque = false
                 
                 newPanel.contentView = hostingView
                 self.panel = newPanel
@@ -53,13 +53,12 @@ class OverlayPanelManager {
 struct FloatingWidgetView: View {
     @ObservedObject var audioCapture = AudioCapture.shared
     
-    let greenColor = Color(hex: "#10B981")  // Неоновый зеленый
-    let purpleColor = Color(hex: "#8B5CF6") // Фиолетовый
+    let greenColor = Color(hex: "#10B981")
+    let purpleColor = Color(hex: "#8B5CF6")
     
     var body: some View {
         HStack(spacing: 3.5) {
             if audioCapture.transcribedText == "Расшифровка..." {
-                // TimelineView высчитывает анимированную фиолетовую синусоиду на 60-120 FPS
                 TimelineView(.animation) { timeline in
                     let time = timeline.date.timeIntervalSince1970 * 4.5
                     HStack(spacing: 3.5) {
@@ -72,7 +71,6 @@ struct FloatingWidgetView: View {
                     }
                 }
             } else {
-                // Активный зеленый эквалайзер
                 ForEach(0..<9, id: \.self) { i in
                     RoundedRectangle(cornerRadius: 2)
                         .fill(greenColor)
@@ -82,12 +80,12 @@ struct FloatingWidgetView: View {
             }
         }
         .frame(width: 130, height: 38)
-        .background(Color.white)
+        .background(.ultraThinMaterial)
         .clipShape(Capsule())
         .overlay(
             Capsule()
-                .stroke(Color(hex: "#E5E5E5"), lineWidth: 1)
+                .stroke(Color.white.opacity(0.4), lineWidth: 1)
         )
-        .shadow(color: Color.black.opacity(0.08), radius: 8, x: 0, y: 3)
+        .shadow(color: Color.black.opacity(0.15), radius: 10, x: 0, y: 4)
     }
 }

@@ -52,7 +52,7 @@ struct GolosokApp: App {
             
             Divider()
             
-            Text("Golosok v1.0.0 (GigaAM v3)")
+            Text("Golosok v1.1.0 (GigaAM v3)")
             
             Button("Завершить") {
                 NSApplication.shared.terminate(nil)

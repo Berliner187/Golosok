@@ -1,3 +1,5 @@
 *.gguf
-Golosok/transcribe-cli
-Golosok/transcribe-cli
+transcribe-cli
+DerivedData/
+*.xcuserdata
+.DS_Store
