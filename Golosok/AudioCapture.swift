@@ -248,7 +248,8 @@ class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
             }
         }
         
-        let finalText = accumulatedText.joined(separator: " ").trimmingCharacters(in: .whitespacesAndNewlines)
+        let rawText = accumulatedText.joined(separator: " ").trimmingCharacters(in: .whitespacesAndNewlines)
+        let finalText = TextFormatter.formatIntoParagraphs(rawText)
         
         DispatchQueue.main.async {
             self.isProcessingFile = false

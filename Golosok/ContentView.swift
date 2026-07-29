@@ -55,7 +55,7 @@ struct ContentView: View {
                         Text("Голосок")
                             .font(UIStyleFont.display(size: 16, weight: .bold))
                             .foregroundColor(.uiInk)
-                        Text("v1.2.0")
+                        Text("v1.3.1")
                             .font(UIStyleFont.body(size: 10, weight: .medium))
                             .foregroundColor(.uiMidGray)
                     }
@@ -192,7 +192,7 @@ struct ContentView: View {
                             Divider().background(Color.uiHairline).padding(.vertical, 4)
                             
                             ScrollView {
-                                Text(selected.text)
+                                Text(TextFormatter.formatIntoParagraphs(selected.text))
                                     .font(UIStyleFont.body(size: 15, weight: .regular))
                                     .foregroundColor(.uiInk)
                                     .lineSpacing(6)
