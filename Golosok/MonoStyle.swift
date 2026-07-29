@@ -19,12 +19,10 @@ extension NSColor {
 
 // MARK: - Hex & Dynamic Initializers for SwiftUI Color
 extension Color {
-    // Конструктор для прямого создания Color(hex: "#10B981")
     init(hex: String) {
         self.init(NSColor(hex: hex))
     }
     
-    // Функция для динамической смены цвета (Светлая/Тёмная тема)
     static func dynamic(light: String, dark: String) -> Color {
         return Color(NSColor(name: nil) { appearance in
             if appearance.name == .darkAqua {
@@ -44,6 +42,11 @@ extension Color {
     static let uiMidGray = dynamic(light: "#737373", dark: "#a1a1aa")
     static let uiHairline = dynamic(light: "#e5e5e5", dark: "#27272a")
     static let uiEmber = dynamic(light: "#e7000b", dark: "#ef4444")
+    
+    static let uiInverseBlock = dynamic(light: "#0a0a0a", dark: "#18181b")
+    static let uiInverseBorder = dynamic(light: "#0a0a0a", dark: "#27272a")
+    static let uiInverseText = dynamic(light: "#ffffff", dark: "#0a0a0a")
+    static let uiInverseTextSoft = dynamic(light: "rgba(255,255,255,0.6)", dark: "rgba(0,0,0,0.6)")
 }
 
 // MARK: - Typography & Fonts
@@ -68,7 +71,7 @@ struct UICard<Content: View>: View {
             .background(Color.uiPaper)
             .cornerRadius(24)
             .overlay(RoundedRectangle(cornerRadius: 24).stroke(Color.uiHairline, lineWidth: 1))
-            .shadow(color: Color.black.opacity(0.05), radius: 6, x: 0, y: 2)
+            .shadow(color: Color.black.opacity(0.04), radius: 6, x: 0, y: 2)
     }
 }
 

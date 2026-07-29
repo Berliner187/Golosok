@@ -73,26 +73,41 @@ class OverlayPanelManager {
 struct FloatingWidgetView: View {
     @ObservedObject var audioCapture = AudioCapture.shared
     
-    // 3D Градиенты для эквалайзера
     let greenGradient = LinearGradient(
         colors: [Color(hex: "#34D399"), Color(hex: "#059669")],
-        startPoint: .top,
-        endPoint: .bottom
+        startPoint: .top, endPoint: .bottom
     )
-    
     let purpleGradient = LinearGradient(
         colors: [Color(hex: "#C084FC"), Color(hex: "#6366F1")],
-        startPoint: .top,
-        endPoint: .bottom
+        startPoint: .top, endPoint: .bottom
     )
     
     var body: some View {
         ZStack {
-            // Абсолютно прозрачная подложка без серого квадрата
             Color.clear
             
-            HStack(spacing: 3.5) {
-                if audioCapture.transcribedText == "Расшифровка..." {
+            HStack(spacing: 8) {
+                if audioCapture.isProcessingFile {
+                    // ОБРАБОТКА ДЛИННОГО ФАЙЛА С ЖИВЫМИ %
+                    TimelineView(.animation) { timeline in
+                        let time = timeline.date.timeIntervalSince1970 * 4.5
+                        HStack(spacing: 2.5) {
+                            ForEach(0..<5, id: \.self) { i in
+                                let height = sin(time + Double(i) * 0.7) * 6 + 10
+                                RoundedRectangle(cornerRadius: 2)
+                                    .fill(purpleGradient)
+                                    .frame(width: 3, height: height)
+                            }
+                        }
+                    }
+                    
+                    // БЕГУЩИЙ ПРОЦЕНТ ВЫПОЛНЕНИЯ
+                    Text("\(Int(audioCapture.fileProcessingProgress * 100))%")
+                        .font(.system(size: 13, weight: .bold, design: .monospaced))
+                        .foregroundColor(Color.dynamic(light: "#0a0a0a", dark: "#fafafa"))
+                        
+                } else if audioCapture.transcribedText == "Расшифровка..." {
+                    // ОБЫЧНАЯ ДИКТОВКА (Фиолетовая волна)
                     TimelineView(.animation) { timeline in
                         let time = timeline.date.timeIntervalSince1970 * 4.5
                         HStack(spacing: 3.5) {
@@ -105,6 +120,7 @@ struct FloatingWidgetView: View {
                         }
                     }
                 } else {
+                    // ЗАПИСЬ С МИКРОФОНА (Зеленый эквалайзер)
                     ForEach(0..<9, id: \.self) { i in
                         RoundedRectangle(cornerRadius: 2)
                             .fill(greenGradient)
@@ -114,20 +130,14 @@ struct FloatingWidgetView: View {
                 }
             }
             .frame(width: 130, height: 38)
-            .background(.ultraThinMaterial) // Эффект премиального стекла
+            .background(.ultraThinMaterial)
             .clipShape(Capsule())
             .overlay(
-                // 3D Блик стекла по контуру (Спекулярный свет)
                 Capsule()
                     .stroke(
                         LinearGradient(
-                            colors: [
-                                Color.white.opacity(0.8),
-                                Color.white.opacity(0.15),
-                                Color.black.opacity(0.2)
-                            ],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
+                            colors: [Color.white.opacity(0.8), Color.white.opacity(0.15), Color.black.opacity(0.2)],
+                            startPoint: .topLeading, endPoint: .bottomTrailing
                         ),
                         lineWidth: 1.2
                     )

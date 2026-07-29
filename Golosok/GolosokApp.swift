@@ -19,6 +19,14 @@ struct GolosokApp: App {
         WindowGroup {
             ContentView()
         }
+        .commands {
+            CommandGroup(replacing: .newItem) {
+                Button("Открыть аудиофайл...") {
+                    AudioCapture.shared.importAndTranscribeFile()
+                }
+                .keyboardShortcut("o", modifiers: .command)
+            }
+        }
         
         MenuBarExtra("Голосок", systemImage: "waveform") {
             Button("Скопировать последнюю запись") {
@@ -28,14 +36,22 @@ struct GolosokApp: App {
                 }
             }
             .disabled(audioCapture.history.isEmpty)
+            
             Divider()
+            
+            Button("Транскрибировать аудиофайл...") {
+                AudioCapture.shared.importAndTranscribeFile()
+            }
+            
             Button("Развернуть Голосок") {
                 NSApp.activate(ignoringOtherApps: true)
                 if let window = NSApplication.shared.windows.first {
                     window.makeKeyAndOrderFront(nil)
                 }
             }
+            
             Divider()
+            
             Button("Завершить") { NSApplication.shared.terminate(nil) }
         }
     }

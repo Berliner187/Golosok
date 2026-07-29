@@ -51,24 +51,20 @@ struct DashboardCalculator {
         let totalWords = history.reduce(0) { $0 + $1.text.components(separatedBy: .whitespacesAndNewlines).filter { !$0.isEmpty }.count }
         let calculatedWpm = totalMins > 0 ? Int(Double(totalWords) / totalMins) : 160
         
-        // ФИЛЬТРАЦИЯ СТРОГО ПО ТЕКУЩЕЙ НЕДЕЛЕ
         var dayCounts = Array(repeating: 0, count: 7)
         let formatter = DateFormatter()
         formatter.dateFormat = "dd.MM.yyyy, HH:mm"
         
         var calendar = Calendar.current
-        calendar.firstWeekday = 2 // Устанавливаем Понедельник как 1-й день недели
-        
+        calendar.firstWeekday = 2
         let now = Date()
         
-        // Берем временной интервал ТЕКУЩЕЙ недели (с ПН 00:00 до ВС 23:59)
         if let currentWeekInterval = calendar.dateInterval(of: .weekOfYear, for: now) {
             for item in history {
                 if let date = formatter.date(from: item.date) {
-                    // Учитываем запись ТОЛЬКО если она была сделана на ЭТОЙ неделе!
                     if currentWeekInterval.contains(date) {
                         let weekday = calendar.component(.weekday, from: date)
-                        let idx = (weekday + 5) % 7 // Переводим 2(Пн)...7(Сб), 1(Вс) в индексы 0...6
+                        let idx = (weekday + 5) % 7
                         dayCounts[idx] += 1
                     }
                 }
@@ -99,6 +95,12 @@ struct DashboardView: View {
         DashboardCalculator.calculate(from: audioCapture.history)
     }
     
+    // Цвета инверсивной карточки
+    let cardBackground = Color.dynamic(light: "#0a0a0a", dark: "#ffffff")
+    let primaryTextColor = Color.dynamic(light: "#ffffff", dark: "#0a0a0a")
+    let secondaryTextColor = Color.dynamic(light: "rgba(255,255,255,0.6)", dark: "rgba(0,0,0,0.6)")
+    let uiInverseText = Color.dynamic(light: "#f0f0f0", dark: "#0a0a0a")
+    
     var body: some View {
         ScrollView {
             VStack(spacing: 16) {
@@ -117,18 +119,19 @@ struct DashboardView: View {
                 VStack(alignment: .leading, spacing: 6) {
                     Text(stats.hoursSaved)
                         .font(UIStyleFont.display(size: 44, weight: .bold))
-                        .foregroundColor(.white)
+                        .foregroundColor(primaryTextColor)
                         .tracking(-1.5)
                     
                     Text("СОХРАНЕНО ЧАСОВ")
                         .font(UIStyleFont.body(size: 11, weight: .bold))
                         .tracking(1.2)
-                        .foregroundColor(Color.white.opacity(0.6))
+                        .foregroundColor(uiInverseText)
                 }
                 .padding(24)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .background(Color.uiInk)
+                .background(cardBackground)
                 .cornerRadius(24)
+                .overlay(RoundedRectangle(cornerRadius: 24).stroke(Color.uiHairline, lineWidth: 1))
                 
                 // СЕТКА МЕТРИК
                 LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
@@ -156,7 +159,6 @@ struct DashboardView: View {
                             )
                             .foregroundStyle(Color.uiInk)
                             .cornerRadius(4)
-                            // Выводим значения над столбцами
                             .annotation(position: .top, alignment: .center) {
                                 if item.count > 0 {
                                     Text("\(item.count)")
@@ -180,21 +182,22 @@ struct DashboardView: View {
                         .chartYAxis(.hidden)
                     }
                 }
-
-                // ФУТЕР
+                
+                // ИНВЕРСИВНЫЙ ФУТЕР
                 HStack {
                     Text("ГОЛОСОК ™2026")
                         .font(UIStyleFont.body(size: 10, weight: .bold))
-                        .foregroundColor(.white)
+                        .foregroundColor(primaryTextColor)
                     Spacer()
                     Text("Design by Kozak")
                         .font(UIStyleFont.body(size: 10, weight: .regular))
-                        .foregroundColor(Color.white.opacity(0.6))
+                        .foregroundColor(secondaryTextColor)
                 }
                 .padding(.horizontal, 20)
                 .padding(.vertical, 14)
-                .background(Color.uiInk)
+                .background(cardBackground)
                 .cornerRadius(16)
+                .overlay(RoundedRectangle(cornerRadius: 16).stroke(Color.uiHairline, lineWidth: 1))
             }
             .padding(20)
         }
