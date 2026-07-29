@@ -3,3 +3,5 @@ transcribe-cli
 DerivedData/
 *.xcuserdata
 .DS_Store
+/Golosok.xcodeproj/project.xcworkspace/xcuserdata
+*.pbxproj
