@@ -15,21 +15,23 @@ struct OnboardingView: View {
             Color.uiCanvas.ignoresSafeArea()
             
             VStack(spacing: 24) {
+                // Заголовок
                 VStack(spacing: 8) {
                     Text("Настройка Голоска")
                         .font(UIStyleFont.display(size: 22, weight: .semibold))
                         .foregroundColor(.uiInk)
                     
-                    Text("Для работы распознавания требуется доступ к микрофону. Авто-вставка Cmd+V настраивается по желанию.")
+                    Text("Для работы распознавания речи требуется микрофон. Автоматическая вставка текста настраивается по желанию.")
                         .font(UIStyleFont.body(size: 13, weight: .regular))
                         .foregroundColor(.uiMidGray)
                         .multilineTextAlignment(.center)
                 }
                 .frame(maxWidth: 420)
                 
+                // Карточка разрешений
                 UICard {
                     VStack(spacing: 20) {
-                        // Микрофон
+                        // ШАГ 1: Микрофон (Обязательно)
                         HStack(spacing: 16) {
                             Circle()
                                 .fill(permissions.isMicGranted ? Color(hex: "#10B981") : Color.uiEmber)
@@ -44,7 +46,7 @@ struct OnboardingView: View {
                                         .font(UIStyleFont.body(size: 10, weight: .bold))
                                         .foregroundColor(.uiEmber)
                                 }
-                                Text("Требуется для записи и обработки речи")
+                                Text("Запись голоса для работы расшифровок")
                                     .font(UIStyleFont.body(size: 12, weight: .regular))
                                     .foregroundColor(.uiMidGray)
                             }
@@ -62,7 +64,7 @@ struct OnboardingView: View {
                         
                         Divider().background(Color.uiHairline)
                         
-                        // Автоматическая вставка
+                        // ШАГ 2: Автовставка
                         HStack(spacing: 16) {
                             Circle()
                                 .fill(permissions.isAccessibilityGranted ? Color(hex: "#10B981") : Color.uiMidGray.opacity(0.4))
@@ -70,14 +72,14 @@ struct OnboardingView: View {
                             
                             VStack(alignment: .leading, spacing: 2) {
                                 HStack(spacing: 6) {
-                                    Text("Автоматическая вставка")
+                                    Text("Автовставка")
                                         .font(UIStyleFont.display(size: 14, weight: .medium))
                                         .foregroundColor(.uiInk)
-                                    Text("Опционально")
+                                    Text("По желанию")
                                         .font(UIStyleFont.body(size: 10, weight: .regular))
                                         .foregroundColor(.uiMidGray)
                                 }
-                                Text("Эмуляция Cmd+V для печати в место курсора")
+                                Text("Автовставка текста в поле ввода")
                                     .font(UIStyleFont.body(size: 12, weight: .regular))
                                     .foregroundColor(.uiMidGray)
                             }
@@ -87,7 +89,7 @@ struct OnboardingView: View {
                             if permissions.isAccessibilityGranted {
                                 UIBadge(text: "Готово")
                             } else {
-                                UIOutlineButton(title: "Настройки") {
+                                UIOutlineButton(title: "Открыть настройки") {
                                     permissions.requestAccessibilityPermission()
                                 }
                             }
@@ -96,6 +98,7 @@ struct OnboardingView: View {
                 }
                 .frame(maxWidth: 480)
                 
+                // Кнопка продолжения (Активна, когда выдан Микрофон. Окно закрывается ТОЛЬКО по клику сюда)
                 UIPrimaryButton(title: canContinue ? "Начать использование" : "Сначала включите микрофон") {
                     if canContinue {
                         permissions.completeOnboarding()

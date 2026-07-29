@@ -26,7 +26,6 @@ struct DashboardCalculator {
     let avgLength: Int
     let weeklyTrend: [DayTrendStat]
     
-    // КЕШИРОВАННЫЙ ДАТА-ФОРМАТТЕР (Не создается 20 раз в секунду!)
     private static let dateFormatter: DateFormatter = {
         let df = DateFormatter()
         df.dateFormat = "dd.MM.yyyy, HH:mm"
@@ -54,10 +53,16 @@ struct DashboardCalculator {
         
         let level: String
         switch count {
-        case 0...10: level = "НОВИЧОК"
-        case 11...50: level = "ПИСАТЕЛЬ"
-        case 51...200: level = "ОРРАТОР"
-        default: level = "НЕЙРОКИБОРГ"
+        case 0...5:       level = "НОВИЧОК"
+        case 6...20:      level = "ПОЛЬЗОВАТЕЛЬ"
+        case 21...50:     level = "ЛЮБИТЕЛЬ"
+        case 51...100:    level = "ОПЫТНЫЙ"
+        case 101...250:   level = "СПЕЦИАЛИСТ"
+        case 251...500:   level = "ЭКСПЕРТ"
+        case 501...1000:  level = "ПРОФИ"
+        case 1001...2500: level = "МАСТЕР"
+        case 2501...5000: level = "ВИРТУОЗ"
+        default:          level = "ЛЕГЕНДА"
         }
         
         var totalSecs: Double = 0.0
@@ -126,8 +131,6 @@ struct DashboardCalculator {
 struct DashboardView: View {
     @ObservedObject var audioCapture = AudioCapture.shared
     @State private var trendMetric: TrendMetric = .notes
-    
-    // КЕШИРОВАННОЕ СОСТОЯНИЕ (Не пересчитывается при анимации мика!)
     @State private var stats: DashboardCalculator = DashboardCalculator.empty
     
     let cardBackground = Color.dynamic(light: "#0a0a0a", dark: "#ffffff")
@@ -147,26 +150,25 @@ struct DashboardView: View {
                     
                     Spacer()
                     if let update = audioCapture.updateInfo {
-                        HStack(spacing: 6) {
-                            if audioCapture.isDownloadingUpdate {
-                                ProgressView().scaleEffect(0.6)
-                                Text("Скачивание...").font(UIStyleFont.body(size: 10, weight: .bold)).foregroundColor(.white)
-                                Button(action: { audioCapture.cancelUpdateDownload() }) {
-                                    Image(systemName: "xmark.circle.fill").foregroundColor(.white.opacity(0.8))
-                                }.buttonStyle(.plain)
-                            } else {
-                                Button(action: { audioCapture.downloadAndInstallUpdate() }) {
-                                    HStack(spacing: 4) {
-                                        Image(systemName: "arrow.down.circle.fill")
-                                        Text("Доступна \(update.codename)")
-                                    }
-                                    .font(UIStyleFont.body(size: 10, weight: .bold))
-                                    .foregroundColor(.white)
-                                }.buttonStyle(.plain)
+                        Button(action: {
+                            audioCapture.downloadAndInstallUpdate()
+                        }) {
+                            HStack(spacing: 4) {
+                                if audioCapture.isDownloadingUpdate {
+                                    ProgressView().scaleEffect(0.6)
+                                    Text("Скачивание...")
+                                } else {
+                                    Image(systemName: "arrow.down.circle.fill")
+                                    Text("Доступна \(update.codename)")
+                                }
                             }
+                            .font(UIStyleFont.body(size: 10, weight: .bold))
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 10).padding(.vertical, 6)
+                            .background(Color.uiEmber).cornerRadius(12)
                         }
-                        .padding(.horizontal, 10).padding(.vertical, 6)
-                        .background(Color.uiEmber).cornerRadius(12)
+                        .buttonStyle(.plain)
+                        .disabled(audioCapture.isDownloadingUpdate)
                     }
                 }
                 
@@ -180,7 +182,7 @@ struct DashboardView: View {
                     Text("СОХРАНЕНО ЧАСОВ")
                         .font(UIStyleFont.body(size: 11, weight: .bold))
                         .tracking(1.2)
-                        .foregroundColor(Color.uiInverseText)
+                        .foregroundColor(secondaryTextColor)
                 }
                 .padding(24)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -271,7 +273,6 @@ struct DashboardView: View {
         .onAppear {
             stats = DashboardCalculator.calculate(from: audioCapture.history)
         }
-        // Пересчитываем ТОЛЬКО если изменилось количество записей в истории!
         .onChange(of: audioCapture.history.count) { _ in
             stats = DashboardCalculator.calculate(from: audioCapture.history)
         }

@@ -34,7 +34,7 @@ struct SettingsView: View {
                         
                         HStack {
                             VStack(alignment: .leading, spacing: 2) {
-                                Text("Авто-вставка текста")
+                                Text("Автовставка текста")
                                     .font(UIStyleFont.body(size: 13, weight: .medium))
                                     .foregroundColor(.uiInk)
                                 Text("Вставлять расшифровку прямо в активное окно")

@@ -26,6 +26,8 @@ struct ContentView: View {
     @ObservedObject var audioCapture = AudioCapture.shared
     @ObservedObject var permissions = PermissionManager.shared
     
+    @State private var isSplashFinished = false
+    
     @State private var currentTab: MainTab = .history
     @State private var selectedItemId: UUID?
     @State private var showOnboarding = false
@@ -43,15 +45,27 @@ struct ContentView: View {
     }
     
     var body: some View {
-        Group {
-            if !permissions.canContinue || !permissions.hasCompletedOnboarding {
-                OnboardingView(isPresented: $showOnboarding)
+        ZStack {
+            if !isSplashFinished {
+                SplashView(isFinished: $isSplashFinished)
+                    .transition(.opacity)
+                    .zIndex(2)
             } else {
-                mainInterface
+                Group {
+                    if !permissions.onboardingCompleted {
+                        OnboardingView(isPresented: $showOnboarding)
+                    } else {
+                        mainInterface
+                    }
+                }
+                .transition(.opacity)
+                .onAppear {
+                    permissions.checkPermissions()
+                }
             }
         }
-        .onAppear { permissions.checkPermissions() }
     }
+
     
     var mainInterface: some View {
         HStack(spacing: 0) {
@@ -61,11 +75,10 @@ struct ContentView: View {
                     VStack(alignment: .leading, spacing: -2) {
                         Text("Голосок").font(UIStyleFont.display(size: 16, weight: .bold)).foregroundColor(.uiInk)
                         HStack(spacing: 4) {
-                            Text("v1.4.0").font(UIStyleFont.body(size: 10, weight: .medium)).foregroundColor(.uiMidGray)
                             if let update = audioCapture.updateInfo {
                                 Text(update.codename).font(.system(size: 8, weight: .bold, design: .rounded)).tracking(0.5).foregroundColor(Color(hex: "#10B981")).padding(.horizontal, 4).padding(.vertical, 2).background(Color(hex: "#10B981").opacity(0.15)).cornerRadius(4)
                             } else {
-                                Text("BANDURA").font(.system(size: 8, weight: .bold, design: .rounded)).tracking(0.5).foregroundColor(Color(hex: "#10B981")).padding(.horizontal, 4).padding(.vertical, 2).background(Color(hex: "#10B981").opacity(0.15)).cornerRadius(4)
+                                Text((Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "v1.4.0")).font(.system(size: 8, weight: .bold, design: .rounded)).tracking(0.5).foregroundColor(Color(hex: "#10B981")).padding(.horizontal, 4).padding(.vertical, 2).background(Color(hex: "#10B981").opacity(0.15)).cornerRadius(4)
                             }
                         }
                     }
@@ -74,7 +87,7 @@ struct ContentView: View {
                 
                 VStack(spacing: 4) {
                     SidebarTabButton(title: "История", icon: "clock.fill", isActive: currentTab == .history) { currentTab = .history }
-                    SidebarTabButton(title: "Дашборд", icon: "chart.bar.fill", isActive: currentTab == .dashboard) { currentTab = .dashboard; searchText = "" }
+                    SidebarTabButton(title: "Борд", icon: "chart.bar.fill", isActive: currentTab == .dashboard) { currentTab = .dashboard; searchText = "" }
                     SidebarTabButton(title: "Настройки", icon: "gearshape.fill", isActive: currentTab == .settings) { currentTab = .settings; searchText = "" }
                 }.padding(.horizontal, 8)
                 
@@ -117,22 +130,21 @@ struct ContentView: View {
     var historyDetailView: some View {
         ZStack {
             Color.uiCanvas.ignoresSafeArea()
-            
             VStack {
                 if let selected = audioCapture.history.first(where: { $0.id == selectedItemId }) {
                     UICard {
                         VStack(alignment: .leading, spacing: 16) {
                             
+                            // 1. ВЕРХНЯЯ СТРОКА: ДАТА И КНОПКИ УПРАВЛЕНИЯ
                             HStack(alignment: .center) {
                                 let formattedDate = DateFormattingHelper.formatRussianDate(selected.date)
-                                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                                HStack(alignment: .firstTextBaseline, spacing: 6) {
                                     Text(formattedDate.date)
-                                        .font(UIStyleFont.display(size: 18, weight: .bold))
+                                        .font(UIStyleFont.display(size: 16, weight: .bold))
                                         .foregroundColor(.uiInk)
-                                    
                                     if !formattedDate.time.isEmpty {
                                         Text(formattedDate.time)
-                                            .font(UIStyleFont.body(size: 12, weight: .medium))
+                                            .font(UIStyleFont.body(size: 11, weight: .medium))
                                             .foregroundColor(.uiMidGray)
                                             .padding(.horizontal, 6)
                                             .padding(.vertical, 2)
@@ -141,9 +153,11 @@ struct ContentView: View {
                                     }
                                 }
                                 
-                                Spacer()
+                                Spacer(minLength: 12)
                                 
                                 HStack(spacing: 8) {
+                                    CopyFeedbackButton(textToCopy: selected.text)
+                                    
                                     Menu {
                                         Button("Markdown (.md)") { audioCapture.exportTranscription(selected, format: "md") }
                                         Button("Текст (.txt)") { audioCapture.exportTranscription(selected, format: "txt") }
@@ -155,6 +169,7 @@ struct ContentView: View {
                                             Text("Экспорт").font(UIStyleFont.body(size: 13, weight: .medium))
                                             Image(systemName: "chevron.down").font(.system(size: 8, weight: .bold)).foregroundColor(.uiMidGray)
                                         }
+                                        .lineLimit(1)
                                         .foregroundColor(.uiInk)
                                         .padding(.vertical, 8)
                                         .padding(.horizontal, 14)
@@ -163,14 +178,15 @@ struct ContentView: View {
                                         .overlay(RoundedRectangle(cornerRadius: 18).stroke(Color.uiHairline, lineWidth: 1))
                                     }
                                     .menuStyle(.borderlessButton)
-                                    
-                                    CopyFeedbackButton(textToCopy: selected.text)
+                                    .fixedSize(horizontal: true, vertical: false)
                                     
                                     UIDestructiveButton(title: "Удалить") {
                                         itemToDelete = selected.id
                                         showingDeleteAlert = true
                                     }
                                 }
+                                .fixedSize(horizontal: true, vertical: false)
+                                .layoutPriority(1)
                             }
                             
                             HStack(spacing: 8) {
@@ -182,22 +198,20 @@ struct ContentView: View {
                                 MetadataPill(icon: "book.fill", text: "~\(readMin) мин чтения", color: Color.purple)
                                 
                                 if audioCapture.hasAudioFile(for: selected) {
-                                    Spacer()
                                     Button(action: {
                                         audioCapture.toggleAudioPlayback(for: selected)
                                     }) {
-                                        HStack(spacing: 6) {
+                                        HStack(spacing: 4) {
                                             Image(systemName: audioCapture.playingItemId == selected.id ? "pause.fill" : "play.fill")
-                                                .font(.system(size: 10, weight: .bold))
+                                                .font(.system(size: 9, weight: .bold))
                                             Text(audioCapture.playingItemId == selected.id ? "Пауза" : "Слушать голос")
-                                                .font(UIStyleFont.body(size: 12, weight: .medium))
+                                                .font(.system(size: 10, weight: .bold, design: .rounded))
                                         }
                                         .foregroundColor(.blue)
+                                        .padding(.horizontal, 8)
                                         .padding(.vertical, 4)
-                                        .padding(.horizontal, 10)
-                                        .background(Color.blue.opacity(0.1))
-                                        .cornerRadius(12)
-                                        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.blue.opacity(0.2), lineWidth: 1))
+                                        .background(Color.blue.opacity(0.12))
+                                        .cornerRadius(6)
                                     }
                                     .buttonStyle(.plain)
                                 }
@@ -205,6 +219,7 @@ struct ContentView: View {
                             
                             Divider().background(Color.uiHairline).padding(.vertical, 4)
                             
+                            // 3. ТЕКСТ ТРАНСКРИПЦИИ
                             if isFormattingText {
                                 VStack(spacing: 12) {
                                     ProgressView().scaleEffect(0.8)
@@ -266,14 +281,17 @@ struct CopyFeedbackButton: View {
         }) {
             HStack(spacing: 6) {
                 Image(systemName: isCopied ? "checkmark" : "doc.on.doc").font(.system(size: 11, weight: .medium))
-                Text(isCopied ? "Скопировано!" : "Скопировать")
+                Text(isCopied ? "Готово!" : "Скопировать")
             }
+            .lineLimit(1)
             .font(UIStyleFont.body(size: 13, weight: .medium))
             .foregroundColor(isCopied ? Color(hex: "#10B981") : .uiInk)
             .padding(.vertical, 8).padding(.horizontal, 14)
             .background(Color.uiPaper).cornerRadius(18)
             .overlay(RoundedRectangle(cornerRadius: 18).stroke(isCopied ? Color(hex: "#10B981").opacity(0.5) : Color.uiHairline, lineWidth: 1))
-        }.buttonStyle(.plain)
+        }
+        .buttonStyle(.plain)
+        .fixedSize(horizontal: true, vertical: false)
     }
 }
 

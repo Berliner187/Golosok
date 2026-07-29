@@ -3,6 +3,7 @@ import AVFoundation
 import AppKit
 import UniformTypeIdentifiers
 import ServiceManagement
+import CoreMedia
 
 // MARK: - Системные звуки
 struct SoundEffect {
@@ -74,6 +75,11 @@ class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
         super.init()
         loadHistory()
         checkUpdates()
+    }
+    
+    var currentAppVersion: String {
+        let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.4.0"
+        return "v\(version)"
     }
     
     private func setLaunchAtLogin(enabled: Bool) {
@@ -197,18 +203,22 @@ class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
         DispatchQueue.main.async { self.audioSamples = newSamples }
     }
     
+    // ИМПОРТ ФАЙЛОВ С ПОДДЕРЖКОЙ WebM И ЯНДЕКС ТЕЛЕМОСТА
     func importAndTranscribeFile() {
         let panel = NSOpenPanel()
         panel.allowsMultipleSelection = false
         panel.canChooseDirectories = false
         panel.canChooseFiles = true
-        panel.allowedContentTypes = [.audio, .movie, .mp3, .mpeg4Audio, .wav]
+        
+        let webmType = UTType(filenameExtension: "webm") ?? .movie
+        let mkvType = UTType(filenameExtension: "mkv") ?? .movie
+        panel.allowedContentTypes = [.audio, .movie, .mp3, .mpeg4Audio, .wav, webmType, mkvType]
         
         if panel.runModal() == .OK, let fileURL = panel.url {
             DispatchQueue.main.async {
                 self.isProcessingFile = true
                 self.fileProcessingProgress = 0.0
-                self.transcribedText = "Подготовка файла..."
+                self.transcribedText = "Извлечение аудио из медиафайла..."
                 OverlayPanelManager.shared.showOverlay()
             }
             DispatchQueue.global(qos: .userInitiated).async {
@@ -223,13 +233,17 @@ class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
         let sourceURL = isFileImport ? tempWavURL : fileURL
         
         if isFileImport {
-            guard convertAudioTo16kHzWav(inputURL: fileURL, outputURL: tempWavURL) else {
-                DispatchQueue.main.async {
-                    self.isProcessingFile = false
-                    self.transcribedText = "Ошибка чтения файла"
-                    OverlayPanelManager.shared.hideOverlay()
+            // ДВУХСТУПЕНЧАТАЯ КОНВЕРТАЦИЯ: Сначала пробуем вытащить аудио из видеозаписи (WebM/MP4/MOV)
+            if !convertMediaTo16kHzWav(inputURL: fileURL, outputURL: tempWavURL) {
+                // Если не видео, пробуем как стандартный аудиофайл
+                if !convertAudioTo16kHzWav(inputURL: fileURL, outputURL: tempWavURL) {
+                    DispatchQueue.main.async {
+                        self.isProcessingFile = false
+                        self.transcribedText = "Не удалось извлечь аудио из файла"
+                        OverlayPanelManager.shared.hideOverlay()
+                    }
+                    return
                 }
-                return
             }
         }
         
@@ -311,6 +325,110 @@ class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
         }
     }
 
+    // ДЕКОДЕР ВИДЕОФАЙЛОВ И WebM ЗАПИСЕЙ (Яндекс Телемост, Zoom, MP4, MOV)
+    private func convertMediaTo16kHzWav(inputURL: URL, outputURL: URL) -> Bool {
+        let asset = AVURLAsset(url: inputURL)
+        
+        guard let track = asset.tracks(withMediaType: .audio).first else { return false }
+        
+        do {
+            let reader = try AVAssetReader(asset: asset)
+            
+            let outputSettings: [String: Any] = [
+                AVFormatIDKey: kAudioFormatLinearPCM,
+                AVSampleRateKey: 16000.0,
+                AVNumberOfChannelsKey: 1,
+                AVLinearPCMBitDepthKey: 32,
+                AVLinearPCMIsBigEndianKey: false,
+                AVLinearPCMIsFloatKey: true
+            ]
+            
+            let readerOutput = AVAssetReaderTrackOutput(track: track, outputSettings: outputSettings)
+            reader.add(readerOutput)
+            
+            let targetFormat = AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: 16000, channels: 1, interleaved: false)!
+            
+            if FileManager.default.fileExists(atPath: outputURL.path) {
+                try FileManager.default.removeItem(at: outputURL)
+            }
+            
+            let outputFile = try AVAudioFile(forWriting: outputURL, settings: targetFormat.settings)
+            reader.startReading()
+            
+            while reader.status == .reading {
+                autoreleasepool {
+                    if let sampleBuffer = readerOutput.copyNextSampleBuffer(),
+                       let blockBuffer = CMSampleBufferGetDataBuffer(sampleBuffer) {
+                        
+                        var length: Int = 0
+                        var dataPointer: UnsafeMutablePointer<Int8>?
+                        CMBlockBufferGetDataPointer(blockBuffer, atOffset: 0, lengthAtOffsetOut: nil, totalLengthOut: &length, dataPointerOut: &dataPointer)
+                        
+                        if let ptr = dataPointer, length > 0 {
+                            let frameCount = AVAudioFrameCount(length / 4) // Float32 = 4 байта
+                            if let pcmBuffer = AVAudioPCMBuffer(pcmFormat: targetFormat, frameCapacity: frameCount) {
+                                pcmBuffer.frameLength = frameCount
+                                memcpy(pcmBuffer.floatChannelData?[0], ptr, length)
+                                try? outputFile.write(from: pcmBuffer)
+                            }
+                        }
+                    }
+                }
+            }
+            
+            return reader.status == .completed
+        } catch {
+            return false
+        }
+    }
+
+    private func convertAudioTo16kHzWav(inputURL: URL, outputURL: URL) -> Bool {
+        guard let inputFile = try? AVAudioFile(forReading: inputURL) else { return false }
+        let targetFormat = AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: 16000, channels: 1, interleaved: false)!
+        
+        do {
+            if FileManager.default.fileExists(atPath: outputURL.path) { try FileManager.default.removeItem(at: outputURL) }
+            let outputFile = try AVAudioFile(forWriting: outputURL, settings: targetFormat.settings)
+            guard let converter = AVAudioConverter(from: inputFile.processingFormat, to: targetFormat) else { return false }
+            
+            let bufferSize: AVAudioFrameCount = 8192
+            guard let inputBuffer = AVAudioPCMBuffer(pcmFormat: inputFile.processingFormat, frameCapacity: bufferSize) else { return false }
+            
+            let ratio = 16000.0 / inputFile.processingFormat.sampleRate
+            let outputCapacity = AVAudioFrameCount(Double(bufferSize) * ratio)
+            guard let outputBuffer = AVAudioPCMBuffer(pcmFormat: targetFormat, frameCapacity: outputCapacity) else { return false }
+            
+            let totalFrames = inputFile.length
+            var currentFrame: AVAudioFramePosition = 0
+            var hasError = false
+            
+            while currentFrame < totalFrames && !hasError {
+                autoreleasepool {
+                    let framesToRead = min(bufferSize, AVAudioFrameCount(totalFrames - currentFrame))
+                    if framesToRead == 0 { currentFrame = totalFrames; return }
+                    
+                    do { try inputFile.read(into: inputBuffer, frameCount: framesToRead) } catch { hasError = true; return }
+                    
+                    let framesRead = inputBuffer.frameLength
+                    if framesRead == 0 { currentFrame = totalFrames; return }
+                    currentFrame += Int64(framesRead)
+                    
+                    var error: NSError?
+                    var allConsumed = false
+                    
+                    let status = converter.convert(to: outputBuffer, error: &error) { inNumPackets, outStatus in
+                        if allConsumed { outStatus.pointee = .noDataNow; return nil }
+                        allConsumed = true; outStatus.pointee = .haveData; return inputBuffer
+                    }
+                    
+                    if status != .error && error == nil { try? outputFile.write(from: outputBuffer) }
+                    else { hasError = true }
+                }
+            }
+            return !hasError
+        } catch { return false }
+    }
+    
     private func saveAudioForNote(id: UUID, sourceURL: URL) {
         let fm = FileManager.default
         guard let appSupport = fm.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else { return }
@@ -345,73 +463,7 @@ class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
             playingItemId = item.id
         } catch {}
     }
-    
-    // ИСПРАВЛЕННЫЙ БЕЗОПАСНЫЙ КОНВЕРТЕР БЕЗ КРАША
-    private func convertAudioTo16kHzWav(inputURL: URL, outputURL: URL) -> Bool {
-        guard let inputFile = try? AVAudioFile(forReading: inputURL) else { return false }
-        let targetFormat = AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: 16000, channels: 1, interleaved: false)!
-        
-        do {
-            if FileManager.default.fileExists(atPath: outputURL.path) { try FileManager.default.removeItem(at: outputURL) }
-            let outputFile = try AVAudioFile(forWriting: outputURL, settings: targetFormat.settings)
-            guard let converter = AVAudioConverter(from: inputFile.processingFormat, to: targetFormat) else { return false }
-            
-            let bufferSize: AVAudioFrameCount = 8192
-            guard let inputBuffer = AVAudioPCMBuffer(pcmFormat: inputFile.processingFormat, frameCapacity: bufferSize) else { return false }
-            
-            let ratio = 16000.0 / inputFile.processingFormat.sampleRate
-            let outputCapacity = AVAudioFrameCount(Double(bufferSize) * ratio)
-            guard let outputBuffer = AVAudioPCMBuffer(pcmFormat: targetFormat, frameCapacity: outputCapacity) else { return false }
-            
-            let totalFrames = inputFile.length
-            var currentFrame: AVAudioFramePosition = 0
-            var hasError = false
-            
-            while currentFrame < totalFrames && !hasError {
-                autoreleasepool {
-                    let framesToRead = min(bufferSize, AVAudioFrameCount(totalFrames - currentFrame))
-                    if framesToRead == 0 {
-                        currentFrame = totalFrames
-                        return
-                    }
-                    
-                    do {
-                        try inputFile.read(into: inputBuffer, frameCount: framesToRead)
-                    } catch {
-                        hasError = true
-                        return
-                    }
-                    
-                    let framesRead = inputBuffer.frameLength
-                    if framesRead == 0 {
-                        currentFrame = totalFrames
-                        return
-                    }
-                    
-                    currentFrame += Int64(framesRead)
-                    var error: NSError?
-                    var allConsumed = false
-                    
-                    let status = converter.convert(to: outputBuffer, error: &error) { inNumPackets, outStatus in
-                        if allConsumed { outStatus.pointee = .noDataNow; return nil }
-                        allConsumed = true
-                        outStatus.pointee = .haveData
-                        return inputBuffer
-                    }
-                    
-                    if status != .error && error == nil {
-                        try? outputFile.write(from: outputBuffer)
-                    } else {
-                        hasError = true
-                    }
-                }
-            }
-            return !hasError
-        } catch {
-            return false
-        }
-    }
-    
+
     private func writeBufferToWav(buffer: AVAudioPCMBuffer, targetFormat: AVAudioFormat, outputURL: URL) -> Bool {
         do {
             if FileManager.default.fileExists(atPath: outputURL.path) { try FileManager.default.removeItem(at: outputURL) }
@@ -514,14 +566,6 @@ class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
                 DispatchQueue.main.async { self.updateInfo = nil }
             }
         }.resume()
-    }
-    
-    func cancelUpdateDownload() {
-        downloadTask?.cancel()
-        downloadTask = nil
-        DispatchQueue.main.async {
-            self.isDownloadingUpdate = false
-        }
     }
     
     func downloadAndInstallUpdate() {

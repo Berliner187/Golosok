@@ -8,20 +8,21 @@ class PermissionManager: ObservableObject {
     @Published var isMicGranted: Bool = false
     @Published var isAccessibilityGranted: Bool = false
     
-    // Сохраняем факт прохождения анбординга
-    @Published var hasCompletedOnboarding: Bool = UserDefaults.standard.bool(forKey: "hasCompletedOnboarding") {
+    @Published var onboardingCompleted: Bool = UserDefaults.standard.bool(forKey: "onboardingCompleted") {
         didSet {
-            UserDefaults.standard.set(hasCompletedOnboarding, forKey: "hasCompletedOnboarding")
+            UserDefaults.standard.set(onboardingCompleted, forKey: "onboardingCompleted")
         }
     }
     
-    // Для старта достаточно только микрофона!
     var canContinue: Bool {
         return isMicGranted
     }
     
     init() {
         checkPermissions()
+        if !isMicGranted {
+            onboardingCompleted = false
+        }
     }
     
     func checkPermissions() {
@@ -49,7 +50,7 @@ class PermissionManager: ObservableObject {
     
     func completeOnboarding() {
         DispatchQueue.main.async {
-            self.hasCompletedOnboarding = true
+            self.onboardingCompleted = true
         }
     }
 }
