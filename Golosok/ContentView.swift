@@ -223,7 +223,7 @@ struct ContentView: View {
                             if isFormattingText {
                                 VStack(spacing: 12) {
                                     ProgressView().scaleEffect(0.8)
-                                    Text("Оптимизация текста...").font(UIStyleFont.body(size: 12, weight: .regular)).foregroundColor(.uiMidGray)
+                                    Text("Загрузка...").font(UIStyleFont.body(size: 12, weight: .regular)).foregroundColor(.uiMidGray)
                                 }.frame(maxWidth: .infinity, maxHeight: .infinity)
                             } else {
                                 ScrollView {

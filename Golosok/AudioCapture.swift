@@ -203,7 +203,6 @@ class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
         DispatchQueue.main.async { self.audioSamples = newSamples }
     }
     
-    // ИМПОРТ ФАЙЛОВ С ПОДДЕРЖКОЙ WebM И ЯНДЕКС ТЕЛЕМОСТА
     func importAndTranscribeFile() {
         let panel = NSOpenPanel()
         panel.allowsMultipleSelection = false

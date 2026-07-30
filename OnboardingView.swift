@@ -21,7 +21,7 @@ struct OnboardingView: View {
                         .font(UIStyleFont.display(size: 22, weight: .semibold))
                         .foregroundColor(.uiInk)
                     
-                    Text("Для работы распознавания речи требуется микрофон. Автоматическая вставка текста настраивается по желанию.")
+                    Text("Для работы распознавания речи требуется микрофон. Автоматическая вставка текста настраивается опционально.")
                         .font(UIStyleFont.body(size: 13, weight: .regular))
                         .foregroundColor(.uiMidGray)
                         .multilineTextAlignment(.center)
@@ -75,7 +75,7 @@ struct OnboardingView: View {
                                     Text("Автовставка")
                                         .font(UIStyleFont.display(size: 14, weight: .medium))
                                         .foregroundColor(.uiInk)
-                                    Text("По желанию")
+                                    Text("Опционально")
                                         .font(UIStyleFont.body(size: 10, weight: .regular))
                                         .foregroundColor(.uiMidGray)
                                 }
@@ -98,7 +98,6 @@ struct OnboardingView: View {
                 }
                 .frame(maxWidth: 480)
                 
-                // Кнопка продолжения (Активна, когда выдан Микрофон. Окно закрывается ТОЛЬКО по клику сюда)
                 UIPrimaryButton(title: canContinue ? "Начать использование" : "Сначала включите микрофон") {
                     if canContinue {
                         permissions.completeOnboarding()

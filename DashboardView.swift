@@ -135,7 +135,6 @@ struct DashboardView: View {
     
     let cardBackground = Color.dynamic(light: "#0a0a0a", dark: "#ffffff")
     let primaryTextColor = Color.dynamic(light: "#ffffff", dark: "#0a0a0a")
-    let secondaryTextColor = Color.dynamic(light: "rgba(255,255,255,0.6)", dark: "rgba(0,0,0,0.6)")
     
     var body: some View {
         ScrollView {
@@ -182,7 +181,7 @@ struct DashboardView: View {
                     Text("СОХРАНЕНО ЧАСОВ")
                         .font(UIStyleFont.body(size: 11, weight: .bold))
                         .tracking(1.2)
-                        .foregroundColor(secondaryTextColor)
+                        .foregroundColor(primaryTextColor)
                 }
                 .padding(24)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -259,7 +258,7 @@ struct DashboardView: View {
                     Spacer()
                     Text("Design by Kozak")
                         .font(UIStyleFont.body(size: 10, weight: .regular))
-                        .foregroundColor(secondaryTextColor)
+                        .foregroundColor(primaryTextColor)
                 }
                 .padding(.horizontal, 20)
                 .padding(.vertical, 14)
