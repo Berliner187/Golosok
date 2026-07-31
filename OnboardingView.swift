@@ -2,6 +2,7 @@ import SwiftUI
 
 struct OnboardingView: View {
     @ObservedObject var permissions = PermissionManager.shared
+    @ObservedObject var audioCapture = AudioCapture.shared
     @Binding var isPresented: Bool
     
     var canContinue: Bool {
@@ -15,22 +16,20 @@ struct OnboardingView: View {
             Color.uiCanvas.ignoresSafeArea()
             
             VStack(spacing: 24) {
-                // Заголовок
                 VStack(spacing: 8) {
                     Text("Настройка Голоска")
                         .font(UIStyleFont.display(size: 22, weight: .semibold))
                         .foregroundColor(.uiInk)
                     
-                    Text("Для работы распознавания речи требуется микрофон. Автоматическая вставка текста настраивается опционально.")
+                    Text("Для работы распознавания речи требуется микрофон. Остальные параметры можно настроить по желанию.")
                         .font(UIStyleFont.body(size: 13, weight: .regular))
                         .foregroundColor(.uiMidGray)
                         .multilineTextAlignment(.center)
                 }
                 .frame(maxWidth: 420)
                 
-                // Карточка разрешений
                 UICard {
-                    VStack(spacing: 20) {
+                    VStack(spacing: 18) {
                         // ШАГ 1: Микрофон (Обязательно)
                         HStack(spacing: 16) {
                             Circle()
@@ -46,7 +45,7 @@ struct OnboardingView: View {
                                         .font(UIStyleFont.body(size: 10, weight: .bold))
                                         .foregroundColor(.uiEmber)
                                 }
-                                Text("Запись голоса для работы расшифровок")
+                                Text("Запись голоса для нейросети GigaAM v3")
                                     .font(UIStyleFont.body(size: 12, weight: .regular))
                                     .foregroundColor(.uiMidGray)
                             }
@@ -64,7 +63,7 @@ struct OnboardingView: View {
                         
                         Divider().background(Color.uiHairline)
                         
-                        // ШАГ 2: Автовставка
+                        // ШАГ 2: Авто-вставка (По желанию)
                         HStack(spacing: 16) {
                             Circle()
                                 .fill(permissions.isAccessibilityGranted ? Color(hex: "#10B981") : Color.uiMidGray.opacity(0.4))
@@ -72,14 +71,14 @@ struct OnboardingView: View {
                             
                             VStack(alignment: .leading, spacing: 2) {
                                 HStack(spacing: 6) {
-                                    Text("Автовставка")
+                                    Text("Автоматическая вставка")
                                         .font(UIStyleFont.display(size: 14, weight: .medium))
                                         .foregroundColor(.uiInk)
-                                    Text("Опционально")
+                                    Text("По желанию")
                                         .font(UIStyleFont.body(size: 10, weight: .regular))
                                         .foregroundColor(.uiMidGray)
                                 }
-                                Text("Автовставка текста в поле ввода")
+                                Text("Эмуляция Cmd+V в место курсора")
                                     .font(UIStyleFont.body(size: 12, weight: .regular))
                                     .foregroundColor(.uiMidGray)
                             }
@@ -93,6 +92,30 @@ struct OnboardingView: View {
                                     permissions.requestAccessibilityPermission()
                                 }
                             }
+                        }
+                        
+                        Divider().background(Color.uiHairline)
+                        
+                        // ШАГ 3: Анонимная аналитика (Включена по умолчанию)
+                        HStack(spacing: 16) {
+                            Circle()
+                                .fill(audioCapture.analyticsEnabled ? Color(hex: "#10B981") : Color.uiMidGray.opacity(0.4))
+                                .frame(width: 10, height: 10)
+                            
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Анонимная аналитика")
+                                    .font(UIStyleFont.display(size: 14, weight: .medium))
+                                    .foregroundColor(.uiInk)
+                                Text("Отправка обезличенной статистики запускa")
+                                    .font(UIStyleFont.body(size: 12, weight: .regular))
+                                    .foregroundColor(.uiMidGray)
+                            }
+                            
+                            Spacer()
+                            
+                            Toggle("", isOn: $audioCapture.analyticsEnabled)
+                                .labelsHidden()
+                                .toggleStyle(SwitchToggleStyle(tint: Color(hex: "#10B981")))
                         }
                     }
                 }

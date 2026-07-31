@@ -7,7 +7,7 @@ struct SettingsView: View {
     var body: some View {
         ScrollView {
             VStack(spacing: 20) {
-                
+                // РАЗДЕЛ 1: ОСНОВНЫЕ
                 UICard {
                     VStack(alignment: .leading, spacing: 16) {
                         Text("ОСНОВНЫЕ")
@@ -15,12 +15,13 @@ struct SettingsView: View {
                             .tracking(1.0)
                             .foregroundColor(.uiMidGray)
                         
+                        // Автозапуск
                         HStack {
                             VStack(alignment: .leading, spacing: 2) {
-                                Text("Автозапуск")
+                                Text("Запуск при входе")
                                     .font(UIStyleFont.body(size: 13, weight: .medium))
                                     .foregroundColor(.uiInk)
-                                Text("Автоматически запускать при входе в систему")
+                                Text("Автоматически открывать в строке меню")
                                     .font(UIStyleFont.body(size: 11, weight: .regular))
                                     .foregroundColor(.uiMidGray)
                             }
@@ -32,12 +33,13 @@ struct SettingsView: View {
                         
                         Divider().background(Color.uiHairline)
                         
+                        // Авто-вставка
                         HStack {
                             VStack(alignment: .leading, spacing: 2) {
-                                Text("Автовставка текста")
+                                Text("Авто-вставка текста")
                                     .font(UIStyleFont.body(size: 13, weight: .medium))
                                     .foregroundColor(.uiInk)
-                                Text("Вставлять расшифровку прямо в активное окно")
+                                Text("Печатать расшифровку прямо в активное окно")
                                     .font(UIStyleFont.body(size: 11, weight: .regular))
                                     .foregroundColor(.uiMidGray)
                             }
@@ -49,12 +51,31 @@ struct SettingsView: View {
                         
                         Divider().background(Color.uiHairline)
                         
+                        // Анонимная аналитика
+                        HStack {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Делиться аналитикой")
+                                    .font(UIStyleFont.body(size: 13, weight: .medium))
+                                    .foregroundColor(.uiInk)
+                                Text("Анонимный подсчет активных пользователей и скорости ИИ")
+                                    .font(UIStyleFont.body(size: 11, weight: .regular))
+                                    .foregroundColor(.uiMidGray)
+                            }
+                            Spacer()
+                            Toggle("", isOn: $audioCapture.analyticsEnabled)
+                                .labelsHidden()
+                                .toggleStyle(SwitchToggleStyle(tint: Color(hex: "#10B981")))
+                        }
+                        
+                        Divider().background(Color.uiHairline)
+                        
+                        // Звуки
                         HStack {
                             VStack(alignment: .leading, spacing: 2) {
                                 Text("Системные звуки")
                                     .font(UIStyleFont.body(size: 13, weight: .medium))
                                     .foregroundColor(.uiInk)
-                                Text("Воспроизводить начало, отмену и конец записи")
+                                Text("Озвучивать начало, отмену и конец записи")
                                     .font(UIStyleFont.body(size: 11, weight: .regular))
                                     .foregroundColor(.uiMidGray)
                             }
@@ -66,6 +87,7 @@ struct SettingsView: View {
                     }
                 }
                 
+                // РАЗДЕЛ 2: УПРАВЛЕНИЕ
                 UICard {
                     VStack(alignment: .leading, spacing: 14) {
                         Text("УПРАВЛЕНИЕ")
@@ -93,6 +115,7 @@ struct SettingsView: View {
                     }
                 }
                 
+                // РАЗДЕЛ 3: ДВИЖОК
                 UICard {
                     VStack(alignment: .leading, spacing: 14) {
                         Text("ДВИЖОК И УСКОРЕНИЕ")
@@ -124,6 +147,7 @@ struct SettingsView: View {
                     }
                 }
                 
+                // РАЗДЕЛ 4: ДАННЫЕ
                 UICard {
                     HStack {
                         VStack(alignment: .leading, spacing: 2) {
