@@ -41,6 +41,7 @@ extension Color {
     static let uiInkSoft = dynamic(light: "#171717", dark: "#d4d4d8")
     static let uiMidGray = dynamic(light: "#737373", dark: "#a1a1aa")
     static let uiHairline = dynamic(light: "#e5e5e5", dark: "#27272a")
+    static let uiWarn = dynamic(light: "#FF9F0A", dark: "#F59E0B")
     static let uiEmber = dynamic(light: "#e7000b", dark: "#ef4444")
     
     static let uiInverseBlock = dynamic(light: "#0a0a0a", dark: "#18181b")

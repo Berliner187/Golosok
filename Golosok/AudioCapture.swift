@@ -50,15 +50,14 @@ class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
     @Published var playingItemId: UUID? = nil
     private var audioPlayer: AVAudioPlayer?
     
-    @Published var analyticsEnabled: Bool = UserDefaults.standard.object(forKey: "analyticsEnabled") as? Bool ?? true {
-        didSet { UserDefaults.standard.set(analyticsEnabled, forKey: "analyticsEnabled") }
-    }
-    
     @Published var soundEnabled: Bool = UserDefaults.standard.object(forKey: "soundEnabled") as? Bool ?? true {
         didSet { UserDefaults.standard.set(soundEnabled, forKey: "soundEnabled") }
     }
     @Published var autoPasteEnabled: Bool = UserDefaults.standard.object(forKey: "autoPasteEnabled") as? Bool ?? true {
         didSet { UserDefaults.standard.set(autoPasteEnabled, forKey: "autoPasteEnabled") }
+    }
+    @Published var analyticsEnabled: Bool = UserDefaults.standard.object(forKey: "analyticsEnabled") as? Bool ?? true {
+        didSet { UserDefaults.standard.set(analyticsEnabled, forKey: "analyticsEnabled") }
     }
     @Published var launchAtLoginEnabled: Bool = UserDefaults.standard.bool(forKey: "launchAtLoginEnabled") {
         didSet {
@@ -80,11 +79,6 @@ class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
         sendTelemetry(eventType: "app_launch", audioDurationSec: 0, characterCount: 0, speedup: 0)
     }
     
-    var currentAppVersion: String {
-        let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.4.0"
-        return "v\(version)"
-    }
-    
     private func setLaunchAtLogin(enabled: Bool) {
         if #available(macOS 13.0, *) {
             do {
@@ -94,14 +88,11 @@ class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
         }
     }
     
-    // MARK: - УПРАВЛЕНИЕ ЗАПИСЬЮ (С БЛОКИРОВКОЙ)
     func toggleRecording() {
-        // ЗАЩИТА: Если уже идет обработка файла или нейросеть расшифровывает - блокируем хоткей!
         if isProcessingFile {
             SoundEffect.playCancel()
             return
         }
-        
         if isRecording { stopRecording() }
         else { startRecording() }
     }
@@ -124,7 +115,6 @@ class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
     }
     
     func startRecording() {
-        // Дополнительная защита на всякий случай
         guard !isProcessingFile else { return }
         
         switch AVCaptureDevice.authorizationStatus(for: .audio) {
@@ -216,9 +206,7 @@ class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
         DispatchQueue.main.async { self.audioSamples = newSamples }
     }
     
-    // MARK: - ИМПОРТ ФАЙЛОВ (С БЛОКИРОВКОЙ)
     func importAndTranscribeFile() {
-        // ЗАЩИТА: Не даем выбрать файл, если идет запись микрофона или другой файл уже в работе
         if isRecording || isProcessingFile {
             SoundEffect.playCancel()
             return
@@ -263,7 +251,7 @@ class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
                         DispatchQueue.main.async {
                             self.isProcessingFile = false
                             if fileURL.pathExtension.lowercased() == "webm" {
-                                self.transcribedText = "Файлы WebM (Телемост) требуют конвертации в MP4/MP3 или ffmpeg (brew install ffmpeg)."
+                                self.transcribedText = "Файлы WebM требуют ffmpeg (brew install ffmpeg)."
                             } else {
                                 self.transcribedText = "Не удалось извлечь аудио из файла"
                             }
@@ -321,27 +309,31 @@ class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
         }
         
         let rawText = accumulatedText.joined(separator: " ").trimmingCharacters(in: .whitespacesAndNewlines)
+        
+        // ФОРМАТИРУЕМ В АБЗАЦЫ СРАЗУ ПЕРЕД СОХРАНЕНИЕМ НА ДИСК!
+        let prettyFormattedText = TextFormatter.formatIntoParagraphs(rawText)
+        
         let processingTimeSecs = Date().timeIntervalSince(processStartTime)
         let calculatedSpeedup = max(1.0, realAudioSecs / max(0.1, processingTimeSecs))
         
         DispatchQueue.main.async {
             self.isProcessingFile = false
-            if rawText.isEmpty {
+            if prettyFormattedText.isEmpty {
                 self.transcribedText = isFileImport ? "В файле не распознана речь" : "Речь не распознана"
             } else {
-                self.transcribedText = rawText
+                self.transcribedText = prettyFormattedText
                 let formatter = DateFormatter()
                 formatter.dateFormat = "dd.MM.yyyy, HH:mm"
                 let dateStr = formatter.string(from: Date())
                 
-                let newItem = TranscriptionItem(date: dateStr, text: rawText, duration: durationFormatted, speedup: calculatedSpeedup)
+                // СОХРАНЯЕМ В ДИСКОВУЮ БАЗУ УЖЕ ОТФОРМАТИРОВАННЫЙ ТЕКСТ!
+                let newItem = TranscriptionItem(date: dateStr, text: prettyFormattedText, duration: durationFormatted, speedup: calculatedSpeedup)
                 
                 self.saveAudioForNote(id: newItem.id, sourceURL: sourceURL)
                 self.history.insert(newItem, at: 0)
                 
-                let prettyText = TextFormatter.formatIntoParagraphs(rawText)
                 NSPasteboard.general.clearContents()
-                NSPasteboard.general.setString(prettyText, forType: .string)
+                NSPasteboard.general.setString(prettyFormattedText, forType: .string)
                 if !isFileImport { self.pasteToActiveApp() }
             }
             
@@ -349,7 +341,13 @@ class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
                 OverlayPanelManager.shared.hideOverlay()
             }
-            self.sendTelemetry(eventType: isFileImport ? "file_import" : "dictation", audioDurationSec: realAudioSecs, characterCount: rawText.count, speedup: calculatedSpeedup)
+            
+            self.sendTelemetry(
+                eventType: isFileImport ? "file_import" : "dictation",
+                audioDurationSec: realAudioSecs,
+                characterCount: prettyFormattedText.count,
+                speedup: calculatedSpeedup
+            )
         }
     }
 
@@ -409,6 +407,7 @@ class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
     private func convertAudioTo16kHzWav(inputURL: URL, outputURL: URL) -> Bool {
         guard let inputFile = try? AVAudioFile(forReading: inputURL) else { return false }
         let targetFormat = AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: 16000, channels: 1, interleaved: false)!
+        
         do {
             if FileManager.default.fileExists(atPath: outputURL.path) { try FileManager.default.removeItem(at: outputURL) }
             let outputFile = try AVAudioFile(forWriting: outputURL, settings: targetFormat.settings)
@@ -515,85 +514,42 @@ class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
     }
     
     private func sendTelemetry(eventType: String, audioDurationSec: Double, characterCount: Int, speedup: Double) {
-        if eventType != "app_launch" && !analyticsEnabled {
-            print("[Telemetry Log] ⏸️ Аналитика отключена пользователем в настройках.")
-            return
-        }
-        
-        guard let url = URL(string: "https://golosok.space/api/v1/telemetry/") else {
-            print("[Telemetry Error] ❌ Неверный URL адреса телеметрии.")
-            return
-        }
-        
+        guard analyticsEnabled else { return }
+        guard let url = URL(string: "https://your-domain.ru/api/v1/telemetry/") else { return }
         var deviceID = UserDefaults.standard.string(forKey: "anonymous_device_id")
-        if deviceID == nil {
-            deviceID = UUID().uuidString
-            UserDefaults.standard.set(deviceID, forKey: "anonymous_device_id")
-        }
-        
+        if deviceID == nil { deviceID = UUID().uuidString; UserDefaults.standard.set(deviceID, forKey: "anonymous_device_id") }
         let appVer = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.4.0"
         let osVer = ProcessInfo.processInfo.operatingSystemVersionString
-        
         let payload: [String: Any] = [
-            "device_id": deviceID ?? "unknown",
-            "app_version": appVer,
-            "os_version": osVer,
-            "event_type": eventType,
-            "audio_duration_sec": audioDurationSec,
-            "character_count": characterCount,
-            "speedup_factor": speedup
+            "device_id": deviceID ?? "unknown", "app_version": appVer, "os_version": osVer,
+            "event_type": eventType, "audio_duration_sec": audioDurationSec,
+            "character_count": characterCount, "speedup_factor": speedup
         ]
-        
         DispatchQueue.global(qos: .utility).async {
             var request = URLRequest(url: url)
             request.httpMethod = "POST"
             request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-            request.timeoutInterval = 10.0
-            
-            do {
-                request.httpBody = try JSONSerialization.data(withJSONObject: payload)
-            } catch {
-                print("[Telemetry Error] ❌ Ошибка сериализации JSON: \(error)")
-                return
-            }
-            
-            // Запрос с выводом ответа сервера в консоль Xcode
-            let task = URLSession.shared.dataTask(with: request) { data, response, error in
-                if let error = error {
-                    print("[Telemetry Error] ❌ Сетевая ошибка при отправке на golosok.space: \(error.localizedDescription)")
-                    return
-                }
-                
-                if let httpResponse = response as? HTTPURLResponse {
-                    if httpResponse.statusCode == 200 {
-                        print("[Telemetry Log] 📡 УСПЕШНО ОТПРАВЛЕНО на golosok.space! HTTP 200 OK (Event: \(eventType))")
-                    } else {
-                        print("[Telemetry Error] ⚠️ Сервер golosok.space вернул код HTTP \(httpResponse.statusCode)")
-                        if let data = data, let bodyString = String(data: data, encoding: .utf8) {
-                            print("[Telemetry Error Server Response]: \(bodyString)")
-                        }
-                    }
-                }
-            }
-            task.resume()
+            request.timeoutInterval = 3.0
+            request.httpBody = try? JSONSerialization.data(withJSONObject: payload)
+            URLSession.shared.dataTask(with: request).resume()
         }
     }
-
+    
     func exportTranscription(_ item: TranscriptionItem, format: String) {
         let panel = NSSavePanel()
         panel.title = "Сохранить транскрипцию"
         panel.nameFieldStringValue = "Заметка_\(item.date.replacingOccurrences(of: ":", with: "-")).\(format)"
         if panel.runModal() == .OK, let saveURL = panel.url {
             var content = ""
-            let prettyText = TextFormatter.formatIntoParagraphs(item.text)
+            // Текст УЖЕ отформатирован на диске!
             switch format.lowercased() {
-            case "md": content = "# Транскрипция Голосок\n**Дата:** \(item.date)\n**Длительность:** \(item.duration)\n\n---\n\n\(prettyText)"
-            case "txt": content = "Голосок — Транскрипция\nДата: \(item.date)\nДлительность: \(item.duration)\n\n\(prettyText)"
+            case "md": content = "# Транскрипция Голосок\n**Дата:** \(item.date)\n**Длительность:** \(item.duration)\n\n---\n\n\(item.text)"
+            case "txt": content = "Голосок — Транскрипция\nДата: \(item.date)\nДлительность: \(item.duration)\n\n\(item.text)"
             case "csv": content = "\"Дата\",\"Длительность\",\"Текст\"\n\"\(item.date)\",\"\(item.duration)\",\"\(item.text.replacingOccurrences(of: "\"", with: "\"\""))\""
             case "json":
                 let dict: [String: Any] = ["id": item.id.uuidString, "date": item.date, "duration": item.duration, "text": item.text]
                 if let data = try? JSONSerialization.data(withJSONObject: dict, options: .prettyPrinted) { content = String(data: data, encoding: .utf8) ?? "" }
-            default: content = prettyText
+            default: content = item.text
             }
             try? content.write(to: saveURL, atomically: true, encoding: .utf8)
         }
@@ -601,7 +557,7 @@ class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
     
     func checkUpdates() {
         guard let url = URL(string: "https://api.github.com/repos/Berliner187/Golosok/releases/latest") else { return }
-        let currentVer = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.6.0"
+        let currentVer = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.4.0"
         URLSession.shared.dataTask(with: url) { data, _, _ in
             guard let data = data, let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
                   let tagName = json["tag_name"] as? String, let releaseName = json["name"] as? String,
@@ -648,5 +604,20 @@ class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
     func deleteItem(at index: Int) { history.remove(at: index) }
     func clearAllHistory() { history.removeAll() }
     private func saveHistory() { if let e = try? JSONEncoder().encode(history) { UserDefaults.standard.set(e, forKey: "transcription_history") } }
-    private func loadHistory() { if let d = UserDefaults.standard.data(forKey: "transcription_history"), let dec = try? JSONDecoder().decode([TranscriptionItem].self, from: d) { self.history = dec } }
+    
+    // МИГРАЦИЯ СТАРОЙ БАЗЫ ПРИ СТАРТЕПРИЛОЖЕНИЯ
+    private func loadHistory() {
+        if let d = UserDefaults.standard.data(forKey: "transcription_history"),
+           let dec = try? JSONDecoder().decode([TranscriptionItem].self, from: d) {
+            
+            // За 0.001 сек пропатчиваем старые неформатированные заметки прямо на диске!
+            self.history = dec.map { item in
+                if !item.text.contains("\n\n") && item.text.count > 120 {
+                    let pretty = TextFormatter.formatIntoParagraphs(item.text)
+                    return TranscriptionItem(id: item.id, date: item.date, text: pretty, duration: item.duration, speedup: item.speedup)
+                }
+                return item
+            }
+        }
+    }
 }

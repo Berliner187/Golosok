@@ -17,11 +17,11 @@ struct OnboardingView: View {
             
             VStack(spacing: 24) {
                 VStack(spacing: 8) {
-                    Text("Настройка Голоска")
+                    Text("Давайте начнём")
                         .font(UIStyleFont.display(size: 22, weight: .semibold))
                         .foregroundColor(.uiInk)
                     
-                    Text("Для работы распознавания речи требуется микрофон. Остальные параметры можно настроить по желанию.")
+                    Text("Разрешите доступ к микрофону для записи речи. Остальные опции можно настроить позже.")
                         .font(UIStyleFont.body(size: 13, weight: .regular))
                         .foregroundColor(.uiMidGray)
                         .multilineTextAlignment(.center)
@@ -33,7 +33,7 @@ struct OnboardingView: View {
                         // ШАГ 1: Микрофон (Обязательно)
                         HStack(spacing: 16) {
                             Circle()
-                                .fill(permissions.isMicGranted ? Color(hex: "#10B981") : Color.uiEmber)
+                                .fill(permissions.isMicGranted ? Color(hex: "#10B981") : Color.uiWarn)
                                 .frame(width: 10, height: 10)
                             
                             VStack(alignment: .leading, spacing: 2) {
@@ -41,11 +41,11 @@ struct OnboardingView: View {
                                     Text("Доступ к микрофону")
                                         .font(UIStyleFont.display(size: 14, weight: .medium))
                                         .foregroundColor(.uiInk)
-                                    Text("Обязательно")
+                                    Text("Требуется")
                                         .font(UIStyleFont.body(size: 10, weight: .bold))
-                                        .foregroundColor(.uiEmber)
+                                        .foregroundColor(.uiWarn)
                                 }
-                                Text("Запись голоса для нейросети GigaAM v3")
+                                Text("Запись голоса для распознавания моделью")
                                     .font(UIStyleFont.body(size: 12, weight: .regular))
                                     .foregroundColor(.uiMidGray)
                             }
@@ -55,7 +55,7 @@ struct OnboardingView: View {
                             if permissions.isMicGranted {
                                 UIBadge(text: "Готово")
                             } else {
-                                UIPrimaryButton(title: "Включить") {
+                                UIPrimaryButton(title: "Разрешить") {
                                     permissions.requestMicPermission()
                                 }
                             }
@@ -71,14 +71,14 @@ struct OnboardingView: View {
                             
                             VStack(alignment: .leading, spacing: 2) {
                                 HStack(spacing: 6) {
-                                    Text("Автоматическая вставка")
+                                    Text("Вставка под курсор")
                                         .font(UIStyleFont.display(size: 14, weight: .medium))
                                         .foregroundColor(.uiInk)
-                                    Text("По желанию")
+                                    Text("Опционально")
                                         .font(UIStyleFont.body(size: 10, weight: .regular))
                                         .foregroundColor(.uiMidGray)
                                 }
-                                Text("Эмуляция Cmd+V в место курсора")
+                                Text("Мгновенная вставка распознанного текста в активное окно")
                                     .font(UIStyleFont.body(size: 12, weight: .regular))
                                     .foregroundColor(.uiMidGray)
                             }
@@ -88,7 +88,7 @@ struct OnboardingView: View {
                             if permissions.isAccessibilityGranted {
                                 UIBadge(text: "Готово")
                             } else {
-                                UIOutlineButton(title: "Открыть настройки") {
+                                UIOutlineButton(title: "Включить") {
                                     permissions.requestAccessibilityPermission()
                                 }
                             }
@@ -103,10 +103,10 @@ struct OnboardingView: View {
                                 .frame(width: 10, height: 10)
                             
                             VStack(alignment: .leading, spacing: 2) {
-                                Text("Анонимная аналитика")
+                                Text("Делиться аналитикой")
                                     .font(UIStyleFont.display(size: 14, weight: .medium))
                                     .foregroundColor(.uiInk)
-                                Text("Отправка обезличенной статистики запускa")
+                                Text("Автоматическая отправка данных диагностики и использования поможет совершенствовать продукт")
                                     .font(UIStyleFont.body(size: 12, weight: .regular))
                                     .foregroundColor(.uiMidGray)
                             }

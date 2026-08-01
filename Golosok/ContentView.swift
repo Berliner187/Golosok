@@ -3,22 +3,54 @@ import SwiftUI
 enum MainTab { case history, dashboard, settings }
 
 struct DateFormattingHelper {
+    private static let inputFormatter: DateFormatter = {
+        let df = DateFormatter()
+        df.dateFormat = "dd.MM.yyyy"
+        return df
+    }()
+    
+    private static let outputFormatter: DateFormatter = {
+        let df = DateFormatter()
+        df.locale = Locale(identifier: "ru_RU")
+        df.dateFormat = "d MMMM yyyy"
+        return df
+    }()
+    
     static func formatRussianDate(_ dateStr: String) -> (date: String, time: String) {
         let parts = dateStr.components(separatedBy: ", ")
         let datePart = parts.first ?? dateStr
         let timePart = parts.count > 1 ? parts[1] : ""
         
-        let inputFormatter = DateFormatter()
-        inputFormatter.dateFormat = "dd.MM.yyyy"
-        
         if let dateObj = inputFormatter.date(from: datePart) {
-            let outputFormatter = DateFormatter()
-            outputFormatter.locale = Locale(identifier: "ru_RU")
-            outputFormatter.dateFormat = "d MMMM yyyy"
             return (outputFormatter.string(from: dateObj), timePart)
         }
-        
         return (datePart, timePart)
+    }
+}
+
+struct NativeTextView: NSViewRepresentable {
+    let text: String
+    
+    func makeNSView(context: Context) -> NSScrollView {
+        let scrollView = NSTextView.scrollableTextView()
+        guard let textView = scrollView.documentView as? NSTextView else { return scrollView }
+        
+        textView.isEditable = false
+        textView.isSelectable = true
+        textView.drawsBackground = false
+        textView.font = NSFont.systemFont(ofSize: 15, weight: .regular)
+        textView.textColor = NSColor(Color.uiInk)
+        textView.textContainerInset = NSSize(width: 0, height: 10)
+        
+        return scrollView
+    }
+    
+    func updateNSView(_ nsView: NSScrollView, context: Context) {
+        guard let textView = nsView.documentView as? NSTextView else { return }
+        if textView.string != text {
+            textView.string = text
+            textView.textColor = NSColor(Color.uiInk)
+        }
     }
 }
 
@@ -27,7 +59,6 @@ struct ContentView: View {
     @ObservedObject var permissions = PermissionManager.shared
     
     @State private var isSplashFinished = false
-    
     @State private var currentTab: MainTab = .history
     @State private var selectedItemId: UUID?
     @State private var showOnboarding = false
@@ -35,9 +66,6 @@ struct ContentView: View {
     @State private var searchText = ""
     @State private var itemToDelete: UUID?
     @State private var showingDeleteAlert = false
-    
-    @State private var formattedDetailText: String = ""
-    @State private var isFormattingText: Bool = false
     
     var filteredHistory: [TranscriptionItem] {
         if searchText.isEmpty { return audioCapture.history }
@@ -65,30 +93,34 @@ struct ContentView: View {
             }
         }
     }
-
     
     var mainInterface: some View {
         HStack(spacing: 0) {
             VStack(alignment: .leading, spacing: 16) {
+                // ШАПКА САЙДБАРА (Без IMPULSE)
                 HStack(spacing: 8) {
                     Image("AppLogo").resizable().aspectRatio(contentMode: .fit).frame(width: 22, height: 22).cornerRadius(4)
                     VStack(alignment: .leading, spacing: -2) {
                         Text("Голосок").font(UIStyleFont.display(size: 16, weight: .bold)).foregroundColor(.uiInk)
-                        HStack(spacing: 4) {
-                            if let update = audioCapture.updateInfo {
-                                Text(update.codename).font(.system(size: 8, weight: .bold, design: .rounded)).tracking(0.5).foregroundColor(Color(hex: "#10B981")).padding(.horizontal, 4).padding(.vertical, 2).background(Color(hex: "#10B981").opacity(0.15)).cornerRadius(4)
-                            } else {
-                                Text((Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "v1.4.0")).font(.system(size: 8, weight: .bold, design: .rounded)).tracking(0.5).foregroundColor(Color(hex: "#10B981")).padding(.horizontal, 4).padding(.vertical, 2).background(Color(hex: "#10B981").opacity(0.15)).cornerRadius(4)
-                            }
-                        }
+                        Text("v" + (Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.6.0"))
+                            .font(UIStyleFont.body(size: 10, weight: .medium)).foregroundColor(.uiMidGray)
                     }
                     Spacer()
                 }.padding(.horizontal, 16).padding(.top, 16)
                 
                 VStack(spacing: 4) {
-                    SidebarTabButton(title: "История", icon: "clock.fill", isActive: currentTab == .history) { currentTab = .history }
-                    SidebarTabButton(title: "Борд", icon: "chart.bar.fill", isActive: currentTab == .dashboard) { currentTab = .dashboard; searchText = "" }
-                    SidebarTabButton(title: "Настройки", icon: "gearshape.fill", isActive: currentTab == .settings) { currentTab = .settings; searchText = "" }
+                    SidebarTabButton(title: "История", icon: "clock.fill", isActive: currentTab == .history) {
+                        currentTab = .history
+                        selectedItemId = nil
+                    }
+                    SidebarTabButton(title: "Борд", icon: "chart.bar.fill", isActive: currentTab == .dashboard) {
+                        currentTab = .dashboard
+                        searchText = ""
+                    }
+                    SidebarTabButton(title: "Настройки", icon: "gearshape.fill", isActive: currentTab == .settings) {
+                        currentTab = .settings
+                        searchText = ""
+                    }
                 }.padding(.horizontal, 8)
                 
                 Divider().background(Color.uiHairline)
@@ -101,7 +133,7 @@ struct ContentView: View {
                     }.padding(8).background(Color.uiPaper).cornerRadius(8).overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.uiHairline, lineWidth: 1)).padding(.horizontal, 12).padding(.bottom, 4)
                     
                     ScrollView {
-                        VStack(spacing: 8) {
+                        LazyVStack(spacing: 8) {
                             if filteredHistory.isEmpty { Text(searchText.isEmpty ? "История пуста" : "Ничего не найдено").font(UIStyleFont.body(size: 13, weight: .regular)).foregroundColor(.uiMidGray).padding(.vertical, 20) }
                             else { ForEach(filteredHistory) { item in HistoryCard(item: item, isSelected: selectedItemId == item.id).contentShape(Rectangle()).onTapGesture { selectedItemId = item.id } } }
                         }.padding(.horizontal, 8)
@@ -134,22 +166,13 @@ struct ContentView: View {
                 if let selected = audioCapture.history.first(where: { $0.id == selectedItemId }) {
                     UICard {
                         VStack(alignment: .leading, spacing: 16) {
-                            
-                            // 1. ВЕРХНЯЯ СТРОКА: ДАТА И КНОПКИ УПРАВЛЕНИЯ
                             HStack(alignment: .center) {
                                 let formattedDate = DateFormattingHelper.formatRussianDate(selected.date)
                                 HStack(alignment: .firstTextBaseline, spacing: 6) {
-                                    Text(formattedDate.date)
-                                        .font(UIStyleFont.display(size: 16, weight: .bold))
-                                        .foregroundColor(.uiInk)
+                                    Text(formattedDate.date).font(UIStyleFont.display(size: 16, weight: .bold)).foregroundColor(.uiInk)
                                     if !formattedDate.time.isEmpty {
-                                        Text(formattedDate.time)
-                                            .font(UIStyleFont.body(size: 11, weight: .medium))
-                                            .foregroundColor(.uiMidGray)
-                                            .padding(.horizontal, 6)
-                                            .padding(.vertical, 2)
-                                            .background(Color.uiCanvas)
-                                            .cornerRadius(6)
+                                        Text(formattedDate.time).font(UIStyleFont.body(size: 11, weight: .medium)).foregroundColor(.uiMidGray)
+                                            .padding(.horizontal, 6).padding(.vertical, 2).background(Color.uiCanvas).cornerRadius(6)
                                     }
                                 }
                                 
@@ -219,41 +242,60 @@ struct ContentView: View {
                             
                             Divider().background(Color.uiHairline).padding(.vertical, 4)
                             
-                            // 3. ТЕКСТ ТРАНСКРИПЦИИ
-                            if isFormattingText {
-                                VStack(spacing: 12) {
-                                    ProgressView().scaleEffect(0.8)
-                                    Text("Загрузка...").font(UIStyleFont.body(size: 12, weight: .regular)).foregroundColor(.uiMidGray)
-                                }.frame(maxWidth: .infinity, maxHeight: .infinity)
-                            } else {
-                                ScrollView {
-                                    Text(formattedDetailText)
-                                        .font(UIStyleFont.body(size: 15, weight: .regular))
-                                        .foregroundColor(.uiInk)
-                                        .lineSpacing(6)
-                                        .frame(maxWidth: .infinity, alignment: .leading)
-                                        .textSelection(.enabled)
-                                }
-                            }
+                            NativeTextView(text: selected.text)
                         }
                     }
-                    .task(id: selectedItemId) {
-                        guard let id = selectedItemId, let item = audioCapture.history.first(where: { $0.id == id }) else { formattedDetailText = ""; return }
-                        isFormattingText = true
-                        let raw = item.text
-                        let formatted = await Task.detached(priority: .userInitiated) { return TextFormatter.formatIntoParagraphs(raw) }.value
-                        self.formattedDetailText = formatted
-                        self.isFormattingText = false
-                    }
                 } else {
+                    // ХАБ ВОЗМОЖНОСТЕЙ (ЧЕСТНЫЕ 4 БЛОКА)
                     UICard {
-                        VStack(spacing: 20) {
-                            Image(systemName: "command").font(.system(size: 32, weight: .light)).foregroundColor(.uiMidGray)
-                            VStack(spacing: 8) {
-                                Text("⌥ + ПРОБЕЛ").font(UIStyleFont.display(size: 28, weight: .semibold)).foregroundColor(.uiInk)
-                                Text("Нажмите горячие клавиши в любом месте системы, чтобы запустить диктовку.").font(UIStyleFont.body(size: 13, weight: .regular)).foregroundColor(.uiMidGray).multilineTextAlignment(.center).frame(maxWidth: 320)
+                        VStack(spacing: 24) {
+                            VStack(spacing: 6) {
+                                HStack(spacing: 8) {
+                                    Image("AppLogo")
+                                        .resizable()
+                                        .frame(width: 26, height: 26)
+                                        .cornerRadius(6)
+                                    Text("Голосок")
+                                        .font(UIStyleFont.display(size: 20, weight: .bold))
+                                        .foregroundColor(.uiInk)
+                                }
+                                Text("Локальное приложение для надиктовки, расшифровки созвонов и работы с медиафайлами")
+                                    .font(UIStyleFont.body(size: 13, weight: .regular))
+                                    .foregroundColor(.uiMidGray)
                             }
-                        }.frame(maxWidth: .infinity, maxHeight: .infinity)
+                            
+                            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
+                                CapabilityCard(
+                                    icon: "keyboard",
+                                    badge: "⌥ + SPACE",
+                                    title: "Быстрый ввод",
+                                    description: "Надиктуйте мысль – текст сразу появится под курсором в любом приложении"
+                                )
+
+                                CapabilityCard(
+                                    icon: "video.fill",
+                                    badge: "⌘ + O / МЕНЮ",
+                                    title: "Созвоны и файлы",
+                                    description: "Расшифровка встреч Zoom, Телемоста и любых медиафайлов: MP3, MP4, WebM"
+                                )
+
+                                CapabilityCard(
+                                    icon: "play.circle.fill",
+                                    badge: "ОРИГИНАЛ",
+                                    title: "Сверка аудио",
+                                    description: "Слушайте исходный звук прямо в заметке, чтобы проверить соответствие с текстом"
+                                )
+
+                                CapabilityCard(
+                                    icon: "doc.badge.gearshape.fill",
+                                    badge: "4 ФОРМАТА",
+                                    title: "Экспорт",
+                                    description: "Авто-деление на абзацы и сохранение в Markdown, CSV, TXT или JSON"
+                                )
+                            }
+                        }
+                        .padding(12)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
                     }
                 }
             }.padding(20)
@@ -266,6 +308,43 @@ struct ContentView: View {
                 }
             }
         } message: { Text("Это действие нельзя отменить.") }
+    }
+}
+
+struct CapabilityCard: View {
+    let icon: String
+    let badge: String
+    let title: String
+    let description: String
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Image(systemName: icon)
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundColor(.uiInk)
+                Spacer()
+                UIBadge(text: badge)
+            }
+            
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title)
+                    .font(UIStyleFont.display(size: 14, weight: .semibold))
+                    .foregroundColor(.uiInk)
+                
+                Text(description)
+                    .font(UIStyleFont.body(size: 12, weight: .regular))
+                    .foregroundColor(.uiMidGray)
+                    .lineSpacing(2)
+            }
+        }
+        .padding(16)
+        .background(Color.uiSidebar)
+        .cornerRadius(16)
+        .overlay(
+            RoundedRectangle(cornerRadius: 16)
+                .stroke(Color.uiHairline, lineWidth: 1)
+        )
     }
 }
 
@@ -327,7 +406,7 @@ struct HistoryCard: View {
                 Spacer()
                 Text(item.duration).font(UIStyleFont.body(size: 10, weight: .regular)).foregroundColor(.uiMidGray)
             }
-            Text(item.text).font(UIStyleFont.body(size: 13, weight: .regular)).foregroundColor(isSelected ? .uiInk : .uiMidGray).lineLimit(2)
+            Text(item.text).font(UIStyleFont.body(size: 13, weight: .regular)).foregroundColor(isSelected ? .uiInk : .uiInkSoft).lineLimit(2)
         }
         .padding(12).background(isSelected ? Color.uiPaper : Color.clear).cornerRadius(12)
         .overlay(RoundedRectangle(cornerRadius: 12).stroke(isSelected ? Color.uiHairline : Color.clear, lineWidth: 1))
