@@ -290,7 +290,7 @@ struct CopyFeedbackButton: View {
         }) {
             HStack(spacing: 6) {
                 Image(systemName: isCopied ? "checkmark" : "doc.on.doc").font(.system(size: 11, weight: .medium))
-                Text(isCopied ? "Скопировано!" : "Скопировать")
+                Text(isCopied ? "Готово!" : "Скопировать")
             }
             .lineLimit(1)
             .font(UIStyleFont.body(size: 13, weight: .medium))
@@ -299,7 +299,7 @@ struct CopyFeedbackButton: View {
             .background(Color.uiPaper).cornerRadius(18)
             .overlay(RoundedRectangle(cornerRadius: 18).stroke(isCopied ? Color(hex: "#10B981").opacity(0.5) : Color.uiHairline, lineWidth: 1))
         }
-        .buttonStyle(TactileButtonStyle()) // ТАКТИЛЬНЫЙ СТИЛЬ С ПРУЖИНОЙ
+        .buttonStyle(TactileButtonStyle())
         .fixedSize(horizontal: true, vertical: false)
     }
 }

@@ -41,9 +41,10 @@ class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
     @Published var isRecording = false
     @Published var isProcessingFile = false
     @Published var fileProcessingProgress: Double = 0.0
-    @Published var audioSamples: [Float] = Array(repeating: 0.15, count: 9)
     @Published var transcribedText = ""
     @Published var warningMessage: String? = nil
+    @Published var audioSamples: [Float] = Array(repeating: 0.15, count: 18)
+    @Published var formattedRecordingTime: String = "00:00"
     
     // АПДЕЙТЫ
     @Published var updateInfo: UpdateInfo? = nil
@@ -204,18 +205,29 @@ class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
     private func updateMetering() {
         guard let recorder = audioRecorder, recorder.isRecording else { return }
         recorder.updateMeters()
+        
+        let elapsed = Int(Date().timeIntervalSince(startTime ?? Date()))
+        let mins = elapsed / 60
+        let secs = elapsed % 60
+        let timeStr = String(format: "%02d:%02d", mins, secs)
+        
         let power = recorder.averagePower(forChannel: 0)
         let level = max(0.15, min(1.0, (power + 40.0) / 35.0))
+        
         var newSamples: [Float] = []
-        for i in 0..<9 {
+        for i in 0..<18 {
             let randomFactor = Float.random(in: 0.7...1.3)
             let targetVal = max(0.15, min(1.0, level * randomFactor))
             let currentVal = i < audioSamples.count ? audioSamples[i] : 0.15
-            newSamples.append(currentVal * 0.4 + targetVal * 0.6)
+            newSamples.append(currentVal * 0.35 + targetVal * 0.65)
         }
-        DispatchQueue.main.async { self.audioSamples = newSamples }
+        
+        DispatchQueue.main.async {
+            self.formattedRecordingTime = timeStr
+            self.audioSamples = newSamples
+        }
     }
-    
+
     func importAndTranscribeFile() {
         if isRecording || isProcessingFile {
             SoundEffect.playCancel()
