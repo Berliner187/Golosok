@@ -513,7 +513,7 @@ class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
     
     private func sendTelemetry(eventType: String, audioDurationSec: Double, characterCount: Int, speedup: Double) {
         guard analyticsEnabled else { return }
-        guard let url = URL(string: "https://your-domain.ru/api/v1/telemetry/") else { return }
+        guard let url = URL(string: "https://golosok.space/api/v1/telemetry/") else { return }
         var deviceID = UserDefaults.standard.string(forKey: "anonymous_device_id")
         if deviceID == nil { deviceID = UUID().uuidString; UserDefaults.standard.set(deviceID, forKey: "anonymous_device_id") }
         let appVer = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.4.0"
@@ -558,7 +558,7 @@ class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
         guard let url = URL(string: "https://api.github.com/repos/Berliner187/Golosok/releases/latest") else { return }
         let currentVer = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.4.0"
         
-        var request = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalAndRemoteCacheData, timeoutInterval: 10.0)
+        let request = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalAndRemoteCacheData, timeoutInterval: 10.0)
         
         URLSession.shared.dataTask(with: request) { data, _, _ in
             guard let data = data, let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
