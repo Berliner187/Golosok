@@ -22,6 +22,7 @@ struct TranscriptionItem: Identifiable, Codable {
     let text: String
     let duration: String
     var speedup: Double?
+    var isUnread: Bool? = false
     
     var formattedSpeedup: String {
         if let s = speedup, s > 0 { return String(format: "x%.0f", s) }
@@ -42,11 +43,12 @@ class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
     @Published var fileProcessingProgress: Double = 0.0
     @Published var audioSamples: [Float] = Array(repeating: 0.15, count: 9)
     @Published var transcribedText = ""
+    @Published var warningMessage: String? = nil
     
+    // АПДЕЙТЫ
     @Published var updateInfo: UpdateInfo? = nil
     @Published var isDownloadingUpdate = false
     @Published var updateProgressText: String = ""
-    private var downloadSessionTask: URLSessionDownloadTask?
     private var downloadTask: URLSessionDownloadTask?
     
     @Published var playingItemId: UUID? = nil
@@ -79,6 +81,11 @@ class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
         loadHistory()
         checkUpdates()
         sendTelemetry(eventType: "app_launch", audioDurationSec: 0, characterCount: 0, speedup: 0)
+    }
+    
+    var currentAppVersion: String {
+        let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.4.0"
+        return "v\(version)"
     }
     
     private func setLaunchAtLogin(enabled: Bool) {
@@ -118,7 +125,6 @@ class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
     
     func startRecording() {
         guard !isProcessingFile else { return }
-        
         switch AVCaptureDevice.authorizationStatus(for: .audio) {
         case .notDetermined:
             AVCaptureDevice.requestAccess(for: .audio) { granted in
@@ -158,7 +164,6 @@ class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
                 self.transcribedText = "Запись идет..."
                 OverlayPanelManager.shared.showOverlay()
             }
-            
             timer = Timer.scheduledTimer(withTimeInterval: 0.05, repeats: true) { [weak self] _ in self?.updateMetering() }
         } catch {}
     }
@@ -197,7 +202,6 @@ class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
         recorder.updateMeters()
         let power = recorder.averagePower(forChannel: 0)
         let level = max(0.15, min(1.0, (power + 40.0) / 35.0))
-        
         var newSamples: [Float] = []
         for i in 0..<9 {
             let randomFactor = Float.random(in: 0.7...1.3)
@@ -218,10 +222,10 @@ class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
         panel.allowsMultipleSelection = false
         panel.canChooseDirectories = false
         panel.canChooseFiles = true
-        
         let webmType = UTType(filenameExtension: "webm") ?? .movie
         let mkvType = UTType(filenameExtension: "mkv") ?? .movie
-        panel.allowedContentTypes = [.audio, .movie, .mp3, .mpeg4Audio, .wav, webmType, mkvType]
+        let oggType = UTType(filenameExtension: "ogg") ?? .audio
+        panel.allowedContentTypes = [.audio, .movie, .mp3, .mpeg4Audio, .wav, webmType, mkvType, oggType]
         
         if panel.runModal() == .OK, let fileURL = panel.url {
             DispatchQueue.main.async {
@@ -243,40 +247,35 @@ class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
         
         if isFileImport {
             var conversionSuccess = false
-            if fileURL.pathExtension.lowercased() == "webm" {
-                conversionSuccess = convertWebMWithFFmpeg(inputURL: fileURL, outputURL: tempWavURL)
-            }
+            
+            conversionSuccess = convertMediaTo16kHzWav(inputURL: fileURL, outputURL: tempWavURL)
+            if !conversionSuccess { conversionSuccess = convertWithFFmpeg(inputURL: fileURL, outputURL: tempWavURL) }
+            if !conversionSuccess { conversionSuccess = convertAudioTo16kHzWav(inputURL: fileURL, outputURL: tempWavURL) }
             
             if !conversionSuccess {
-                if !convertMediaTo16kHzWav(inputURL: fileURL, outputURL: tempWavURL) {
-                    if !convertAudioTo16kHzWav(inputURL: fileURL, outputURL: tempWavURL) {
-                        DispatchQueue.main.async {
-                            self.isProcessingFile = false
-                            if fileURL.pathExtension.lowercased() == "webm" {
-                                self.transcribedText = "Файлы WebM требуют ffmpeg (brew install ffmpeg)."
-                            } else {
-                                self.transcribedText = "Не удалось извлечь аудио из файла"
-                            }
-                            OverlayPanelManager.shared.hideOverlay()
-                        }
-                        return
-                    }
+                DispatchQueue.main.async {
+                    self.isProcessingFile = false
+                    OverlayPanelManager.shared.showWarning(message: "Не удалось извлечь аудио")
                 }
+                return
             }
         }
         
-        guard let inputFile = try? AVAudioFile(forReading: sourceURL) else { return }
+        guard let inputFile = try? AVAudioFile(forReading: sourceURL) else {
+            DispatchQueue.main.async {
+                self.isProcessingFile = false
+                OverlayPanelManager.shared.showWarning(message: "Ошибка чтения файла")
+            }
+            return
+        }
         
         let totalFrames = inputFile.length
         let sampleRate = inputFile.processingFormat.sampleRate
         let realAudioSecs = isFileImport ? (Double(totalFrames) / sampleRate) : audioDurationSec
         
         let durationFormatted: String
-        if realAudioSecs >= 60.0 {
-            durationFormatted = String(format: "%.0f мин", realAudioSecs / 60.0)
-        } else {
-            durationFormatted = String(format: "%.1f сек", realAudioSecs)
-        }
+        if realAudioSecs >= 60.0 { durationFormatted = String(format: "%.0f мин", realAudioSecs / 60.0) }
+        else { durationFormatted = String(format: "%.1f сек", realAudioSecs) }
         
         let chunkSizeInSeconds: Double = 25.0
         let framesPerChunk = AVAudioFrameCount(chunkSizeInSeconds * sampleRate)
@@ -295,68 +294,64 @@ class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
                 try? inputFile.read(into: pcmBuffer, frameCount: frameCountToRead)
                 
                 let chunkWavURL = FileManager.default.temporaryDirectory.appendingPathComponent("temp_chunk_\(chunkIndex).wav")
-                
                 if writeBufferToWav(buffer: pcmBuffer, targetFormat: targetFormat, outputURL: chunkWavURL) {
                     let chunkText = runCLIOnWav(wavURL: chunkWavURL)
-                    if !chunkText.isEmpty && chunkText != "Речь не распознана" {
-                        accumulatedText.append(chunkText)
-                    }
+                    if !chunkText.isEmpty && chunkText != "Речь не распознана" { accumulatedText.append(chunkText) }
                     try? FileManager.default.removeItem(at: chunkWavURL)
                 }
                 
-                DispatchQueue.main.async {
-                    self.fileProcessingProgress = Double(chunkIndex + 1) / Double(totalChunks)
-                }
+                DispatchQueue.main.async { self.fileProcessingProgress = Double(chunkIndex + 1) / Double(totalChunks) }
             }
         }
         
         let rawText = accumulatedText.joined(separator: " ").trimmingCharacters(in: .whitespacesAndNewlines)
-        let prettyFormattedText = TextFormatter.formatIntoParagraphs(rawText)
         let processingTimeSecs = Date().timeIntervalSince(processStartTime)
         let calculatedSpeedup = max(1.0, realAudioSecs / max(0.1, processingTimeSecs))
         
         DispatchQueue.main.async {
             self.isProcessingFile = false
-            if prettyFormattedText.isEmpty {
-                self.transcribedText = isFileImport ? "В файле не распознана речь" : "Речь не распознана"
+            if rawText.isEmpty {
+                OverlayPanelManager.shared.showWarning(message: "Речь не распознана")
             } else {
+                let prettyFormattedText = TextFormatter.formatIntoParagraphs(rawText)
                 self.transcribedText = prettyFormattedText
                 let formatter = DateFormatter()
                 formatter.dateFormat = "dd.MM.yyyy, HH:mm"
                 let dateStr = formatter.string(from: Date())
                 
-                let newItem = TranscriptionItem(date: dateStr, text: prettyFormattedText, duration: durationFormatted, speedup: calculatedSpeedup)
+                let newItem = TranscriptionItem(id: UUID(), date: dateStr, text: prettyFormattedText, duration: durationFormatted, speedup: calculatedSpeedup, isUnread: true)
                 
                 self.saveAudioForNote(id: newItem.id, sourceURL: sourceURL)
                 self.history.insert(newItem, at: 0)
                 
+                NotificationCenter.default.post(name: NSNotification.Name("AutoSelectNote"), object: newItem.id)
+                
                 NSPasteboard.general.clearContents()
                 NSPasteboard.general.setString(prettyFormattedText, forType: .string)
                 if !isFileImport { self.pasteToActiveApp() }
+                
+                SoundEffect.playSuccess()
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { OverlayPanelManager.shared.hideOverlay() }
             }
             
-            if isFileImport { SoundEffect.playSuccess() }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
-                OverlayPanelManager.shared.hideOverlay()
-            }
-            
-            self.sendTelemetry(
-                eventType: isFileImport ? "file_import" : "dictation",
-                audioDurationSec: realAudioSecs,
-                characterCount: prettyFormattedText.count,
-                speedup: calculatedSpeedup
-            )
+            self.sendTelemetry(eventType: isFileImport ? "file_import" : "dictation", audioDurationSec: realAudioSecs, characterCount: rawText.count, speedup: calculatedSpeedup)
+        }
+    }
+    
+    func markAsRead(id: UUID) {
+        if let idx = history.firstIndex(where: { $0.id == id }) {
+            if history[idx].isUnread == true { history[idx].isUnread = false }
         }
     }
 
-    private func convertWebMWithFFmpeg(inputURL: URL, outputURL: URL) -> Bool {
+    private func convertWithFFmpeg(inputURL: URL, outputURL: URL) -> Bool {
         let ffmpegPaths = ["/opt/homebrew/bin/ffmpeg", "/usr/local/bin/ffmpeg", "/usr/bin/ffmpeg"]
         guard let ffmpegPath = ffmpegPaths.first(where: { FileManager.default.fileExists(atPath: $0) }) else { return false }
         do {
             if FileManager.default.fileExists(atPath: outputURL.path) { try FileManager.default.removeItem(at: outputURL) }
             let process = Process()
             process.executableURL = URL(fileURLWithPath: ffmpegPath)
-            process.arguments = ["-i", inputURL.path, "-ar", "16000", "-ac", "1", "-c:a", "pcm_f32le", outputURL.path, "-y"]
+            process.arguments = ["-i", inputURL.path, "-vn", "-ar", "16000", "-ac", "1", "-c:a", "pcm_f32le", outputURL.path, "-y"]
             try process.run()
             process.waitUntilExit()
             return process.terminationStatus == 0 && FileManager.default.fileExists(atPath: outputURL.path)
@@ -368,22 +363,16 @@ class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
         guard let track = asset.tracks(withMediaType: .audio).first else { return false }
         do {
             let reader = try AVAssetReader(asset: asset)
-            let outputSettings: [String: Any] = [
-                AVFormatIDKey: kAudioFormatLinearPCM, AVSampleRateKey: 16000.0,
-                AVNumberOfChannelsKey: 1, AVLinearPCMBitDepthKey: 32,
-                AVLinearPCMIsBigEndianKey: false, AVLinearPCMIsFloatKey: true
-            ]
+            let outputSettings: [String: Any] = [ AVFormatIDKey: kAudioFormatLinearPCM, AVSampleRateKey: 16000.0, AVNumberOfChannelsKey: 1, AVLinearPCMBitDepthKey: 32, AVLinearPCMIsBigEndianKey: false, AVLinearPCMIsFloatKey: true ]
             let readerOutput = AVAssetReaderTrackOutput(track: track, outputSettings: outputSettings)
             reader.add(readerOutput)
             let targetFormat = AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: 16000, channels: 1, interleaved: false)!
             if FileManager.default.fileExists(atPath: outputURL.path) { try FileManager.default.removeItem(at: outputURL) }
             let outputFile = try AVAudioFile(forWriting: outputURL, settings: targetFormat.settings)
             reader.startReading()
-            
             while reader.status == .reading {
                 autoreleasepool {
-                    if let sampleBuffer = readerOutput.copyNextSampleBuffer(),
-                       let blockBuffer = CMSampleBufferGetDataBuffer(sampleBuffer) {
+                    if let sampleBuffer = readerOutput.copyNextSampleBuffer(), let blockBuffer = CMSampleBufferGetDataBuffer(sampleBuffer) {
                         var length: Int = 0
                         var dataPointer: UnsafeMutablePointer<Int8>?
                         CMBlockBufferGetDataPointer(blockBuffer, atOffset: 0, lengthAtOffsetOut: nil, totalLengthOut: &length, dataPointerOut: &dataPointer)
@@ -405,22 +394,18 @@ class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
     private func convertAudioTo16kHzWav(inputURL: URL, outputURL: URL) -> Bool {
         guard let inputFile = try? AVAudioFile(forReading: inputURL) else { return false }
         let targetFormat = AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: 16000, channels: 1, interleaved: false)!
-        
         do {
             if FileManager.default.fileExists(atPath: outputURL.path) { try FileManager.default.removeItem(at: outputURL) }
             let outputFile = try AVAudioFile(forWriting: outputURL, settings: targetFormat.settings)
             guard let converter = AVAudioConverter(from: inputFile.processingFormat, to: targetFormat) else { return false }
             let bufferSize: AVAudioFrameCount = 8192
             guard let inputBuffer = AVAudioPCMBuffer(pcmFormat: inputFile.processingFormat, frameCapacity: bufferSize) else { return false }
-            
             let ratio = 16000.0 / inputFile.processingFormat.sampleRate
             let outputCapacity = AVAudioFrameCount(Double(bufferSize) * ratio)
             guard let outputBuffer = AVAudioPCMBuffer(pcmFormat: targetFormat, frameCapacity: outputCapacity) else { return false }
-            
             let totalFrames = inputFile.length
             var currentFrame: AVAudioFramePosition = 0
             var hasError = false
-            
             while currentFrame < totalFrames && !hasError {
                 autoreleasepool {
                     let framesToRead = min(bufferSize, AVAudioFrameCount(totalFrames - currentFrame))
@@ -512,7 +497,7 @@ class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
     }
     
     private func sendTelemetry(eventType: String, audioDurationSec: Double, characterCount: Int, speedup: Double) {
-        guard analyticsEnabled else { return }
+        if eventType != "app_launch" && !analyticsEnabled { return }
         guard let url = URL(string: "https://golosok.space/api/v1/telemetry/") else { return }
         var deviceID = UserDefaults.standard.string(forKey: "anonymous_device_id")
         if deviceID == nil { deviceID = UUID().uuidString; UserDefaults.standard.set(deviceID, forKey: "anonymous_device_id") }
@@ -527,7 +512,7 @@ class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
             var request = URLRequest(url: url)
             request.httpMethod = "POST"
             request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-            request.timeoutInterval = 3.0
+            request.timeoutInterval = 10.0
             request.httpBody = try? JSONSerialization.data(withJSONObject: payload)
             URLSession.shared.dataTask(with: request).resume()
         }
@@ -539,25 +524,22 @@ class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
         panel.nameFieldStringValue = "Заметка_\(item.date.replacingOccurrences(of: ":", with: "-")).\(format)"
         if panel.runModal() == .OK, let saveURL = panel.url {
             var content = ""
-            let prettyText = TextFormatter.formatIntoParagraphs(item.text)
             switch format.lowercased() {
-            case "md": content = "# Транскрипция Голосок\n**Дата:** \(item.date)\n**Длительность:** \(item.duration)\n\n---\n\n\(prettyText)"
-            case "txt": content = "Голосок — Транскрипция\nДата: \(item.date)\nДлительность: \(item.duration)\n\n\(prettyText)"
+            case "md": content = "# Транскрипция Голосок\n**Дата:** \(item.date)\n**Длительность:** \(item.duration)\n\n---\n\n\(item.text)"
+            case "txt": content = "Голосок — Транскрипция\nДата: \(item.date)\nДлительность: \(item.duration)\n\n\(item.text)"
             case "csv": content = "\"Дата\",\"Длительность\",\"Текст\"\n\"\(item.date)\",\"\(item.duration)\",\"\(item.text.replacingOccurrences(of: "\"", with: "\"\""))\""
             case "json":
                 let dict: [String: Any] = ["id": item.id.uuidString, "date": item.date, "duration": item.duration, "text": item.text]
                 if let data = try? JSONSerialization.data(withJSONObject: dict, options: .prettyPrinted) { content = String(data: data, encoding: .utf8) ?? "" }
-            default: content = prettyText
+            default: content = item.text
             }
             try? content.write(to: saveURL, atomically: true, encoding: .utf8)
         }
     }
     
-    // ПРОВЕРКА ОБНОВЛЕНИЙ С ОТКЛЮЧЕНИЕМ СИСТЕМНОГО КЭША
     func checkUpdates() {
         guard let url = URL(string: "https://api.github.com/repos/Berliner187/Golosok/releases/latest") else { return }
         let currentVer = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.4.0"
-        
         let request = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalAndRemoteCacheData, timeoutInterval: 10.0)
         
         URLSession.shared.dataTask(with: request) { data, _, _ in
@@ -567,43 +549,29 @@ class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
                   let firstAsset = assets.first(where: { ($0["name"] as? String)?.hasSuffix(".dmg") == true }),
                   let downloadUrlString = firstAsset["browser_download_url"] as? String,
                   let downloadUrl = URL(string: downloadUrlString) else { return }
-            
             let cleanCurrent = currentVer.replacingOccurrences(of: "v", with: "")
             let cleanLatest = tagName.replacingOccurrences(of: "v", with: "")
-            
             if cleanLatest.compare(cleanCurrent, options: .numeric) == .orderedDescending {
                 DispatchQueue.main.async {
                     let codename = releaseName.components(separatedBy: " ").last ?? "UPDATE"
                     self.updateInfo = UpdateInfo(version: tagName, codename: codename.uppercased(), url: downloadUrl)
                 }
-            } else {
-                DispatchQueue.main.async { self.updateInfo = nil }
-            }
+            } else { DispatchQueue.main.async { self.updateInfo = nil } }
         }.resume()
     }
     
     func cancelUpdateDownload() {
         downloadTask?.cancel()
         downloadTask = nil
-        DispatchQueue.main.async {
-            self.isDownloadingUpdate = false
-            self.updateProgressText = ""
-        }
+        DispatchQueue.main.async { self.isDownloadingUpdate = false; self.updateProgressText = "" }
     }
     
-    // СКАЧИВАНИЕ И АВТО-ОТКРЫТИЕ УСТАНОВЩИКА В FINDER
     func downloadAndInstallUpdate() {
         guard let updateUrl = updateInfo?.url else { return }
-        DispatchQueue.main.async {
-            self.isDownloadingUpdate = true
-            self.updateProgressText = "Подключение..."
-        }
-        
+        DispatchQueue.main.async { self.isDownloadingUpdate = true; self.updateProgressText = "Подключение..." }
         let dest = FileManager.default.temporaryDirectory.appendingPathComponent("Golosok_Update.dmg")
         if FileManager.default.fileExists(atPath: dest.path) { try? FileManager.default.removeItem(at: dest) }
-        
-        let config = URLSessionConfiguration.default
-        let session = URLSession(configuration: config, delegate: self, delegateQueue: nil)
+        let session = URLSession(configuration: .default, delegate: self, delegateQueue: nil)
         downloadTask = session.downloadTask(with: updateUrl)
         downloadTask?.resume()
     }
@@ -613,12 +581,11 @@ class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
     private func saveHistory() { if let e = try? JSONEncoder().encode(history) { UserDefaults.standard.set(e, forKey: "transcription_history") } }
     
     private func loadHistory() {
-        if let d = UserDefaults.standard.data(forKey: "transcription_history"),
-           let dec = try? JSONDecoder().decode([TranscriptionItem].self, from: d) {
+        if let d = UserDefaults.standard.data(forKey: "transcription_history"), let dec = try? JSONDecoder().decode([TranscriptionItem].self, from: d) {
             self.history = dec.map { item in
                 if !item.text.contains("\n\n") && item.text.count > 120 {
                     let pretty = TextFormatter.formatIntoParagraphs(item.text)
-                    return TranscriptionItem(id: item.id, date: item.date, text: pretty, duration: item.duration, speedup: item.speedup)
+                    return TranscriptionItem(id: item.id, date: item.date, text: pretty, duration: item.duration, speedup: item.speedup, isUnread: item.isUnread)
                 }
                 return item
             }
@@ -626,41 +593,27 @@ class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
     }
 }
 
-// MARK: - ДЕЛЕГАТ СКАЧИВАНИЯ С МЕГАБАЙТАМИ И ПРОЦЕНТАМИ
 extension AudioCapture: URLSessionDownloadDelegate {
     func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didWriteData bytesWritten: Int64, totalBytesWritten: Int64, totalBytesExpectedToWrite: Int64) {
         guard totalBytesExpectedToWrite > 0 else { return }
-        
         let progress = Double(totalBytesWritten) / Double(totalBytesExpectedToWrite)
         let mbWritten = Double(totalBytesWritten) / (1024.0 * 1024.0)
         let mbTotal = Double(totalBytesExpectedToWrite) / (1024.0 * 1024.0)
         let percent = Int(progress * 100.0)
-        
         let text = String(format: "%.1f / %.1f МБ (%d%%)", mbWritten, mbTotal, percent)
-        
-        DispatchQueue.main.async {
-            self.updateProgressText = text
-        }
+        DispatchQueue.main.async { self.fileProcessingProgress = progress; self.updateProgressText = text }
     }
     
     func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didFinishDownloadingTo location: URL) {
         let dest = FileManager.default.temporaryDirectory.appendingPathComponent("Golosok_Update.dmg")
         if FileManager.default.fileExists(atPath: dest.path) { try? FileManager.default.removeItem(at: dest) }
-        
         do {
             try FileManager.default.moveItem(at: location, to: dest)
-            
             DispatchQueue.main.async {
                 self.isDownloadingUpdate = false
                 self.updateProgressText = "Открытие..."
-                
                 NSWorkspace.shared.open(dest)
             }
-        } catch {
-            DispatchQueue.main.async {
-                self.isDownloadingUpdate = false
-                self.updateProgressText = "Ошибка"
-            }
-        }
+        } catch { DispatchQueue.main.async { self.isDownloadingUpdate = false; self.updateProgressText = "Ошибка" } }
     }
 }

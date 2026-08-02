@@ -1,56 +1,32 @@
 import SwiftUI
+import AppKit
 
 enum MainTab { case history, dashboard, settings }
 
 struct DateFormattingHelper {
-    private static let inputFormatter: DateFormatter = {
-        let df = DateFormatter()
-        df.dateFormat = "dd.MM.yyyy"
-        return df
-    }()
-    
-    private static let outputFormatter: DateFormatter = {
-        let df = DateFormatter()
-        df.locale = Locale(identifier: "ru_RU")
-        df.dateFormat = "d MMMM yyyy"
-        return df
-    }()
-    
+    private static let inputFormatter: DateFormatter = { let df = DateFormatter(); df.dateFormat = "dd.MM.yyyy"; return df }()
+    private static let outputFormatter: DateFormatter = { let df = DateFormatter(); df.locale = Locale(identifier: "ru_RU"); df.dateFormat = "d MMMM yyyy"; return df }()
     static func formatRussianDate(_ dateStr: String) -> (date: String, time: String) {
         let parts = dateStr.components(separatedBy: ", ")
-        let datePart = parts.first ?? dateStr
-        let timePart = parts.count > 1 ? parts[1] : ""
-        
-        if let dateObj = inputFormatter.date(from: datePart) {
-            return (outputFormatter.string(from: dateObj), timePart)
-        }
+        let datePart = parts.first ?? dateStr; let timePart = parts.count > 1 ? parts[1] : ""
+        if let dateObj = inputFormatter.date(from: datePart) { return (outputFormatter.string(from: dateObj), timePart) }
         return (datePart, timePart)
     }
 }
 
 struct NativeTextView: NSViewRepresentable {
     let text: String
-    
     func makeNSView(context: Context) -> NSScrollView {
         let scrollView = NSTextView.scrollableTextView()
         guard let textView = scrollView.documentView as? NSTextView else { return scrollView }
-        
-        textView.isEditable = false
-        textView.isSelectable = true
-        textView.drawsBackground = false
-        textView.font = NSFont.systemFont(ofSize: 15, weight: .regular)
-        textView.textColor = NSColor(Color.uiInk)
+        textView.isEditable = false; textView.isSelectable = true; textView.drawsBackground = false
+        textView.font = NSFont.systemFont(ofSize: 15, weight: .regular); textView.textColor = NSColor(Color.uiInk)
         textView.textContainerInset = NSSize(width: 0, height: 10)
-        
         return scrollView
     }
-    
     func updateNSView(_ nsView: NSScrollView, context: Context) {
         guard let textView = nsView.documentView as? NSTextView else { return }
-        if textView.string != text {
-            textView.string = text
-            textView.textColor = NSColor(Color.uiInk)
-        }
+        if textView.string != text { textView.string = text; textView.textColor = NSColor(Color.uiInk) }
     }
 }
 
@@ -75,20 +51,22 @@ struct ContentView: View {
     var body: some View {
         ZStack {
             if !isSplashFinished {
-                SplashView(isFinished: $isSplashFinished)
-                    .transition(.opacity)
-                    .zIndex(2)
+                SplashView(isFinished: $isSplashFinished).transition(.opacity).zIndex(2)
             } else {
                 Group {
-                    if !permissions.onboardingCompleted {
-                        OnboardingView(isPresented: $showOnboarding)
-                    } else {
-                        mainInterface
-                    }
+                    if !permissions.onboardingCompleted { OnboardingView(isPresented: $showOnboarding) }
+                    else { mainInterface }
                 }
-                .transition(.opacity)
-                .onAppear {
-                    permissions.checkPermissions()
+                .transition(.opacity).onAppear { permissions.checkPermissions() }
+            }
+        }
+        // Автоматическое открытие заметки
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("AutoSelectNote"))) { notification in
+            if let newId = notification.object as? UUID {
+                withAnimation {
+                    self.currentTab = .history
+                    self.searchText = ""
+                    self.selectedItemId = newId
                 }
             }
         }
@@ -96,59 +74,8 @@ struct ContentView: View {
     
     var mainInterface: some View {
         HStack(spacing: 0) {
-            VStack(alignment: .leading, spacing: 16) {
-                // ШАПКА САЙДБАРА (Без IMPULSE)
-                HStack(spacing: 8) {
-                    Image("AppLogo").resizable().aspectRatio(contentMode: .fit).frame(width: 22, height: 22).cornerRadius(4)
-                    VStack(alignment: .leading, spacing: -2) {
-                        Text("Голосок").font(UIStyleFont.display(size: 16, weight: .bold)).foregroundColor(.uiInk)
-                        Text("v" + (Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.6.0"))
-                            .font(UIStyleFont.body(size: 10, weight: .medium)).foregroundColor(.uiMidGray)
-                    }
-                    Spacer()
-                }.padding(.horizontal, 16).padding(.top, 16)
-                
-                VStack(spacing: 4) {
-                    SidebarTabButton(title: "История", icon: "clock.fill", isActive: currentTab == .history) {
-                        currentTab = .history
-                        selectedItemId = nil
-                    }
-                    SidebarTabButton(title: "Борд", icon: "chart.bar.fill", isActive: currentTab == .dashboard) {
-                        currentTab = .dashboard
-                        searchText = ""
-                    }
-                    SidebarTabButton(title: "Настройки", icon: "gearshape.fill", isActive: currentTab == .settings) {
-                        currentTab = .settings
-                        searchText = ""
-                    }
-                }.padding(.horizontal, 8)
-                
-                Divider().background(Color.uiHairline)
-                
-                if currentTab == .history {
-                    HStack {
-                        Image(systemName: "magnifyingglass").foregroundColor(.uiMidGray)
-                        TextField("Поиск...", text: $searchText).textFieldStyle(PlainTextFieldStyle()).font(UIStyleFont.body(size: 13, weight: .regular)).foregroundColor(.uiInk)
-                        if !searchText.isEmpty { Button(action: { searchText = "" }) { Image(systemName: "xmark.circle.fill").foregroundColor(.uiMidGray) }.buttonStyle(.plain) }
-                    }.padding(8).background(Color.uiPaper).cornerRadius(8).overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.uiHairline, lineWidth: 1)).padding(.horizontal, 12).padding(.bottom, 4)
-                    
-                    ScrollView {
-                        LazyVStack(spacing: 8) {
-                            if filteredHistory.isEmpty { Text(searchText.isEmpty ? "История пуста" : "Ничего не найдено").font(UIStyleFont.body(size: 13, weight: .regular)).foregroundColor(.uiMidGray).padding(.vertical, 20) }
-                            else { ForEach(filteredHistory) { item in HistoryCard(item: item, isSelected: selectedItemId == item.id).contentShape(Rectangle()).onTapGesture { selectedItemId = item.id } } }
-                        }.padding(.horizontal, 8)
-                    }
-                } else { Spacer() }
-                
-                HStack {
-                    Circle().fill(audioCapture.isRecording ? Color.uiEmber : Color.green).frame(width: 8, height: 8)
-                    Text(audioCapture.isRecording ? "Запись..." : "Готов к работе").font(UIStyleFont.body(size: 12, weight: .regular)).foregroundColor(.uiMidGray)
-                }.padding(.horizontal, 16).padding(.bottom, 16)
-            }
-            .frame(width: 270).background(Color.uiSidebar)
-            
+            sidebarView
             Divider().background(Color.uiHairline)
-            
             Group {
                 switch currentTab {
                 case .history: historyDetailView
@@ -157,6 +84,66 @@ struct ContentView: View {
                 }
             }
         }.frame(minWidth: 840, minHeight: 520)
+    }
+    
+    private var sidebarView: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            sidebarHeader
+            VStack(spacing: 4) {
+                SidebarTabButton(title: "История", icon: "clock.fill", isActive: currentTab == .history) { currentTab = .history }
+                SidebarTabButton(title: "Борд", icon: "chart.bar.fill", isActive: currentTab == .dashboard) { currentTab = .dashboard; searchText = "" }
+                SidebarTabButton(title: "Настройки", icon: "gearshape.fill", isActive: currentTab == .settings) { currentTab = .settings; searchText = "" }
+            }.padding(.horizontal, 8)
+            Divider().background(Color.uiHairline)
+            if currentTab == .history { historySearchAndList } else { Spacer() }
+            sidebarFooter
+        }.frame(width: 270).background(Color.uiSidebar)
+    }
+    
+    private var sidebarHeader: some View {
+        HStack(spacing: 8) {
+            Image("AppLogo").resizable().aspectRatio(contentMode: .fit).frame(width: 22, height: 22).cornerRadius(4)
+            VStack(alignment: .leading, spacing: -2) {
+                Text("Голосок").font(UIStyleFont.display(size: 16, weight: .bold)).foregroundColor(.uiInk)
+                HStack(spacing: 4) {
+                    let versionStr = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? ""
+                    Text(versionStr).font(UIStyleFont.body(size: 10, weight: .medium)).foregroundColor(.uiMidGray)
+                }
+            }
+            Spacer()
+        }.padding(.horizontal, 16).padding(.top, 16)
+    }
+    
+    private var historySearchAndList: some View {
+        VStack(spacing: 0) {
+            HStack {
+                Image(systemName: "magnifyingglass").foregroundColor(.uiMidGray)
+                TextField("Поиск...", text: $searchText).textFieldStyle(PlainTextFieldStyle()).font(UIStyleFont.body(size: 13, weight: .regular)).foregroundColor(.uiInk)
+                if !searchText.isEmpty { Button(action: { searchText = "" }) { Image(systemName: "xmark.circle.fill").foregroundColor(.uiMidGray) }.buttonStyle(.plain) }
+            }.padding(8).background(Color.uiPaper).cornerRadius(8).overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.uiHairline, lineWidth: 1)).padding(.horizontal, 12).padding(.bottom, 8)
+            ScrollView {
+                LazyVStack(spacing: 8) {
+                    if filteredHistory.isEmpty { Text(searchText.isEmpty ? "История пуста" : "Ничего не найдено").font(UIStyleFont.body(size: 13, weight: .regular)).foregroundColor(.uiMidGray).padding(.vertical, 20) }
+                    else {
+                        ForEach(filteredHistory) { item in
+                            HistoryCard(item: item, isSelected: selectedItemId == item.id)
+                                .contentShape(Rectangle())
+                                .onTapGesture {
+                                    selectedItemId = item.id
+                                    audioCapture.markAsRead(id: item.id) // Гасим точку при клике руками
+                                }
+                        }
+                    }
+                }.padding(.horizontal, 8)
+            }
+        }
+    }
+    
+    private var sidebarFooter: some View {
+        HStack {
+            Circle().fill(audioCapture.isRecording ? Color.uiEmber : Color.green).frame(width: 8, height: 8)
+            Text(audioCapture.isRecording ? "Запись..." : "Готов к работе").font(UIStyleFont.body(size: 12, weight: .regular)).foregroundColor(.uiMidGray)
+        }.padding(.horizontal, 16).padding(.bottom, 16)
     }
     
     var historyDetailView: some View {
@@ -170,83 +157,43 @@ struct ContentView: View {
                                 let formattedDate = DateFormattingHelper.formatRussianDate(selected.date)
                                 HStack(alignment: .firstTextBaseline, spacing: 6) {
                                     Text(formattedDate.date).font(UIStyleFont.display(size: 16, weight: .bold)).foregroundColor(.uiInk)
-                                    if !formattedDate.time.isEmpty {
-                                        Text(formattedDate.time).font(UIStyleFont.body(size: 11, weight: .medium)).foregroundColor(.uiMidGray)
-                                            .padding(.horizontal, 6).padding(.vertical, 2).background(Color.uiCanvas).cornerRadius(6)
-                                    }
+                                    if !formattedDate.time.isEmpty { Text(formattedDate.time).font(UIStyleFont.body(size: 11, weight: .medium)).foregroundColor(.uiMidGray).padding(.horizontal, 6).padding(.vertical, 2).background(Color.uiCanvas).cornerRadius(6) }
                                 }
-                                
                                 Spacer(minLength: 12)
-                                
                                 HStack(spacing: 8) {
                                     CopyFeedbackButton(textToCopy: selected.text)
-                                    
                                     Menu {
                                         Button("Markdown (.md)") { audioCapture.exportTranscription(selected, format: "md") }
                                         Button("Текст (.txt)") { audioCapture.exportTranscription(selected, format: "txt") }
                                         Button("Excel (.csv)") { audioCapture.exportTranscription(selected, format: "csv") }
                                         Button("JSON (.json)") { audioCapture.exportTranscription(selected, format: "json") }
                                     } label: {
-                                        HStack(spacing: 4) {
-                                            Image(systemName: "square.and.arrow.up").font(.system(size: 11, weight: .medium))
-                                            Text("Экспорт").font(UIStyleFont.body(size: 13, weight: .medium))
-                                            Image(systemName: "chevron.down").font(.system(size: 8, weight: .bold)).foregroundColor(.uiMidGray)
-                                        }
-                                        .lineLimit(1)
-                                        .foregroundColor(.uiInk)
-                                        .padding(.vertical, 8)
-                                        .padding(.horizontal, 14)
-                                        .background(Color.uiPaper)
-                                        .cornerRadius(18)
-                                        .overlay(RoundedRectangle(cornerRadius: 18).stroke(Color.uiHairline, lineWidth: 1))
-                                    }
-                                    .menuStyle(.borderlessButton)
-                                    .fixedSize(horizontal: true, vertical: false)
-                                    
-                                    UIDestructiveButton(title: "Удалить") {
-                                        itemToDelete = selected.id
-                                        showingDeleteAlert = true
-                                    }
-                                }
-                                .fixedSize(horizontal: true, vertical: false)
-                                .layoutPriority(1)
+                                        HStack(spacing: 4) { Image(systemName: "square.and.arrow.up").font(.system(size: 11, weight: .medium)); Text("Экспорт").font(UIStyleFont.body(size: 13, weight: .medium)); Image(systemName: "chevron.down").font(.system(size: 8, weight: .bold)).foregroundColor(.uiMidGray) }
+                                        .lineLimit(1).foregroundColor(.uiInk).padding(.vertical, 8).padding(.horizontal, 14).background(Color.uiPaper).cornerRadius(18).overlay(RoundedRectangle(cornerRadius: 18).stroke(Color.uiHairline, lineWidth: 1))
+                                    }.menuStyle(.borderlessButton).fixedSize(horizontal: true, vertical: false)
+                                    UIDestructiveButton(title: "Удалить") { itemToDelete = selected.id; showingDeleteAlert = true }
+                                }.fixedSize(horizontal: true, vertical: false).layoutPriority(1)
                             }
                             
                             HStack(spacing: 8) {
                                 MetadataPill(icon: "waveform", text: selected.duration, color: Color.blue)
                                 MetadataPill(icon: "bolt.fill", text: selected.formattedSpeedup, color: Color.orange)
                                 MetadataPill(icon: "text.alignleft", text: "\(selected.text.count) зн", color: Color(hex: "#10B981"))
-                                
                                 let readMin = max(1, selected.text.count / 900)
                                 MetadataPill(icon: "book.fill", text: "~\(readMin) мин чтения", color: Color.purple)
-                                
                                 if audioCapture.hasAudioFile(for: selected) {
-                                    Button(action: {
-                                        audioCapture.toggleAudioPlayback(for: selected)
-                                    }) {
-                                        HStack(spacing: 4) {
-                                            Image(systemName: audioCapture.playingItemId == selected.id ? "pause.fill" : "play.fill")
-                                                .font(.system(size: 9, weight: .bold))
-                                            Text(audioCapture.playingItemId == selected.id ? "Пауза" : "Слушать голос")
-                                                .font(.system(size: 10, weight: .bold, design: .rounded))
-                                        }
-                                        .foregroundColor(.blue)
-                                        .padding(.horizontal, 8)
-                                        .padding(.vertical, 4)
-                                        .background(Color.blue.opacity(0.12))
-                                        .cornerRadius(6)
-                                    }
-                                    .buttonStyle(.plain)
+                                    Button(action: { audioCapture.toggleAudioPlayback(for: selected) }) {
+                                        HStack(spacing: 4) { Image(systemName: audioCapture.playingItemId == selected.id ? "pause.fill" : "play.fill").font(.system(size: 9, weight: .bold)); Text(audioCapture.playingItemId == selected.id ? "Пауза" : "Слушать голос").font(.system(size: 10, weight: .bold, design: .rounded)) }
+                                        .foregroundColor(.blue).padding(.horizontal, 8).padding(.vertical, 4).background(Color.blue.opacity(0.12)).cornerRadius(6)
+                                    }.buttonStyle(.plain)
                                 }
                             }
                             
                             Divider().background(Color.uiHairline).padding(.vertical, 4)
-                            
                             NativeTextView(text: selected.text)
                         }
                     }
                 } else {
-                    // ХАБ ВОЗМОЖНОСТЕЙ (ЧЕСТНЫЕ 4 БЛОКА)
                     UICard {
                         VStack(spacing: 24) {
                             VStack(spacing: 6) {
@@ -263,7 +210,6 @@ struct ContentView: View {
                                     .font(UIStyleFont.body(size: 13, weight: .regular))
                                     .foregroundColor(.uiMidGray)
                             }
-                            
                             LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
                                 CapabilityCard(
                                     icon: "keyboard",
@@ -293,9 +239,7 @@ struct ContentView: View {
                                     description: "Авто-деление на абзацы и сохранение в Markdown, CSV, TXT или JSON"
                                 )
                             }
-                        }
-                        .padding(12)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        }.padding(12).frame(maxWidth: .infinity, maxHeight: .infinity)
                     }
                 }
             }.padding(20)
@@ -311,40 +255,15 @@ struct ContentView: View {
     }
 }
 
+// MARK: - ВСПОМОГАТЕЛЬНЫЕ КОМПОНЕНТЫ
+
 struct CapabilityCard: View {
-    let icon: String
-    let badge: String
-    let title: String
-    let description: String
-    
+    let icon: String; let badge: String; let title: String; let description: String
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            HStack {
-                Image(systemName: icon)
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundColor(.uiInk)
-                Spacer()
-                UIBadge(text: badge)
-            }
-            
-            VStack(alignment: .leading, spacing: 4) {
-                Text(title)
-                    .font(UIStyleFont.display(size: 14, weight: .semibold))
-                    .foregroundColor(.uiInk)
-                
-                Text(description)
-                    .font(UIStyleFont.body(size: 12, weight: .regular))
-                    .foregroundColor(.uiMidGray)
-                    .lineSpacing(2)
-            }
-        }
-        .padding(16)
-        .background(Color.uiSidebar)
-        .cornerRadius(16)
-        .overlay(
-            RoundedRectangle(cornerRadius: 16)
-                .stroke(Color.uiHairline, lineWidth: 1)
-        )
+            HStack { Image(systemName: icon).font(.system(size: 16, weight: .semibold)).foregroundColor(.uiInk); Spacer(); UIBadge(text: badge) }
+            VStack(alignment: .leading, spacing: 4) { Text(title).font(UIStyleFont.display(size: 14, weight: .semibold)).foregroundColor(.uiInk); Text(description).font(UIStyleFont.body(size: 12, weight: .regular)).foregroundColor(.uiMidGray).lineSpacing(2) }
+        }.padding(16).background(Color.uiSidebar).cornerRadius(16).overlay(RoundedRectangle(cornerRadius: 16).stroke(Color.uiHairline, lineWidth: 1))
     }
 }
 
@@ -377,10 +296,8 @@ struct CopyFeedbackButton: View {
 struct MetadataPill: View {
     let icon: String; let text: String; let color: Color
     var body: some View {
-        HStack(spacing: 4) {
-            Image(systemName: icon).font(.system(size: 9, weight: .bold))
-            Text(text).font(.system(size: 10, weight: .bold, design: .rounded))
-        }.foregroundColor(color).padding(.horizontal, 8).padding(.vertical, 4).background(color.opacity(0.12)).cornerRadius(6)
+        HStack(spacing: 4) { Image(systemName: icon).font(.system(size: 9, weight: .bold)); Text(text).font(.system(size: 10, weight: .bold, design: .rounded)) }
+        .foregroundColor(color).padding(.horizontal, 8).padding(.vertical, 4).background(color.opacity(0.12)).cornerRadius(6)
     }
 }
 
@@ -389,17 +306,26 @@ struct SidebarTabButton: View {
     var body: some View {
         Button(action: action) {
             HStack(spacing: 10) { Image(systemName: icon).font(.system(size: 13)); Text(title).font(UIStyleFont.body(size: 13, weight: .medium)); Spacer() }
-            .foregroundColor(isActive ? .uiPaper : .uiInk).padding(.vertical, 8).padding(.horizontal, 12)
-            .background(isActive ? Color.uiInk : Color.clear).cornerRadius(12).contentShape(Rectangle())
+            .foregroundColor(isActive ? .uiPaper : .uiInk).padding(.vertical, 8).padding(.horizontal, 12).background(isActive ? Color.uiInk : Color.clear).cornerRadius(12).contentShape(Rectangle())
         }.buttonStyle(.plain)
     }
 }
 
+// СИСТЕМНАЯ КАРТОЧКА С СИНЕЙ ТОЧКОЙ
 struct HistoryCard: View {
-    let item: TranscriptionItem; let isSelected: Bool
+    let item: TranscriptionItem
+    let isSelected: Bool
+    
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(alignment: .firstTextBaseline) {
+                // СИНЯЯ ТОЧКА НЕПРОЧИТАННОГО!
+                if item.isUnread == true {
+                    Circle()
+                        .fill(Color.blue)
+                        .frame(width: 6, height: 6)
+                }
+                
                 let formatted = DateFormattingHelper.formatRussianDate(item.date)
                 Text(formatted.date).font(UIStyleFont.body(size: 12, weight: .semibold)).foregroundColor(isSelected ? .uiInk : .uiInkSoft)
                 if !formatted.time.isEmpty { Text(formatted.time).font(UIStyleFont.body(size: 10, weight: .regular)).foregroundColor(isSelected ? .uiMidGray : .uiMidGray.opacity(0.8)) }
