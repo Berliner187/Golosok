@@ -45,6 +45,8 @@ class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
     
     @Published var updateInfo: UpdateInfo? = nil
     @Published var isDownloadingUpdate = false
+    @Published var updateProgressText: String = ""
+    private var downloadSessionTask: URLSessionDownloadTask?
     private var downloadTask: URLSessionDownloadTask?
     
     @Published var playingItemId: UUID? = nil
@@ -309,10 +311,7 @@ class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
         }
         
         let rawText = accumulatedText.joined(separator: " ").trimmingCharacters(in: .whitespacesAndNewlines)
-        
-        // ФОРМАТИРУЕМ В АБЗАЦЫ СРАЗУ ПЕРЕД СОХРАНЕНИЕМ НА ДИСК!
         let prettyFormattedText = TextFormatter.formatIntoParagraphs(rawText)
-        
         let processingTimeSecs = Date().timeIntervalSince(processStartTime)
         let calculatedSpeedup = max(1.0, realAudioSecs / max(0.1, processingTimeSecs))
         
@@ -326,7 +325,6 @@ class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
                 formatter.dateFormat = "dd.MM.yyyy, HH:mm"
                 let dateStr = formatter.string(from: Date())
                 
-                // СОХРАНЯЕМ В ДИСКОВУЮ БАЗУ УЖЕ ОТФОРМАТИРОВАННЫЙ ТЕКСТ!
                 let newItem = TranscriptionItem(date: dateStr, text: prettyFormattedText, duration: durationFormatted, speedup: calculatedSpeedup)
                 
                 self.saveAudioForNote(id: newItem.id, sourceURL: sourceURL)
@@ -541,63 +539,72 @@ class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
         panel.nameFieldStringValue = "Заметка_\(item.date.replacingOccurrences(of: ":", with: "-")).\(format)"
         if panel.runModal() == .OK, let saveURL = panel.url {
             var content = ""
-            // Текст УЖЕ отформатирован на диске!
+            let prettyText = TextFormatter.formatIntoParagraphs(item.text)
             switch format.lowercased() {
-            case "md": content = "# Транскрипция Голосок\n**Дата:** \(item.date)\n**Длительность:** \(item.duration)\n\n---\n\n\(item.text)"
-            case "txt": content = "Голосок — Транскрипция\nДата: \(item.date)\nДлительность: \(item.duration)\n\n\(item.text)"
+            case "md": content = "# Транскрипция Голосок\n**Дата:** \(item.date)\n**Длительность:** \(item.duration)\n\n---\n\n\(prettyText)"
+            case "txt": content = "Голосок — Транскрипция\nДата: \(item.date)\nДлительность: \(item.duration)\n\n\(prettyText)"
             case "csv": content = "\"Дата\",\"Длительность\",\"Текст\"\n\"\(item.date)\",\"\(item.duration)\",\"\(item.text.replacingOccurrences(of: "\"", with: "\"\""))\""
             case "json":
                 let dict: [String: Any] = ["id": item.id.uuidString, "date": item.date, "duration": item.duration, "text": item.text]
                 if let data = try? JSONSerialization.data(withJSONObject: dict, options: .prettyPrinted) { content = String(data: data, encoding: .utf8) ?? "" }
-            default: content = item.text
+            default: content = prettyText
             }
             try? content.write(to: saveURL, atomically: true, encoding: .utf8)
         }
     }
     
+    // ПРОВЕРКА ОБНОВЛЕНИЙ С ОТКЛЮЧЕНИЕМ СИСТЕМНОГО КЭША
     func checkUpdates() {
         guard let url = URL(string: "https://api.github.com/repos/Berliner187/Golosok/releases/latest") else { return }
         let currentVer = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.4.0"
-        URLSession.shared.dataTask(with: url) { data, _, _ in
+        
+        var request = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalAndRemoteCacheData, timeoutInterval: 10.0)
+        
+        URLSession.shared.dataTask(with: request) { data, _, _ in
             guard let data = data, let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
                   let tagName = json["tag_name"] as? String, let releaseName = json["name"] as? String,
                   let assets = json["assets"] as? [[String: Any]],
                   let firstAsset = assets.first(where: { ($0["name"] as? String)?.hasSuffix(".dmg") == true }),
                   let downloadUrlString = firstAsset["browser_download_url"] as? String,
                   let downloadUrl = URL(string: downloadUrlString) else { return }
+            
             let cleanCurrent = currentVer.replacingOccurrences(of: "v", with: "")
             let cleanLatest = tagName.replacingOccurrences(of: "v", with: "")
+            
             if cleanLatest.compare(cleanCurrent, options: .numeric) == .orderedDescending {
                 DispatchQueue.main.async {
                     let codename = releaseName.components(separatedBy: " ").last ?? "UPDATE"
                     self.updateInfo = UpdateInfo(version: tagName, codename: codename.uppercased(), url: downloadUrl)
                 }
-            } else { DispatchQueue.main.async { self.updateInfo = nil } }
+            } else {
+                DispatchQueue.main.async { self.updateInfo = nil }
+            }
         }.resume()
     }
     
     func cancelUpdateDownload() {
-        downloadTask?.cancel(); downloadTask = nil
-        DispatchQueue.main.async { self.isDownloadingUpdate = false }
+        downloadTask?.cancel()
+        downloadTask = nil
+        DispatchQueue.main.async {
+            self.isDownloadingUpdate = false
+            self.updateProgressText = ""
+        }
     }
     
+    // СКАЧИВАНИЕ И АВТО-ОТКРЫТИЕ УСТАНОВЩИКА В FINDER
     func downloadAndInstallUpdate() {
         guard let updateUrl = updateInfo?.url else { return }
-        DispatchQueue.main.async { self.isDownloadingUpdate = true }
+        DispatchQueue.main.async {
+            self.isDownloadingUpdate = true
+            self.updateProgressText = "Подключение..."
+        }
+        
         let dest = FileManager.default.temporaryDirectory.appendingPathComponent("Golosok_Update.dmg")
         if FileManager.default.fileExists(atPath: dest.path) { try? FileManager.default.removeItem(at: dest) }
-        let session = URLSession(configuration: .default, delegate: nil, delegateQueue: nil)
-        downloadTask = session.downloadTask(with: updateUrl) { tempURL, _, _ in
-            DispatchQueue.main.async { self.isDownloadingUpdate = false }
-            guard let tempURL = tempURL else { return }
-            do {
-                try FileManager.default.moveItem(at: tempURL, to: dest)
-                let process = Process()
-                process.executableURL = URL(fileURLWithPath: "/usr/bin/hdiutil")
-                process.arguments = ["attach", dest.path]
-                try process.run()
-            } catch {}
-        }
+        
+        let config = URLSessionConfiguration.default
+        let session = URLSession(configuration: config, delegate: self, delegateQueue: nil)
+        downloadTask = session.downloadTask(with: updateUrl)
         downloadTask?.resume()
     }
     
@@ -605,18 +612,54 @@ class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
     func clearAllHistory() { history.removeAll() }
     private func saveHistory() { if let e = try? JSONEncoder().encode(history) { UserDefaults.standard.set(e, forKey: "transcription_history") } }
     
-    // МИГРАЦИЯ СТАРОЙ БАЗЫ ПРИ СТАРТЕПРИЛОЖЕНИЯ
     private func loadHistory() {
         if let d = UserDefaults.standard.data(forKey: "transcription_history"),
            let dec = try? JSONDecoder().decode([TranscriptionItem].self, from: d) {
-            
-            // За 0.001 сек пропатчиваем старые неформатированные заметки прямо на диске!
             self.history = dec.map { item in
                 if !item.text.contains("\n\n") && item.text.count > 120 {
                     let pretty = TextFormatter.formatIntoParagraphs(item.text)
                     return TranscriptionItem(id: item.id, date: item.date, text: pretty, duration: item.duration, speedup: item.speedup)
                 }
                 return item
+            }
+        }
+    }
+}
+
+// MARK: - ДЕЛЕГАТ СКАЧИВАНИЯ С МЕГАБАЙТАМИ И ПРОЦЕНТАМИ
+extension AudioCapture: URLSessionDownloadDelegate {
+    func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didWriteData bytesWritten: Int64, totalBytesWritten: Int64, totalBytesExpectedToWrite: Int64) {
+        guard totalBytesExpectedToWrite > 0 else { return }
+        
+        let progress = Double(totalBytesWritten) / Double(totalBytesExpectedToWrite)
+        let mbWritten = Double(totalBytesWritten) / (1024.0 * 1024.0)
+        let mbTotal = Double(totalBytesExpectedToWrite) / (1024.0 * 1024.0)
+        let percent = Int(progress * 100.0)
+        
+        let text = String(format: "%.1f / %.1f МБ (%d%%)", mbWritten, mbTotal, percent)
+        
+        DispatchQueue.main.async {
+            self.updateProgressText = text
+        }
+    }
+    
+    func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didFinishDownloadingTo location: URL) {
+        let dest = FileManager.default.temporaryDirectory.appendingPathComponent("Golosok_Update.dmg")
+        if FileManager.default.fileExists(atPath: dest.path) { try? FileManager.default.removeItem(at: dest) }
+        
+        do {
+            try FileManager.default.moveItem(at: location, to: dest)
+            
+            DispatchQueue.main.async {
+                self.isDownloadingUpdate = false
+                self.updateProgressText = "Открытие..."
+                
+                NSWorkspace.shared.open(dest)
+            }
+        } catch {
+            DispatchQueue.main.async {
+                self.isDownloadingUpdate = false
+                self.updateProgressText = "Ошибка"
             }
         }
     }

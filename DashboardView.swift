@@ -149,25 +149,28 @@ struct DashboardView: View {
                     
                     Spacer()
                     if let update = audioCapture.updateInfo {
-                        Button(action: {
-                            audioCapture.downloadAndInstallUpdate()
-                        }) {
-                            HStack(spacing: 4) {
-                                if audioCapture.isDownloadingUpdate {
-                                    ProgressView().scaleEffect(0.6)
-                                    Text("Скачивание...")
-                                } else {
-                                    Image(systemName: "arrow.down.circle.fill")
-                                    Text("Доступна \(update.codename)")
-                                }
+                        HStack(spacing: 6) {
+                            if audioCapture.isDownloadingUpdate {
+                                ProgressView().scaleEffect(0.6)
+                                Text(audioCapture.updateProgressText.isEmpty ? "Скачивание..." : audioCapture.updateProgressText)
+                                    .font(UIStyleFont.body(size: 10, weight: .bold))
+                                    .foregroundColor(.white)
+                                Button(action: { audioCapture.cancelUpdateDownload() }) {
+                                    Image(systemName: "xmark.circle.fill").foregroundColor(.white.opacity(0.8))
+                                }.buttonStyle(.plain)
+                            } else {
+                                Button(action: { audioCapture.downloadAndInstallUpdate() }) {
+                                    HStack(spacing: 4) {
+                                        Image(systemName: "arrow.down.circle.fill")
+                                        Text("Доступна \(update.codename)")
+                                    }
+                                    .font(UIStyleFont.body(size: 10, weight: .bold))
+                                    .foregroundColor(.white)
+                                }.buttonStyle(.plain)
                             }
-                            .font(UIStyleFont.body(size: 10, weight: .bold))
-                            .foregroundColor(.white)
-                            .padding(.horizontal, 10).padding(.vertical, 6)
-                            .background(Color.uiEmber).cornerRadius(12)
                         }
-                        .buttonStyle(.plain)
-                        .disabled(audioCapture.isDownloadingUpdate)
+                        .padding(.horizontal, 10).padding(.vertical, 6)
+                        .background(Color.uiEmber).cornerRadius(12)
                     }
                 }
                 
