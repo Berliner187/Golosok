@@ -1,6 +1,16 @@
 import SwiftUI
 import AppKit
 
+// MARK: - Тактильный стиль кнопок
+struct TactileButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? 0.96 : 1.0)
+            .opacity(configuration.isPressed ? 0.8 : 1.0)
+            .animation(.spring(response: 0.2, dampingFraction: 0.6), value: configuration.isPressed)
+    }
+}
+
 // MARK: - Hex Initializer for NSColor
 extension NSColor {
     convenience init(hex: String) {
@@ -46,8 +56,6 @@ extension Color {
     
     static let uiInverseBlock = dynamic(light: "#0a0a0a", dark: "#18181b")
     static let uiInverseBorder = dynamic(light: "#0a0a0a", dark: "#27272a")
-    static let uiInverseText = dynamic(light: "#ffffff", dark: "#0a0a0a")
-    static let uiInverseTextSoft = dynamic(light: "rgba(255,255,255,0.6)", dark: "rgba(0,0,0,0.6)")
 }
 
 // MARK: - Typography & Fonts
@@ -61,7 +69,7 @@ struct UIStyleFont {
     }
 }
 
-// MARK: - Базовые UI Компоненты
+// MARK: - Базовые ТАКТИЛЬНЫЕ UI Компоненты
 
 struct UICard<Content: View>: View {
     let content: Content
@@ -72,7 +80,7 @@ struct UICard<Content: View>: View {
             .background(Color.uiPaper)
             .cornerRadius(24)
             .overlay(RoundedRectangle(cornerRadius: 24).stroke(Color.uiHairline, lineWidth: 1))
-            .shadow(color: Color.black.opacity(0.04), radius: 6, x: 0, y: 2)
+            .shadow(color: Color.black.opacity(0.05), radius: 6, x: 0, y: 2)
     }
 }
 
@@ -90,7 +98,7 @@ struct UIOutlineButton: View {
                 .cornerRadius(18)
                 .overlay(RoundedRectangle(cornerRadius: 18).stroke(Color.uiHairline, lineWidth: 1))
         }
-        .buttonStyle(.plain)
+        .buttonStyle(TactileButtonStyle()) // ТАКТИЛЬНЫЙ СТИЛЬ
     }
 }
 
@@ -108,7 +116,7 @@ struct UIDestructiveButton: View {
                 .cornerRadius(18)
                 .overlay(RoundedRectangle(cornerRadius: 18).stroke(Color.uiEmber.opacity(0.2), lineWidth: 1))
         }
-        .buttonStyle(.plain)
+        .buttonStyle(TactileButtonStyle()) // ТАКТИЛЬНЫЙ СТИЛЬ
     }
 }
 
@@ -125,7 +133,7 @@ struct UIPrimaryButton: View {
                 .background(Color.uiInk)
                 .cornerRadius(18)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(TactileButtonStyle()) // ТАКТИЛЬНЫЙ СТИЛЬ
     }
 }
 

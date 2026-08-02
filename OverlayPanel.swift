@@ -9,14 +9,14 @@ class OverlayPanelManager {
         DispatchQueue.main.async {
             if self.panel == nil {
                 let newPanel = NSPanel(
-                    contentRect: NSRect(x: 0, y: 0, width: 220, height: 50),
+                    contentRect: NSRect(x: 0, y: 0, width: 220, height: 60),
                     styleMask: [.borderless, .nonactivatingPanel],
                     backing: .buffered,
                     defer: false
                 )
                 newPanel.isOpaque = false
                 newPanel.backgroundColor = .clear
-                newPanel.hasShadow = true
+                newPanel.hasShadow = false
                 newPanel.level = .screenSaver
                 newPanel.isFloatingPanel = true
                 newPanel.ignoresMouseEvents = true
@@ -35,14 +35,14 @@ class OverlayPanelManager {
             if let screen = NSScreen.main {
                 let screenRect = screen.visibleFrame
                 let x = screenRect.midX - 110
-                let targetY = screenRect.maxY - 70
+                let targetY = screenRect.maxY - 80
                 
                 self.panel?.alphaValue = 0.0
-                self.panel?.setFrameOrigin(NSPoint(x: x, y: targetY + 10))
+                self.panel?.setFrameOrigin(NSPoint(x: x, y: targetY + 15))
                 self.panel?.orderFrontRegardless()
                 
                 NSAnimationContext.runAnimationGroup { context in
-                    context.duration = 0.2
+                    context.duration = 0.25
                     context.timingFunction = CAMediaTimingFunction(name: .easeOut)
                     self.panel?.animator().alphaValue = 1.0
                     self.panel?.animator().setFrameOrigin(NSPoint(x: x, y: targetY))
@@ -51,7 +51,6 @@ class OverlayPanelManager {
         }
     }
     
-    // ЖЕЛТЫЙ DYNAMIC ISLAND ВАРНИНГ
     func showWarning(message: String) {
         DispatchQueue.main.async {
             AudioCapture.shared.warningMessage = message
@@ -59,7 +58,6 @@ class OverlayPanelManager {
             SoundEffect.playCancel()
             self.showOverlay()
             
-            // Держим желтую плашку 3.5 секунды
             DispatchQueue.main.asyncAfter(deadline: .now() + 3.5) {
                 AudioCapture.shared.warningMessage = nil
                 self.hideOverlay()
@@ -73,10 +71,10 @@ class OverlayPanelManager {
             let currentFrame = panel.frame
             
             NSAnimationContext.runAnimationGroup({ context in
-                context.duration = 0.18
+                context.duration = 0.2
                 context.timingFunction = CAMediaTimingFunction(name: .easeIn)
                 panel.animator().alphaValue = 0.0
-                panel.animator().setFrameOrigin(NSPoint(x: currentFrame.minX, y: currentFrame.minY + 6))
+                panel.animator().setFrameOrigin(NSPoint(x: currentFrame.minX, y: currentFrame.minY + 10))
             }) {
                 panel.orderOut(nil)
             }
@@ -84,9 +82,64 @@ class OverlayPanelManager {
     }
 }
 
+// КРУГОВОЙ ПРОГРЕСС БАР ДЛЯ ФАЙЛОВ
+struct CircularProgressView: View {
+    var progress: Double
+    
+    let progressGradient = LinearGradient(
+        colors: [Color(hex: "#38BDF8"), Color(hex: "#10B981")],
+        startPoint: .topLeading,
+        endPoint: .bottomTrailing
+    )
+    
+    var body: some View {
+        ZStack {
+            Circle()
+                .stroke(Color(hex: "#6366F1").opacity(0.25), lineWidth: 2.5)
+            Circle()
+                .trim(from: 0, to: CGFloat(progress))
+                .stroke(progressGradient, style: StrokeStyle(lineWidth: 2.5, lineCap: .round))
+                .rotationEffect(.degrees(-90))
+                .animation(.spring(response: 0.3, dampingFraction: 0.7), value: progress)
+        }
+        .frame(width: 18, height: 18)
+    }
+}
+
+// ВРАЩАЮЩАЯСЯ РАМКА СТРОГО ПО КОНТУРУ
+struct RotatingGlowBorder: View {
+    var body: some View {
+        GeometryReader { geo in
+            let size = max(geo.size.width, geo.size.height) * 2.0
+            
+            TimelineView(.animation) { timeline in
+                let angle = (timeline.date.timeIntervalSince1970 * 360.0 / 1.5).truncatingRemainder(dividingBy: 360)
+                
+                ZStack {
+                    AngularGradient(
+                        gradient: Gradient(colors: [
+                            Color(hex: "#C084FC"),
+                            Color(hex: "#6366F1"),
+                            Color(hex: "#38BDF8"),
+                            Color(hex: "#10B981"),
+                            Color(hex: "#C084FC")
+                        ]),
+                        center: .center
+                    )
+                    .frame(width: size, height: size)
+                    .rotationEffect(.degrees(angle))
+                }
+                .frame(width: geo.size.width, height: geo.size.height)
+                .mask(
+                    Capsule().stroke(lineWidth: 1.5)
+                )
+            }
+        }
+    }
+}
+
 struct FloatingWidgetView: View {
     @ObservedObject var audioCapture = AudioCapture.shared
-    @State private var rotateAngle: Double = 0
     
     let greenGradient = LinearGradient(colors: [Color(hex: "#34D399"), Color(hex: "#059669")], startPoint: .top, endPoint: .bottom)
     let purpleGradient = LinearGradient(colors: [Color(hex: "#C084FC"), Color(hex: "#6366F1")], startPoint: .top, endPoint: .bottom)
@@ -95,91 +148,60 @@ struct FloatingWidgetView: View {
         ZStack {
             Color.clear
             
-            // ПРИОРИТЕТ 1: ЖЕЛТЫЙ ВАРНИНГ ОШИБКИ
-            if let warningText = audioCapture.warningMessage {
-                HStack(spacing: 8) {
-                    Image(systemName: "exclamationmark.triangle.fill")
-                        .font(.system(size: 13, weight: .bold))
-                        .foregroundColor(Color(hex: "#F59E0B"))
-                    
-                    Text(warningText)
-                        .font(UIStyleFont.body(size: 12, weight: .semibold))
-                        .foregroundColor(Color.dynamic(light: "#0a0a0a", dark: "#fafafa"))
-                        .lineLimit(1)
-                }
-                .padding(.horizontal, 16)
-                .frame(height: 38)
-                .background(.ultraThinMaterial)
-                .clipShape(Capsule())
-                .overlay(
-                    Capsule().stroke(Color(hex: "#F59E0B").opacity(0.6), lineWidth: 1.2)
-                )
-            // ПРИОРИТЕТ 2: ОБРАБОТКА ФАЙЛА С ПРОГРЕССОМ %
-            } else if audioCapture.isProcessingFile {
-                HStack(spacing: 8) {
-                    TimelineView(.animation) { timeline in
-                        let time = timeline.date.timeIntervalSince1970 * 4.5
-                        HStack(spacing: 2.5) {
-                            ForEach(0..<5, id: \.self) { i in
-                                let height = sin(time + Double(i) * 0.7) * 5 + 9
-                                RoundedRectangle(cornerRadius: 2).fill(purpleGradient).frame(width: 3, height: height)
-                            }
+            // ОСНОВНОЙ КОНТЕНТ КАПСУЛЫ
+            HStack(spacing: 8) {
+                if let warningText = audioCapture.warningMessage {
+                    // 1. ЖЕЛТЫЙ ВАРНИНГ ОШИБКИ
+                    HStack(spacing: 6) {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .font(.system(size: 13, weight: .bold))
+                            .foregroundColor(Color(hex: "#F59E0B"))
+                        Text(warningText)
+                            .font(UIStyleFont.body(size: 12, weight: .semibold))
+                            .foregroundColor(Color.dynamic(light: "#0a0a0a", dark: "#fafafa"))
+                            .lineLimit(1)
+                    }
+                } else if audioCapture.isProcessingFile {
+                    // 2. ИМПОРТ ФАЙЛА: КРУГОВОЙ ПРОГРЕСС И %
+                    HStack(spacing: 10) {
+                        CircularProgressView(progress: audioCapture.fileProcessingProgress)
+                        
+                        Text("\(Int(audioCapture.fileProcessingProgress * 100))%")
+                            .font(.system(size: 13, weight: .bold, design: .monospaced))
+                            .foregroundColor(Color.dynamic(light: "#0a0a0a", dark: "#fafafa"))
+                    }
+                } else if audioCapture.isRecording {
+                    // 3. МИКРОФОН ЗАПИСЬ: Зеленый эквалайзер
+                    HStack(spacing: 4.5) {
+                        ForEach(0..<9, id: \.self) { i in
+                            RoundedRectangle(cornerRadius: 2)
+                                .fill(greenGradient)
+                                .frame(width: 3.5, height: CGFloat(audioCapture.audioSamples[i]) * 24)
+                                .animation(.spring(response: 0.15, dampingFraction: 0.5), value: audioCapture.audioSamples[i])
                         }
                     }
-                    
-                    Text("Файл \(Int(audioCapture.fileProcessingProgress * 100))%")
-                        .font(.system(size: 12, weight: .bold, design: .monospaced))
-                        .foregroundColor(Color.dynamic(light: "#0a0a0a", dark: "#fafafa"))
-                }
-                .frame(width: 170, height: 38)
-                .background(.ultraThinMaterial)
-                .clipShape(Capsule())
-                .overlay(
-                    Capsule().stroke(
-                        AngularGradient(gradient: Gradient(colors: [Color(hex: "#C084FC"), Color(hex: "#6366F1"), Color(hex: "#3B82F6"), Color(hex: "#C084FC")]), center: .center, angle: .degrees(rotateAngle)),
-                        lineWidth: 1.5
-                    )
-                    .onAppear {
-                        withAnimation(.linear(duration: 1.5).repeatForever(autoreverses: false)) { rotateAngle = 360 }
-                    }
-                )
-            // ПРИОРИТЕТ 3: МИКРОФОН РАСШИФРОВКА (ТОЛЬКО ВОЛНЫ, БЕЗ СЛОВА ФАЙЛ)
-            } else if audioCapture.transcribedText == "Расшифровка..." {
-                HStack(spacing: 2.5) {
-                    TimelineView(.animation) { timeline in
-                        let time = timeline.date.timeIntervalSince1970 * 4.5
-                        HStack(spacing: 2.5) {
-                            ForEach(0..<9, id: \.self) { i in
-                                let height = sin(time + Double(i) * 0.7) * 7 + 12
-                                RoundedRectangle(cornerRadius: 2).fill(purpleGradient).frame(width: 3.5, height: height)
+                } else {
+                    // 4. МИКРОФОН РАСШИФРОВКА И ЗАКРЫТИЕ: Фиолетовые волны
+                    HStack(spacing: 4.5) {
+                        TimelineView(.animation) { timeline in
+                            let time = timeline.date.timeIntervalSince1970 * 4.5
+                            HStack(spacing: 4.5) {
+                                ForEach(0..<9, id: \.self) { i in
+                                    let height = sin(time + Double(i) * 0.7) * 7 + 12
+                                    RoundedRectangle(cornerRadius: 2).fill(purpleGradient).frame(width: 3.5, height: height)
+                                }
                             }
                         }
                     }
                 }
-                .frame(width: 130, height: 38)
-                .background(.ultraThinMaterial)
-                .clipShape(Capsule())
-                .overlay(
-                    Capsule().stroke(
-                        AngularGradient(gradient: Gradient(colors: [Color(hex: "#C084FC"), Color(hex: "#6366F1"), Color(hex: "#3B82F6"), Color(hex: "#C084FC")]), center: .center, angle: .degrees(rotateAngle)),
-                        lineWidth: 1.5
-                    )
-                    .onAppear {
-                        withAnimation(.linear(duration: 1.5).repeatForever(autoreverses: false)) { rotateAngle = 360 }
-                    }
+            }
+            .padding(.horizontal, 16)
+            .frame(width: getWidth(), height: 38)
+            .background(.regularMaterial)
+                .background(
+                    Capsule()
+                        .fill(Color.uiPaper.opacity(0.85))
                 )
-            // ПРИОРИТЕТ 4: МИКРОФОН ЗАПИСЬ
-            } else {
-                HStack(spacing: 2.5) {
-                    ForEach(0..<9, id: \.self) { i in
-                        RoundedRectangle(cornerRadius: 2)
-                            .fill(greenGradient)
-                            .frame(width: 3, height: CGFloat(audioCapture.audioSamples[i]) * 24)
-                            .animation(.spring(response: 0.15, dampingFraction: 0.5), value: audioCapture.audioSamples[i])
-                    }
-                }
-                .frame(width: 130, height: 38)
-                .background(.ultraThinMaterial)
                 .clipShape(Capsule())
                 .overlay(
                     Capsule().stroke(
@@ -187,8 +209,20 @@ struct FloatingWidgetView: View {
                         lineWidth: 1.0
                     )
                 )
-            }
+            .animation(.spring(response: 0.35, dampingFraction: 0.7), value: getWidth())
         }
-        .frame(width: 220, height: 50)
+        .frame(width: 220, height: 46)
+    }
+    
+    private func getWidth() -> CGFloat {
+        if audioCapture.warningMessage != nil { return 210 }
+        if audioCapture.isProcessingFile { return 110 }
+        return 130
+    }
+    
+    private func getGlowColor() -> Color {
+        if audioCapture.warningMessage != nil { return Color(hex: "#F59E0B") }
+        if audioCapture.isRecording { return Color(hex: "#10B981") }
+        return Color(hex: "#6366F1")
     }
 }

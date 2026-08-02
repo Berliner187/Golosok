@@ -62,12 +62,13 @@ struct ContentView: View {
         }
         // Автоматическое открытие заметки
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("AutoSelectNote"))) { notification in
-            if let newId = notification.object as? UUID {
+            if audioCapture.autoOpenNoteEnabled, let newId = notification.object as? UUID {
                 withAnimation {
                     self.currentTab = .history
                     self.searchText = ""
                     self.selectedItemId = newId
                 }
+                audioCapture.markAsRead(id: newId)
             }
         }
     }
@@ -90,10 +91,20 @@ struct ContentView: View {
         VStack(alignment: .leading, spacing: 16) {
             sidebarHeader
             VStack(spacing: 4) {
-                SidebarTabButton(title: "История", icon: "clock.fill", isActive: currentTab == .history) { currentTab = .history }
-                SidebarTabButton(title: "Борд", icon: "chart.bar.fill", isActive: currentTab == .dashboard) { currentTab = .dashboard; searchText = "" }
-                SidebarTabButton(title: "Настройки", icon: "gearshape.fill", isActive: currentTab == .settings) { currentTab = .settings; searchText = "" }
-            }.padding(.horizontal, 8)
+                SidebarTabButton(title: "История", icon: "clock.fill", isActive: currentTab == .history) {
+                    currentTab = .history
+                    selectedItemId = nil
+                }
+                SidebarTabButton(title: "Борд", icon: "chart.bar.fill", isActive: currentTab == .dashboard) {
+                    currentTab = .dashboard
+                    searchText = ""
+                }
+                SidebarTabButton(title: "Настройки", icon: "gearshape.fill", isActive: currentTab == .settings) {
+                    currentTab = .settings
+                    searchText = ""
+                }
+            }
+            .padding(.horizontal, 8)
             Divider().background(Color.uiHairline)
             if currentTab == .history { historySearchAndList } else { Spacer() }
             sidebarFooter
@@ -279,7 +290,7 @@ struct CopyFeedbackButton: View {
         }) {
             HStack(spacing: 6) {
                 Image(systemName: isCopied ? "checkmark" : "doc.on.doc").font(.system(size: 11, weight: .medium))
-                Text(isCopied ? "Готово!" : "Скопировать")
+                Text(isCopied ? "Скопировано!" : "Скопировать")
             }
             .lineLimit(1)
             .font(UIStyleFont.body(size: 13, weight: .medium))
@@ -288,26 +299,31 @@ struct CopyFeedbackButton: View {
             .background(Color.uiPaper).cornerRadius(18)
             .overlay(RoundedRectangle(cornerRadius: 18).stroke(isCopied ? Color(hex: "#10B981").opacity(0.5) : Color.uiHairline, lineWidth: 1))
         }
-        .buttonStyle(.plain)
+        .buttonStyle(TactileButtonStyle()) // ТАКТИЛЬНЫЙ СТИЛЬ С ПРУЖИНОЙ
         .fixedSize(horizontal: true, vertical: false)
     }
 }
 
+struct SidebarTabButton: View {
+    let title: String
+    let icon: String
+    let isActive: Bool
+    let action: () -> Void
+    
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 10) { Image(systemName: icon).font(.system(size: 13)); Text(title).font(UIStyleFont.body(size: 13, weight: .medium)); Spacer() }
+            .foregroundColor(isActive ? .uiPaper : .uiInk).padding(.vertical, 8).padding(.horizontal, 12)
+            .background(isActive ? Color.uiInk : Color.clear).cornerRadius(12).contentShape(Rectangle())
+        }
+        .buttonStyle(TactileButtonStyle())
+    }
+}
 struct MetadataPill: View {
     let icon: String; let text: String; let color: Color
     var body: some View {
         HStack(spacing: 4) { Image(systemName: icon).font(.system(size: 9, weight: .bold)); Text(text).font(.system(size: 10, weight: .bold, design: .rounded)) }
         .foregroundColor(color).padding(.horizontal, 8).padding(.vertical, 4).background(color.opacity(0.12)).cornerRadius(6)
-    }
-}
-
-struct SidebarTabButton: View {
-    let title: String; let icon: String; let isActive: Bool; let action: () -> Void
-    var body: some View {
-        Button(action: action) {
-            HStack(spacing: 10) { Image(systemName: icon).font(.system(size: 13)); Text(title).font(UIStyleFont.body(size: 13, weight: .medium)); Spacer() }
-            .foregroundColor(isActive ? .uiPaper : .uiInk).padding(.vertical, 8).padding(.horizontal, 12).background(isActive ? Color.uiInk : Color.clear).cornerRadius(12).contentShape(Rectangle())
-        }.buttonStyle(.plain)
     }
 }
 

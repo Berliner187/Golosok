@@ -70,6 +70,10 @@ class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
         }
     }
     
+    @Published var autoOpenNoteEnabled: Bool = UserDefaults.standard.object(forKey: "autoOpenNoteEnabled") as? Bool ?? true {
+        didSet { UserDefaults.standard.set(autoOpenNoteEnabled, forKey: "autoOpenNoteEnabled") }
+    }
+    
     @Published var history: [TranscriptionItem] = [] {
         didSet { saveHistory() }
     }
@@ -179,7 +183,7 @@ class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
         
         DispatchQueue.main.async {
             self.isRecording = false
-            self.isProcessingFile = true
+            self.isProcessingFile = false
             self.fileProcessingProgress = 0.0
             self.audioSamples = Array(repeating: 0.15, count: 9)
             self.transcribedText = "Расшифровка..."
@@ -247,7 +251,6 @@ class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
         
         if isFileImport {
             var conversionSuccess = false
-            
             conversionSuccess = convertMediaTo16kHzWav(inputURL: fileURL, outputURL: tempWavURL)
             if !conversionSuccess { conversionSuccess = convertWithFFmpeg(inputURL: fileURL, outputURL: tempWavURL) }
             if !conversionSuccess { conversionSuccess = convertAudioTo16kHzWav(inputURL: fileURL, outputURL: tempWavURL) }
@@ -300,7 +303,11 @@ class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
                     try? FileManager.default.removeItem(at: chunkWavURL)
                 }
                 
-                DispatchQueue.main.async { self.fileProcessingProgress = Double(chunkIndex + 1) / Double(totalChunks) }
+                if isFileImport {
+                    DispatchQueue.main.async {
+                        self.fileProcessingProgress = Double(chunkIndex + 1) / Double(totalChunks)
+                    }
+                }
             }
         }
         
@@ -320,20 +327,15 @@ class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
                 let dateStr = formatter.string(from: Date())
                 
                 let newItem = TranscriptionItem(id: UUID(), date: dateStr, text: prettyFormattedText, duration: durationFormatted, speedup: calculatedSpeedup, isUnread: true)
-                
                 self.saveAudioForNote(id: newItem.id, sourceURL: sourceURL)
                 self.history.insert(newItem, at: 0)
-                
                 NotificationCenter.default.post(name: NSNotification.Name("AutoSelectNote"), object: newItem.id)
-                
                 NSPasteboard.general.clearContents()
                 NSPasteboard.general.setString(prettyFormattedText, forType: .string)
                 if !isFileImport { self.pasteToActiveApp() }
-                
                 SoundEffect.playSuccess()
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { OverlayPanelManager.shared.hideOverlay() }
             }
-            
             self.sendTelemetry(eventType: isFileImport ? "file_import" : "dictation", audioDurationSec: realAudioSecs, characterCount: rawText.count, speedup: calculatedSpeedup)
         }
     }
@@ -540,8 +542,7 @@ class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
     func checkUpdates() {
         guard let url = URL(string: "https://api.github.com/repos/Berliner187/Golosok/releases/latest") else { return }
         let currentVer = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.4.0"
-        let request = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalAndRemoteCacheData, timeoutInterval: 10.0)
-        
+        var request = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalAndRemoteCacheData, timeoutInterval: 10.0)
         URLSession.shared.dataTask(with: request) { data, _, _ in
             guard let data = data, let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
                   let tagName = json["tag_name"] as? String, let releaseName = json["name"] as? String,
@@ -579,7 +580,6 @@ class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
     func deleteItem(at index: Int) { history.remove(at: index) }
     func clearAllHistory() { history.removeAll() }
     private func saveHistory() { if let e = try? JSONEncoder().encode(history) { UserDefaults.standard.set(e, forKey: "transcription_history") } }
-    
     private func loadHistory() {
         if let d = UserDefaults.standard.data(forKey: "transcription_history"), let dec = try? JSONDecoder().decode([TranscriptionItem].self, from: d) {
             self.history = dec.map { item in
@@ -603,7 +603,6 @@ extension AudioCapture: URLSessionDownloadDelegate {
         let text = String(format: "%.1f / %.1f МБ (%d%%)", mbWritten, mbTotal, percent)
         DispatchQueue.main.async { self.fileProcessingProgress = progress; self.updateProgressText = text }
     }
-    
     func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didFinishDownloadingTo location: URL) {
         let dest = FileManager.default.temporaryDirectory.appendingPathComponent("Golosok_Update.dmg")
         if FileManager.default.fileExists(atPath: dest.path) { try? FileManager.default.removeItem(at: dest) }

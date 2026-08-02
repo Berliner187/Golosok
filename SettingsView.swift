@@ -2,11 +2,15 @@ import SwiftUI
 
 struct SettingsView: View {
     @ObservedObject var audioCapture = AudioCapture.shared
+    @ObservedObject var permissions = PermissionManager.shared
     @State private var showingClearHistoryAlert = false
+    
+    let timer = Timer.publish(every: 5, on: .main, in: .common).autoconnect()
     
     var body: some View {
         ScrollView {
             VStack(spacing: 20) {
+                
                 // РАЗДЕЛ 1: ОСНОВНЫЕ
                 UICard {
                     VStack(alignment: .leading, spacing: 16) {
@@ -15,7 +19,6 @@ struct SettingsView: View {
                             .tracking(1.0)
                             .foregroundColor(.uiMidGray)
                         
-                        // Автозапуск
                         HStack {
                             VStack(alignment: .leading, spacing: 2) {
                                 Text("Запуск при входе")
@@ -33,43 +36,59 @@ struct SettingsView: View {
                         
                         Divider().background(Color.uiHairline)
                         
-                        // Авто-вставка
                         HStack {
                             VStack(alignment: .leading, spacing: 2) {
-                                Text("Авто-вставка текста")
-                                    .font(UIStyleFont.body(size: 13, weight: .medium))
-                                    .foregroundColor(.uiInk)
-                                Text("Печатать расшифровку прямо в активное окно")
+                                HStack(spacing: 6) {
+                                    Text("Авто-вставка текста")
+                                        .font(UIStyleFont.body(size: 13, weight: .medium))
+                                        .foregroundColor(.uiInk)
+                                    
+                                    if !permissions.isAccessibilityGranted {
+                                        Text("Требуется доступ")
+                                            .font(UIStyleFont.body(size: 10, weight: .bold))
+                                            .foregroundColor(.uiWarn)
+                                    }
+                                }
+                                Text(permissions.isAccessibilityGranted ?
+                                     "Печатать расшифровку прямо в место курсора" :
+                                     "Выдайте доступ в Универсальном доступе macOS")
                                     .font(UIStyleFont.body(size: 11, weight: .regular))
                                     .foregroundColor(.uiMidGray)
                             }
                             Spacer()
-                            Toggle("", isOn: $audioCapture.autoPasteEnabled)
-                                .labelsHidden()
-                                .toggleStyle(SwitchToggleStyle(tint: Color(hex: "#10B981")))
+                            
+                            if permissions.isAccessibilityGranted {
+                                Toggle("", isOn: $audioCapture.autoPasteEnabled)
+                                    .labelsHidden()
+                                    .toggleStyle(SwitchToggleStyle(tint: Color(hex: "#10B981")))
+                            } else {
+                                UIOutlineButton(title: "Настройки") {
+                                    permissions.requestAccessibilityPermission()
+                                }
+                            }
                         }
                         
                         Divider().background(Color.uiHairline)
                         
-                        // Анонимная аналитика
                         HStack {
                             VStack(alignment: .leading, spacing: 2) {
-                                Text("Делиться аналитикой")
+                                Text("Сразу открывать в истории")
                                     .font(UIStyleFont.body(size: 13, weight: .medium))
                                     .foregroundColor(.uiInk)
-                                Text("Анонимный подсчет активных пользователей и скорости ИИ")
+                                Text("Автоматически открывать свежую заметку по завершении расшифровки")
                                     .font(UIStyleFont.body(size: 11, weight: .regular))
                                     .foregroundColor(.uiMidGray)
                             }
                             Spacer()
-                            Toggle("", isOn: $audioCapture.analyticsEnabled)
+                            Toggle("", isOn: $audioCapture.autoOpenNoteEnabled)
                                 .labelsHidden()
                                 .toggleStyle(SwitchToggleStyle(tint: Color(hex: "#10B981")))
                         }
+
                         
                         Divider().background(Color.uiHairline)
                         
-                        // Звуки
+                        // 3. Звуки
                         HStack {
                             VStack(alignment: .leading, spacing: 2) {
                                 Text("Системные звуки")
@@ -168,11 +187,14 @@ struct SettingsView: View {
             .padding(20)
         }
         .background(Color.uiCanvas)
+        .onReceive(timer) { _ in
+            permissions.checkPermissions()
+        }
         .alert("Стереть всю историю?", isPresented: $showingClearHistoryAlert) {
             Button("Отмена", role: .cancel) { }
             Button("Стереть", role: .destructive) {
                 audioCapture.clearAllHistory()
             }
-        } message: { Text("Все сохраненные транскрипции будут удалены безвозвратно. Это действие нельзя отменить.") }
+        } message: { Text("Все сохраненные транскрипции будут удалены безвозвратно.") }
     }
 }
