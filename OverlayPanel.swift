@@ -4,12 +4,18 @@ import AppKit
 class OverlayPanelManager {
     static let shared = OverlayPanelManager()
     private var panel: NSPanel?
+    private var warningHideWorkItem: DispatchWorkItem?
     
     func showOverlay() {
         DispatchQueue.main.async {
+            if AudioCapture.shared.warningMessage == nil {
+                self.warningHideWorkItem?.cancel()
+                self.warningHideWorkItem = nil
+            }
+            
             if self.panel == nil {
                 let newPanel = NSPanel(
-                    contentRect: NSRect(x: 0, y: 0, width: 240, height: 60),
+                    contentRect: NSRect(x: 0, y: 0, width: 220, height: 60),
                     styleMask: [.borderless, .nonactivatingPanel],
                     backing: .buffered,
                     defer: false
@@ -38,11 +44,11 @@ class OverlayPanelManager {
                 let targetY = screen.visibleFrame.maxY - 44
                 
                 self.panel?.alphaValue = 0.0
-                self.panel?.setFrameOrigin(NSPoint(x: x, y: targetY + 12))
+                self.panel?.setFrameOrigin(NSPoint(x: x, y: targetY + 10))
                 self.panel?.orderFrontRegardless()
                 
                 NSAnimationContext.runAnimationGroup { context in
-                    context.duration = 0.25
+                    context.duration = 0.22
                     context.timingFunction = CAMediaTimingFunction(name: .easeOut)
                     self.panel?.animator().alphaValue = 1.0
                     self.panel?.animator().setFrameOrigin(NSPoint(x: x, y: targetY))
@@ -50,33 +56,41 @@ class OverlayPanelManager {
             }
         }
     }
-
+    
     func showWarning(message: String) {
         DispatchQueue.main.async {
+            self.warningHideWorkItem?.cancel()
+            
             AudioCapture.shared.warningMessage = message
             AudioCapture.shared.isProcessingFile = false
-            SoundEffect.playCancel()
+            SoundEffect.playWarning()
             self.showOverlay()
             
-            DispatchQueue.main.asyncAfter(deadline: .now() + 3.5) {
-                AudioCapture.shared.warningMessage = nil
-                self.hideOverlay()
+            let workItem = DispatchWorkItem { [weak self] in
+                self?.hideOverlay()
             }
+            self.warningHideWorkItem = workItem
+            
+            DispatchQueue.main.asyncAfter(deadline: .now() + 3.5, execute: workItem)
         }
     }
     
     func hideOverlay() {
         DispatchQueue.main.async {
+            self.warningHideWorkItem?.cancel()
+            self.warningHideWorkItem = nil
+            
             guard let panel = self.panel else { return }
             let currentFrame = panel.frame
             
             NSAnimationContext.runAnimationGroup({ context in
-                context.duration = 0.18
+                context.duration = 0.22
                 context.timingFunction = CAMediaTimingFunction(name: .easeIn)
                 panel.animator().alphaValue = 0.0
-                panel.animator().setFrameOrigin(NSPoint(x: currentFrame.minX, y: currentFrame.minY + 8))
+                panel.animator().setFrameOrigin(NSPoint(x: currentFrame.minX, y: currentFrame.minY + 6))
             }) {
                 panel.orderOut(nil)
+                AudioCapture.shared.warningMessage = nil
             }
         }
     }
@@ -122,30 +136,22 @@ struct RotatingGlowBorder: View {
 
 struct FloatingWidgetView: View {
     @ObservedObject var audioCapture = AudioCapture.shared
-    
     @State private var isAppeared = false
     
     let greenGradient = LinearGradient(colors: [Color(hex: "#34D399"), Color(hex: "#059669")], startPoint: .top, endPoint: .bottom)
     let purpleGradient = LinearGradient(colors: [Color(hex: "#C084FC"), Color(hex: "#6366F1")], startPoint: .top, endPoint: .bottom)
-    
-    let glassBorderGradient = LinearGradient(
-        colors: [Color.white.opacity(0.85), Color.white.opacity(0.12)],
-        startPoint: .top,
-        endPoint: .bottom
-    )
+    let glassBorderGradient = LinearGradient(colors: [Color.white.opacity(0.85), Color.white.opacity(0.12)], startPoint: .top, endPoint: .bottom)
     
     var body: some View {
         ZStack {
             Color.clear
             
-            // ВНЕШНЯЯ АУРА
             Capsule()
                 .fill(getGlowColor())
                 .frame(width: getWidth() - 10, height: 28)
                 .blur(radius: 12)
                 .opacity(0.4)
             
-            // ОСНОВНАЯ КАПСУЛА
             HStack(alignment: .center, spacing: 10) {
                 if let warningText = audioCapture.warningMessage {
                     HStack(spacing: 6) {
@@ -177,7 +183,6 @@ struct FloatingWidgetView: View {
                         }
                     }
                 } else {
-                    // МИКРОФОН ЗАПИСЬ
                     HStack(spacing: 6) {
                         Circle()
                             .fill(Color(hex: "#10B981"))

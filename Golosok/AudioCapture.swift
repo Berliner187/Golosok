@@ -4,10 +4,14 @@ import AppKit
 import UniformTypeIdentifiers
 import ServiceManagement
 
+// MARK: - Кастомная акустическая айдентика
 struct SoundEffect {
-    static func playStart() { guard AudioCapture.shared.soundEnabled else { return }; NSSound(named: "Pop")?.play() }
-    static func playSuccess() { guard AudioCapture.shared.soundEnabled else { return }; NSSound(named: "Tink")?.play() }
-    static func playCancel() { guard AudioCapture.shared.soundEnabled else { return }; NSSound(named: "Basso")?.play() }
+    static func playStart() { LuxurySoundSynth.shared.playStart() }
+    static func playSuccess() { LuxurySoundSynth.shared.playSuccess() }
+    static func playCancel() { LuxurySoundSynth.shared.playCancel() }
+    static func playCopy() { LuxurySoundSynth.shared.playCopy() }
+    static func playDelete() { LuxurySoundSynth.shared.playDelete() }
+    static func playWarning() { LuxurySoundSynth.shared.playWarning() }
 }
 
 struct UpdateInfo {
@@ -83,11 +87,16 @@ class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
     
     override init() {
         super.init()
+        
+        if UserDefaults.standard.object(forKey: "analyticsEnabled") == nil {
+            self.analyticsEnabled = true
+        }
+        
         loadHistory()
         checkUpdates()
         sendTelemetry(eventType: "app_launch", audioDurationSec: 0, characterCount: 0, speedup: 0)
     }
-    
+
     var currentAppVersion: String {
         let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.4.0"
         return "v\(version)"
@@ -121,6 +130,7 @@ class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
         SoundEffect.playCancel()
         
         DispatchQueue.main.async {
+            self.warningMessage = nil
             self.isRecording = false
             self.audioSamples = Array(repeating: 0.15, count: 9)
             self.transcribedText = "Запись отменена"
@@ -165,6 +175,7 @@ class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
             }
             
             DispatchQueue.main.async {
+                self.warningMessage = nil
                 self.isRecording = true
                 self.transcribedText = "Запись идет..."
                 OverlayPanelManager.shared.showOverlay()
@@ -245,6 +256,7 @@ class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
         
         if panel.runModal() == .OK, let fileURL = panel.url {
             DispatchQueue.main.async {
+                self.warningMessage = nil
                 self.isProcessingFile = true
                 self.fileProcessingProgress = 0.0
                 self.transcribedText = "Извлечение аудио..."

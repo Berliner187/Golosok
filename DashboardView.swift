@@ -170,7 +170,7 @@ struct DashboardView: View {
                             }
                         }
                         .padding(.horizontal, 10).padding(.vertical, 6)
-                        .background(Color.uiEmber).cornerRadius(12)
+                        .background(Color.uiWarn).cornerRadius(12)
                     }
                 }
                 

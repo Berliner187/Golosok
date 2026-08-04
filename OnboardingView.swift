@@ -16,6 +16,7 @@ struct OnboardingView: View {
             Color.uiCanvas.ignoresSafeArea()
             
             VStack(spacing: 24) {
+                // ШАПКА
                 VStack(spacing: 8) {
                     Text("Давайте начнём")
                         .font(UIStyleFont.display(size: 22, weight: .semibold))
@@ -28,6 +29,7 @@ struct OnboardingView: View {
                 }
                 .frame(maxWidth: 420)
                 
+                // КАРТОЧКА НАСТРОЕК
                 UICard {
                     VStack(spacing: 18) {
                         // ШАГ 1: Микрофон (Обязательно)
@@ -96,7 +98,7 @@ struct OnboardingView: View {
                         
                         Divider().background(Color.uiHairline)
                         
-                        // ШАГ 3: Анонимная аналитика (Включена по умолчанию)
+                        // ШАГ 3: Анонимная аналитика
                         HStack(spacing: 16) {
                             Circle()
                                 .fill(audioCapture.analyticsEnabled ? Color(hex: "#10B981") : Color.uiMidGray.opacity(0.4))
@@ -106,7 +108,7 @@ struct OnboardingView: View {
                                 Text("Делиться аналитикой")
                                     .font(UIStyleFont.display(size: 14, weight: .medium))
                                     .foregroundColor(.uiInk)
-                                Text("Автоматическая отправка данных диагностики и использования поможет совершенствовать продукт")
+                                Text("Автоматическая отправка данных диагностики поможет совершенствовать продукт")
                                     .font(UIStyleFont.body(size: 12, weight: .regular))
                                     .foregroundColor(.uiMidGray)
                             }
@@ -121,7 +123,7 @@ struct OnboardingView: View {
                 }
                 .frame(maxWidth: 480)
                 
-                UIPrimaryButton(title: canContinue ? "Начать использование" : "Сначала включите микрофон") {
+                UIPrimaryButton(title: canContinue ? "Начать использование" : "Требуется доступ к микрофону") {
                     if canContinue {
                         permissions.completeOnboarding()
                         isPresented = false
@@ -129,6 +131,11 @@ struct OnboardingView: View {
                 }
                 .disabled(!canContinue)
                 .opacity(canContinue ? 1.0 : 0.4)
+                
+                Text("Design & Development by Kozak • 2026")
+                    .font(UIStyleFont.body(size: 11, weight: .regular))
+                    .foregroundColor(.uiMidGray)
+                    .padding(.top, 4)
             }
             .padding(40)
         }

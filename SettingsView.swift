@@ -5,8 +5,6 @@ struct SettingsView: View {
     @ObservedObject var permissions = PermissionManager.shared
     @State private var showingClearHistoryAlert = false
     
-    let timer = Timer.publish(every: 5, on: .main, in: .common).autoconnect()
-    
     var body: some View {
         ScrollView {
             VStack(spacing: 20) {
@@ -19,6 +17,7 @@ struct SettingsView: View {
                             .tracking(1.0)
                             .foregroundColor(.uiMidGray)
                         
+                        // 1. Автозапуск
                         HStack {
                             VStack(alignment: .leading, spacing: 2) {
                                 Text("Запуск при входе")
@@ -36,6 +35,7 @@ struct SettingsView: View {
                         
                         Divider().background(Color.uiHairline)
                         
+                        // 2. Авто-вставка
                         HStack {
                             VStack(alignment: .leading, spacing: 2) {
                                 HStack(spacing: 6) {
@@ -44,11 +44,12 @@ struct SettingsView: View {
                                         .foregroundColor(.uiInk)
                                     
                                     if !permissions.isAccessibilityGranted {
-                                        Text("Требуется доступ")
+                                        Text("Разрешите доступ")
                                             .font(UIStyleFont.body(size: 10, weight: .bold))
                                             .foregroundColor(.uiWarn)
                                     }
                                 }
+                                
                                 Text(permissions.isAccessibilityGranted ?
                                      "Печатать расшифровку прямо в место курсора" :
                                      "Выдайте доступ в Универсальном доступе macOS")
@@ -70,31 +71,31 @@ struct SettingsView: View {
                         
                         Divider().background(Color.uiHairline)
                         
+                        // 3. АНАЛИТИКА (ВЕРНУЛИ НА МЕСТО!)
                         HStack {
                             VStack(alignment: .leading, spacing: 2) {
-                                Text("Сразу открывать в истории")
+                                Text("Делиться аналитикой")
                                     .font(UIStyleFont.body(size: 13, weight: .medium))
                                     .foregroundColor(.uiInk)
-                                Text("Автоматически открывать свежую заметку по завершении расшифровки")
+                                Text("Автоматическая отправка анонимных метрик производительности")
                                     .font(UIStyleFont.body(size: 11, weight: .regular))
                                     .foregroundColor(.uiMidGray)
                             }
                             Spacer()
-                            Toggle("", isOn: $audioCapture.autoOpenNoteEnabled)
+                            Toggle("", isOn: $audioCapture.analyticsEnabled)
                                 .labelsHidden()
                                 .toggleStyle(SwitchToggleStyle(tint: Color(hex: "#10B981")))
                         }
-
                         
                         Divider().background(Color.uiHairline)
                         
-                        // 3. Звуки
+                        // 4. Звуки
                         HStack {
                             VStack(alignment: .leading, spacing: 2) {
                                 Text("Системные звуки")
                                     .font(UIStyleFont.body(size: 13, weight: .medium))
                                     .foregroundColor(.uiInk)
-                                Text("Озвучивать начало, отмену и конец записи")
+                                Text("Акустический отклик при активации, копировании и ошибках")
                                     .font(UIStyleFont.body(size: 11, weight: .regular))
                                     .foregroundColor(.uiMidGray)
                             }
@@ -173,7 +174,7 @@ struct SettingsView: View {
                             Text("Стереть историю")
                                 .font(UIStyleFont.body(size: 13, weight: .bold))
                                 .foregroundColor(.uiEmber)
-                            Text("Безвозвратное удаление всех заметок из базы")
+                            Text("Безвозвратное удаление ВСЕХ заметок на устройстве")
                                 .font(UIStyleFont.body(size: 11, weight: .regular))
                                 .foregroundColor(.uiMidGray)
                         }
@@ -187,7 +188,7 @@ struct SettingsView: View {
             .padding(20)
         }
         .background(Color.uiCanvas)
-        .onReceive(timer) { _ in
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             permissions.checkPermissions()
         }
         .alert("Стереть всю историю?", isPresented: $showingClearHistoryAlert) {
@@ -195,6 +196,6 @@ struct SettingsView: View {
             Button("Стереть", role: .destructive) {
                 audioCapture.clearAllHistory()
             }
-        } message: { Text("Все сохраненные транскрипции будут удалены безвозвратно.") }
+        } message: { Text("Все сохраненные транскрипции будут удалены безвозвратно. Это действие нельзя отменить.") }
     }
 }

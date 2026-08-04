@@ -259,6 +259,7 @@ struct ContentView: View {
             Button("Отмена", role: .cancel) { }
             Button("Удалить", role: .destructive) {
                 if let id = itemToDelete, let idx = audioCapture.history.firstIndex(where: { $0.id == id }) {
+                    SoundEffect.playDelete()
                     withAnimation { audioCapture.deleteItem(at: idx); if selectedItemId == id { selectedItemId = nil } }
                 }
             }
@@ -280,15 +281,16 @@ struct CapabilityCard: View {
 
 struct CopyFeedbackButton: View {
     let textToCopy: String
-    @State private var isCopied = false
-    var body: some View {
-        Button(action: {
-            NSPasteboard.general.clearContents()
-            NSPasteboard.general.setString(textToCopy, forType: .string)
-            withAnimation(.spring()) { isCopied = true }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 2) { withAnimation(.spring()) { isCopied = false } }
-        }) {
-            HStack(spacing: 6) {
+        @State private var isCopied = false
+        var body: some View {
+            Button(action: {
+                NSPasteboard.general.clearContents()
+                NSPasteboard.general.setString(textToCopy, forType: .string)
+                SoundEffect.playCopy()
+                withAnimation(.spring()) { isCopied = true }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 2) { withAnimation(.spring()) { isCopied = false } }
+            }) {
+                HStack(spacing: 6) {
                 Image(systemName: isCopied ? "checkmark" : "doc.on.doc").font(.system(size: 11, weight: .medium))
                 Text(isCopied ? "Готово!" : "Скопировать")
             }
