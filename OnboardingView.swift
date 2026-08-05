@@ -22,7 +22,7 @@ struct OnboardingView: View {
                         .font(UIStyleFont.display(size: 22, weight: .semibold))
                         .foregroundColor(.uiInk)
                     
-                    Text("Разрешите доступ к микрофону для записи речи. Остальные опции можно настроить позже.")
+                    Text("Разрешите доступ к микрофону для записи речи.\nОстальные опции можно настроить позже.")
                         .font(UIStyleFont.body(size: 13, weight: .regular))
                         .foregroundColor(.uiMidGray)
                         .multilineTextAlignment(.center)

@@ -18,9 +18,26 @@ struct GolosokApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView()
-                .frame(minWidth: 820, minHeight: 520)
+                .frame(minWidth: 920, minHeight: 640)
         }
-        .defaultSize(width: 960, height: 640)
+        
+        .commands {
+                CommandGroup(replacing: .appInfo) {
+                    Button("О программе") {
+                        NSApp.activate(ignoringOtherApps: true)
+                        NotificationCenter.default.post(name: NSNotification.Name("OpenAboutModal"), object: nil)
+                    }
+                }
+                
+                CommandGroup(replacing: .newItem) {
+                    Button("Открыть аудиофайл...") {
+                        AudioCapture.shared.importAndTranscribeFile()
+                    }
+                    .keyboardShortcut("o", modifiers: .command)
+                }
+            }
+    
+        .defaultSize(width: 920, height: 640)
         .commands {
             CommandGroup(replacing: .newItem) {
                 Button("Открыть аудиофайл...") {

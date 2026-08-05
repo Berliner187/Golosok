@@ -328,38 +328,45 @@ class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
                 }
                 
                 if isFileImport {
-                    DispatchQueue.main.async {
-                        self.fileProcessingProgress = Double(chunkIndex + 1) / Double(totalChunks)
-                    }
+                    DispatchQueue.main.async { self.fileProcessingProgress = Double(chunkIndex + 1) / Double(totalChunks) }
                 }
             }
         }
         
         let rawText = accumulatedText.joined(separator: " ").trimmingCharacters(in: .whitespacesAndNewlines)
+        let prettyFormattedText = TextFormatter.formatIntoParagraphs(rawText)
         let processingTimeSecs = Date().timeIntervalSince(processStartTime)
         let calculatedSpeedup = max(1.0, realAudioSecs / max(0.1, processingTimeSecs))
         
+        if isFileImport {
+            try? FileManager.default.removeItem(at: tempWavURL)
+        }
+        
         DispatchQueue.main.async {
             self.isProcessingFile = false
-            if rawText.isEmpty {
+            if prettyFormattedText.isEmpty {
                 OverlayPanelManager.shared.showWarning(message: "Речь не распознана")
             } else {
-                let prettyFormattedText = TextFormatter.formatIntoParagraphs(rawText)
                 self.transcribedText = prettyFormattedText
                 let formatter = DateFormatter()
                 formatter.dateFormat = "dd.MM.yyyy, HH:mm"
                 let dateStr = formatter.string(from: Date())
                 
                 let newItem = TranscriptionItem(id: UUID(), date: dateStr, text: prettyFormattedText, duration: durationFormatted, speedup: calculatedSpeedup, isUnread: true)
+                
                 self.saveAudioForNote(id: newItem.id, sourceURL: sourceURL)
                 self.history.insert(newItem, at: 0)
+                
                 NotificationCenter.default.post(name: NSNotification.Name("AutoSelectNote"), object: newItem.id)
                 NSPasteboard.general.clearContents()
                 NSPasteboard.general.setString(prettyFormattedText, forType: .string)
-                if !isFileImport { self.pasteToActiveApp() }
+                
                 SoundEffect.playSuccess()
+                if !isFileImport { self.pasteToActiveApp() }
+                
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { OverlayPanelManager.shared.hideOverlay() }
             }
+            
             self.sendTelemetry(eventType: isFileImport ? "file_import" : "dictation", audioDurationSec: realAudioSecs, characterCount: rawText.count, speedup: calculatedSpeedup)
         }
     }
@@ -513,12 +520,14 @@ class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
         let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true]
         _ = AXIsProcessTrustedWithOptions(options as CFDictionary)
         SoundEffect.playSuccess()
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+        
+        DispatchQueue.main.asyncAfter(deadline: .now() + 5.2) {
             let source = CGEventSource(stateID: .combinedSessionState)
             guard let keyDown = CGEvent(keyboardEventSource: source, virtualKey: 0x09, keyDown: true),
                   let keyUp = CGEvent(keyboardEventSource: source, virtualKey: 0x09, keyDown: false) else { return }
             keyDown.flags = .maskCommand; keyUp.flags = .maskCommand
-            keyDown.post(tap: .cghidEventTap); keyUp.post(tap: .cghidEventTap)
+            keyDown.post(tap: .cgSessionEventTap)
+            keyUp.post(tap: .cgSessionEventTap)
         }
     }
     
@@ -544,20 +553,24 @@ class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
         }
     }
     
+    // ЭКСПОРТ В ВАЛИДНЫЙ UTF-8 С BOM ДЛЯ MS EXCEL / NUMBERS
     func exportTranscription(_ item: TranscriptionItem, format: String) {
         let panel = NSSavePanel()
         panel.title = "Сохранить транскрипцию"
         panel.nameFieldStringValue = "Заметка_\(item.date.replacingOccurrences(of: ":", with: "-")).\(format)"
         if panel.runModal() == .OK, let saveURL = panel.url {
             var content = ""
+            let prettyText = TextFormatter.formatIntoParagraphs(item.text)
             switch format.lowercased() {
-            case "md": content = "# Транскрипция Голосок\n**Дата:** \(item.date)\n**Длительность:** \(item.duration)\n\n---\n\n\(item.text)"
-            case "txt": content = "Голосок — Транскрипция\nДата: \(item.date)\nДлительность: \(item.duration)\n\n\(item.text)"
-            case "csv": content = "\"Дата\",\"Длительность\",\"Текст\"\n\"\(item.date)\",\"\(item.duration)\",\"\(item.text.replacingOccurrences(of: "\"", with: "\"\""))\""
+            case "md": content = "# Транскрипция Голосок\n**Дата:** \(item.date)\n**Длительность:** \(item.duration)\n\n---\n\n\(prettyText)"
+            case "txt": content = "Голосок — Транскрипция\nДата: \(item.date)\nДлительность: \(item.duration)\n\n\(prettyText)"
+            case "csv":
+                // \u{FEFF} — это BOM маркер для того, чтобы Excel открывал русский язык в идеальном UTF-8!
+                content = "\u{FEFF}\"Дата\",\"Длительность\",\"Текст\"\n\"\(item.date)\",\"\(item.duration)\",\"\(item.text.replacingOccurrences(of: "\"", with: "\"\""))\""
             case "json":
                 let dict: [String: Any] = ["id": item.id.uuidString, "date": item.date, "duration": item.duration, "text": item.text]
                 if let data = try? JSONSerialization.data(withJSONObject: dict, options: .prettyPrinted) { content = String(data: data, encoding: .utf8) ?? "" }
-            default: content = item.text
+            default: content = prettyText
             }
             try? content.write(to: saveURL, atomically: true, encoding: .utf8)
         }
@@ -596,7 +609,8 @@ class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
         DispatchQueue.main.async { self.isDownloadingUpdate = true; self.updateProgressText = "Подключение..." }
         let dest = FileManager.default.temporaryDirectory.appendingPathComponent("Golosok_Update.dmg")
         if FileManager.default.fileExists(atPath: dest.path) { try? FileManager.default.removeItem(at: dest) }
-        let session = URLSession(configuration: .default, delegate: self, delegateQueue: nil)
+        let config = URLSessionConfiguration.default
+        let session = URLSession(configuration: config, delegate: self, delegateQueue: nil)
         downloadTask = session.downloadTask(with: updateUrl)
         downloadTask?.resume()
     }

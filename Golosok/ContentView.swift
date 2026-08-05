@@ -43,6 +43,8 @@ struct ContentView: View {
     @State private var itemToDelete: UUID?
     @State private var showingDeleteAlert = false
     
+    @State private var showAboutSheet = false
+    
     var filteredHistory: [TranscriptionItem] {
         if searchText.isEmpty { return audioCapture.history }
         else { return audioCapture.history.filter { $0.text.localizedCaseInsensitiveContains(searchText) } }
@@ -70,6 +72,12 @@ struct ContentView: View {
                 }
                 audioCapture.markAsRead(id: newId)
             }
+        }
+        .sheet(isPresented: $showAboutSheet) {
+            AboutView()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("OpenAboutModal"))) { _ in
+            showAboutSheet = true
         }
     }
     

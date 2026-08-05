@@ -4,6 +4,7 @@ struct SettingsView: View {
     @ObservedObject var audioCapture = AudioCapture.shared
     @ObservedObject var permissions = PermissionManager.shared
     @State private var showingClearHistoryAlert = false
+    @State private var showingAboutSheet = false
     
     var body: some View {
         ScrollView {
@@ -71,7 +72,23 @@ struct SettingsView: View {
                         
                         Divider().background(Color.uiHairline)
                         
-                        // 3. АНАЛИТИКА (ВЕРНУЛИ НА МЕСТО!)
+                        HStack {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Сразу открывать в истории")
+                                    .font(UIStyleFont.body(size: 13, weight: .medium))
+                                    .foregroundColor(.uiInk)
+                                Text("Автоматически открывать свежую заметку по завершении расшифровки")
+                                    .font(UIStyleFont.body(size: 11, weight: .regular))
+                                    .foregroundColor(.uiMidGray)
+                            }
+                            Spacer()
+                            Toggle("", isOn: $audioCapture.autoOpenNoteEnabled)
+                                .labelsHidden()
+                                .toggleStyle(SwitchToggleStyle(tint: Color(hex: "#10B981")))
+                        }
+                        
+                        Divider().background(Color.uiHairline)
+                        
                         HStack {
                             VStack(alignment: .leading, spacing: 2) {
                                 Text("Делиться аналитикой")
@@ -163,6 +180,21 @@ struct SettingsView: View {
                             Text("Apple Metal (MTL0)")
                                 .font(UIStyleFont.body(size: 12, weight: .regular))
                                 .foregroundColor(.uiMidGray)
+                        }
+                        
+                        Divider().background(Color.uiHairline)
+
+                        HStack {
+                            Text("О программе Golosok")
+                                .font(UIStyleFont.body(size: 13, weight: .medium))
+                                .foregroundColor(.uiInk)
+                            Spacer()
+                            UIOutlineButton(title: "Открыть") {
+                                showingAboutSheet = true
+                            }
+                        }
+                        .sheet(isPresented: $showingAboutSheet) {
+                            AboutView()
                         }
                     }
                 }
