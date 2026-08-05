@@ -57,7 +57,7 @@ struct AboutView: View {
                 
                 HStack(spacing: 8) {
                     AboutLinkButton(title: "Поддержка", icon: "envelope") {
-                        openURL(URL(string: "mailto:support@golosok.space")!)
+                        openURL(URL(string: "https://telegram.me/fancycode")!)
                     }
                     AboutLinkButton(title: "Релизы", icon: "doc.text") {
                         openURL(URL(string: "https://github.com/Berliner187/Golosok/releases")!)

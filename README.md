@@ -22,7 +22,7 @@
 
 | Компонент | Спецификация |
 | :--- | :--- |
-| **ОС** | macOS 13.0+ (Ventura, Sonoma, Sequoia) |
+| **ОС** | macOS 13.0+ (Sonoma, Sequoia, Tahoe) |
 | **Железо** | Apple Silicon (M1 / M2 / M3 / M4 / M5) |
 | **Модель** | GigaAM v3 RNN-T (GGUF Q8_0) |
 | **RAM (ожидание)** | ~30–50 МБ |
