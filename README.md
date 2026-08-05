@@ -3,8 +3,9 @@
 **Нативный голосовой ввод на базе Sber GigaAM v3. Инференс на Apple Silicon.**  
 Моментальный ввод текста по `⌥ + Space` и расшифровка медиафайлов без интернета.
 
-![Golosok Demo 1](https://golosok.space/static/img/promo.gif)
-![Golosok Demo 2](https://golosok.space/static/img/promo-2.gif)
+![Golosok Demo 1](https://raw.githubusercontent.com/Berliner187/Golosok/main/.github/assets/promo.gif)
+
+![Golosok Demo 2](https://raw.githubusercontent.com/Berliner187/Golosok/main/.github/assets/promo-2.gif)
 
 ## Архитектура и возможности
 
