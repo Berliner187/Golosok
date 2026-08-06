@@ -100,39 +100,32 @@ final class LuxurySoundSynth {
     
     private func generateSuccessSound() -> Data? {
         let sampleRate = 48000.0
-        let duration = 0.67
-        let volume: Double = 0.42
+        let duration = 0.18
+        let volume: Double = 0.70
         
         let numSamples = Int(sampleRate * duration)
         var pcmData = Data()
         pcmData.reserveCapacity(numSamples * 4)
         
-        let releaseDuration = 0.2
-        let releaseStart = duration - releaseDuration
-        
         for i in 0..<numSamples {
             let t = Double(i) / sampleRate
+            let progress = t / duration
             
-            let fundamental = sin(2.0 * .pi * 146.83 * t) * 0.65 * exp(-2.8 * t)
+            let mainFreq = 105.0 - (67.0 * pow(progress, 0.4))
+            let mainBody = sin(2.0 * .pi * mainFreq * t)
             
-            let body = sin(2.0 * .pi * 220.00 * t) * 0.30 * exp(-4.2 * t)
+            let subFreq = 55.0 - (25.0 * progress)
+            let subBody = sin(2.0 * .pi * subFreq * t) * 0.55 * exp(-14.0 * t)
             
-            let chime = sin(2.0 * .pi * 293.66 * t) * 0.18 * exp(-6.5 * t)
+            let latchClick = (t < 0.0025) ? sin(2.0 * .pi * 220.0 * t) * 0.35 : 0.0
             
-            let malletHit = sin(2.0 * .pi * 587.33 * t) * 0.05 * exp(-30.0 * t)
+            let attack = min(1.0, t / 0.002)
+            let decay = exp(-12.5 * t)
+            let release = min(1.0, (duration - t) / 0.03)
             
-            let attack = min(1.0, t / 0.015)
+            let rawSignal = (mainBody + subBody + latchClick) * attack * decay * release * volume
             
-            let release: Double
-            if t > releaseStart {
-                let progress = (t - releaseStart) / releaseDuration
-                release = 0.5 * (1.0 + cos(.pi * progress))
-            } else {
-                release = 1.0
-            }
-            
-            let rawSignal = (fundamental + body + chime + malletHit) * attack * release * volume
-            let sampleVal = Int16(tanh(rawSignal) * 32767.0).littleEndian
+            let sampleVal = Int16(tanh(rawSignal) * 26000.0).littleEndian
             
             var left = sampleVal, right = sampleVal
             withUnsafeBytes(of: &left) { pcmData.append(contentsOf: $0) }
@@ -172,8 +165,8 @@ final class LuxurySoundSynth {
 
     private func generateCopySound() -> Data? {
         let sampleRate = 48000.0
-        let duration = 0.045
-        let volume: Double = 0.50
+        let duration = 0.058
+        let volume: Double = 0.55
         
         let numSamples = Int(sampleRate * duration)
         var pcmData = Data()
@@ -183,16 +176,26 @@ final class LuxurySoundSynth {
             let t = Double(i) / sampleRate
             let progress = t / duration
             
-            let freq = 380.0 + (140.0 * pow(progress, 0.3))
-            let signal = sin(2.0 * .pi * freq * t)
+            let glideFreq = 220.0 - (132.0 * pow(progress, 0.28))
             
-            let attack = min(1.0, t / 0.0015)
-            let decay = exp(-85.0 * t)
+            let mainSignalLeft = sin(2.0 * .pi * glideFreq * t)
+            let mainSignalRight = sin(2.0 * .pi * glideFreq * (t + 0.0015))
             
-            let rawSignal = signal * attack * decay * volume
-            let sampleVal = Int16(tanh(rawSignal) * 23000.0).littleEndian
+            let subTone = sin(2.0 * .pi * (glideFreq * 0.5) * t) * 0.35
             
-            var left = sampleVal, right = sampleVal
+            let attack = (1.0 - cos(.pi * min(1.0, t / 0.003))) * 0.5
+            let decay = exp(-48.0 * t)
+            
+            let rawLeft = (mainSignalLeft + subTone) * attack * decay * volume
+            let rawRight = (mainSignalRight + subTone) * attack * decay * volume
+            
+            let cleanLeft = rawLeft / (1.0 + abs(rawLeft) * 0.1)
+            let cleanRight = rawRight / (1.0 + abs(rawRight) * 0.1)
+            
+            let sampleValLeft = Int16(max(-32767, min(32767, cleanLeft * 27000.0))).littleEndian
+            let sampleValRight = Int16(max(-32767, min(32767, cleanRight * 27000.0))).littleEndian
+            
+            var left = sampleValLeft, right = sampleValRight
             withUnsafeBytes(of: &left) { pcmData.append(contentsOf: $0) }
             withUnsafeBytes(of: &right) { pcmData.append(contentsOf: $0) }
         }
@@ -231,38 +234,64 @@ final class LuxurySoundSynth {
     
     private func generateWarningSound() -> Data? {
         let sampleRate = 48000.0
-        let duration = 0.16
-        let volume: Double = 0.60
+        let duration = 0.22
+        let volume: Double = 0.65
         
         let numSamples = Int(sampleRate * duration)
         var pcmData = Data()
         pcmData.reserveCapacity(numSamples * 4)
         
-        let t1 = 0.0
-        let t2 = 0.052
+        let t1 = 0.00
+        let t2 = 0.045
+        let t3 = 0.090
         
         for i in 0..<numSamples {
             let t = Double(i) / sampleRate
             
-            var s1 = 0.0
+            var sigLeft = 0.0
+            var sigRight = 0.0
+            
             if t >= t1 {
                 let dt1 = t - t1
-                let freq1 = 140.0 - (60.0 * pow(min(1.0, dt1 / 0.05), 0.5))
-                s1 = sin(2.0 * .pi * freq1 * dt1) * exp(-42.0 * dt1) * min(1.0, dt1 / 0.002)
+                let env1 = exp(-55.0 * dt1) * (1.0 - cos(.pi * min(1.0, dt1 / 0.002))) * 0.5
+                let f1 = 125.0 - (60.0 * pow(min(1.0, dt1 / 0.04), 0.4))
+                let tone = sin(2.0 * .pi * f1 * dt1) + sin(2.0 * .pi * (f1 * 0.5) * dt1) * 0.4
+                
+                sigLeft += tone * env1 * 0.75
+                sigRight += tone * env1 * 0.45
             }
             
-            var s2 = 0.0
             if t >= t2 {
                 let dt2 = t - t2
-                let freq2 = 115.0 - (50.0 * pow(min(1.0, dt2 / 0.05), 0.5))
-                s2 = sin(2.0 * .pi * freq2 * dt2) * exp(-42.0 * dt2) * min(1.0, dt2 / 0.002) * 0.7
+                let env2 = exp(-55.0 * dt2) * (1.0 - cos(.pi * min(1.0, dt2 / 0.002))) * 0.5
+                let f2 = 110.0 - (55.0 * pow(min(1.0, dt2 / 0.04), 0.4))
+                let tone = sin(2.0 * .pi * f2 * dt2) + sin(2.0 * .pi * (f2 * 0.5) * dt2) * 0.4
+                
+                sigLeft += tone * env2 * 0.85
+                sigRight += tone * env2 * 0.85
             }
             
-            let release = min(1.0, (duration - t) / 0.015)
-            let rawSignal = (s1 + s2) * release * volume
-            let sampleVal = Int16(tanh(rawSignal) * 23000.0).littleEndian
+            if t >= t3 {
+                let dt3 = t - t3
+                let env3 = exp(-48.0 * dt3) * (1.0 - cos(.pi * min(1.0, dt3 / 0.002))) * 0.5
+                let f3 = 100.0 - (55.0 * pow(min(1.0, dt3 / 0.05), 0.4))
+                let tone = sin(2.0 * .pi * f3 * dt3) + sin(2.0 * .pi * (f3 * 0.5) * dt3) * 0.5
+                
+                sigLeft += tone * env3 * 0.55
+                sigRight += tone * env3 * 0.95
+            }
             
-            var left = sampleVal, right = sampleVal
+            let release = min(1.0, (duration - t) / 0.02)
+            let rawLeft = sigLeft * release * volume
+            let rawRight = sigRight * release * volume
+            
+            let satLeft = rawLeft / (1.0 + abs(rawLeft) * 0.15)
+            let satRight = rawRight / (1.0 + abs(rawRight) * 0.15)
+            
+            let sampleValLeft = Int16(max(-32767, min(32767, satLeft * 27000.0))).littleEndian
+            let sampleValRight = Int16(max(-32767, min(32767, satRight * 27000.0))).littleEndian
+            
+            var left = sampleValLeft, right = sampleValRight
             withUnsafeBytes(of: &left) { pcmData.append(contentsOf: $0) }
             withUnsafeBytes(of: &right) { pcmData.append(contentsOf: $0) }
         }

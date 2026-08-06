@@ -18,7 +18,7 @@ struct GolosokApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView()
-                .frame(minWidth: 920, minHeight: 640)
+                .frame(minWidth: 990, minHeight: 710)
         }
         
         .commands {
@@ -37,7 +37,7 @@ struct GolosokApp: App {
                 }
             }
     
-        .defaultSize(width: 920, height: 640)
+        .defaultSize(width: 990, height: 710)
         .commands {
             CommandGroup(replacing: .newItem) {
                 Button("Открыть аудиофайл...") {
