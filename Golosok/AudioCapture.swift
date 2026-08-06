@@ -30,7 +30,7 @@ struct TranscriptionItem: Identifiable, Codable {
     
     var formattedSpeedup: String {
         if let s = speedup, s > 0 { return String(format: "x%.0f", s) }
-        return "x28"
+        return "x1"
     }
 }
 
@@ -97,11 +97,6 @@ class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
         sendTelemetry(eventType: "app_launch", audioDurationSec: 0, characterCount: 0, speedup: 0)
     }
 
-    var currentAppVersion: String {
-        let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.4.0"
-        return "v\(version)"
-    }
-    
     private func setLaunchAtLogin(enabled: Bool) {
         if #available(macOS 13.0, *) {
             do {
@@ -393,7 +388,18 @@ class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
 
     private func convertMediaTo16kHzWav(inputURL: URL, outputURL: URL) -> Bool {
         let asset = AVURLAsset(url: inputURL)
-        guard let track = asset.tracks(withMediaType: .audio).first else { return false }
+        let semaphore = DispatchSemaphore(value: 0)
+        var audioTrack: AVAssetTrack?
+        Task.detached {
+            do {
+                audioTrack = try await asset.loadTracks(withMediaType: .audio).first
+            } catch {
+                audioTrack = nil
+            }
+            semaphore.signal()
+        }
+        semaphore.wait()
+        guard let track = audioTrack else { return false }
         do {
             let reader = try AVAssetReader(asset: asset)
             let outputSettings: [String: Any] = [ AVFormatIDKey: kAudioFormatLinearPCM, AVSampleRateKey: 16000.0, AVNumberOfChannelsKey: 1, AVLinearPCMBitDepthKey: 32, AVLinearPCMIsBigEndianKey: false, AVLinearPCMIsFloatKey: true ]
@@ -532,11 +538,11 @@ class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
     }
     
     private func sendTelemetry(eventType: String, audioDurationSec: Double, characterCount: Int, speedup: Double) {
-        if eventType != "app_launch" && !analyticsEnabled { return }
+        guard analyticsEnabled else { return }
         guard let url = URL(string: "https://golosok.space/api/v1/telemetry/") else { return }
         var deviceID = UserDefaults.standard.string(forKey: "anonymous_device_id")
         if deviceID == nil { deviceID = UUID().uuidString; UserDefaults.standard.set(deviceID, forKey: "anonymous_device_id") }
-        let appVer = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.4.0"
+        let appVer = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? ""
         let osVer = ProcessInfo.processInfo.operatingSystemVersionString
         let payload: [String: Any] = [
             "device_id": deviceID ?? "unknown", "app_version": appVer, "os_version": osVer,
@@ -578,8 +584,8 @@ class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
     
     func checkUpdates() {
         guard let url = URL(string: "https://api.github.com/repos/Berliner187/Golosok/releases/latest") else { return }
-        let currentVer = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.4.0"
-        var request = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalAndRemoteCacheData, timeoutInterval: 10.0)
+        let currentVer = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? ""
+        let request = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalAndRemoteCacheData, timeoutInterval: 10.0)
         URLSession.shared.dataTask(with: request) { data, _, _ in
             guard let data = data, let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
                   let tagName = json["tag_name"] as? String, let releaseName = json["name"] as? String,
@@ -615,8 +621,15 @@ class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
         downloadTask?.resume()
     }
     
-    func deleteItem(at index: Int) { history.remove(at: index) }
-    func clearAllHistory() { history.removeAll() }
+    func deleteItem(at index: Int) {
+        let item = history[index]
+        history.remove(at: index)
+        deleteAudioFile(for: item.id)
+    }
+    func clearAllHistory() {
+        history.forEach { deleteAudioFile(for: $0.id) }
+        history.removeAll()
+    }
     private func saveHistory() { if let e = try? JSONEncoder().encode(history) { UserDefaults.standard.set(e, forKey: "transcription_history") } }
     private func loadHistory() {
         if let d = UserDefaults.standard.data(forKey: "transcription_history"), let dec = try? JSONDecoder().decode([TranscriptionItem].self, from: d) {
@@ -628,6 +641,12 @@ class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
                 return item
             }
         }
+    }
+
+    private func deleteAudioFile(for id: UUID) {
+        guard let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else { return }
+        let fileURL = appSupport.appendingPathComponent("Golosok/Audio/\(id.uuidString).wav")
+        if FileManager.default.fileExists(atPath: fileURL.path) { try? FileManager.default.removeItem(at: fileURL) }
     }
 }
 

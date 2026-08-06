@@ -19,7 +19,6 @@ struct DashboardCalculator {
     let levelName: String
     let a4Pages: String
     let peakActivity: String
-    let streakDays: Int
     let wpm: Int
     let totalMinutes: String
     let totalNotes: Int
@@ -36,7 +35,7 @@ struct DashboardCalculator {
         let daysLabels = ["ПН", "ВТ", "СР", "ЧТ", "ПТ", "СБ", "ВС"]
         return DashboardCalculator(
             hoursSaved: "0.00", aiPower: "35.0x", levelName: "НОВИЧОК", a4Pages: "0", peakActivity: "НЕТ ДАННЫХ",
-            streakDays: 0, wpm: 0, totalMinutes: "0.0", totalNotes: 0, avgLength: 0,
+            wpm: 0, totalMinutes: "0.0", totalNotes: 0, avgLength: 0,
             weeklyTrend: daysLabels.map { DayTrendStat(day: $0, count: 0, chars: 0) }
         )
     }
@@ -70,7 +69,8 @@ struct DashboardCalculator {
         
         for item in history {
             let cleaned = item.duration.replacingOccurrences(of: " сек", with: "").replacingOccurrences(of: " мин", with: "")
-            totalSecs += Double(cleaned) ?? 2.5
+            let isMinutes = item.duration.contains("мин")
+            totalSecs += (Double(cleaned) ?? 2.5) * (isMinutes ? 60 : 1)
             
             if let date = dateFormatter.date(from: item.date) {
                 let hour = Calendar.current.component(.hour, from: date)
@@ -118,7 +118,6 @@ struct DashboardCalculator {
             levelName: level,
             a4Pages: String(format: "%.1f", a4Count),
             peakActivity: peak,
-            streakDays: max(1, count > 0 ? 1 : 0),
             wpm: max(130, min(210, calculatedWpm)),
             totalMinutes: String(format: "%.1f", totalMins),
             totalNotes: count,

@@ -5,7 +5,7 @@ struct AboutView: View {
     @Environment(\.openURL) private var openURL
     
     var currentVersionStr: String {
-        let ver = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.8.1"
+        let ver = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? ""
         return "v\(ver)"
     }
     

@@ -22,23 +22,13 @@ struct GolosokApp: App {
         }
         
         .commands {
-                CommandGroup(replacing: .appInfo) {
-                    Button("О программе") {
-                        NSApp.activate(ignoringOtherApps: true)
-                        NotificationCenter.default.post(name: NSNotification.Name("OpenAboutModal"), object: nil)
-                    }
-                }
-                
-                CommandGroup(replacing: .newItem) {
-                    Button("Открыть аудиофайл...") {
-                        AudioCapture.shared.importAndTranscribeFile()
-                    }
-                    .keyboardShortcut("o", modifiers: .command)
+            CommandGroup(replacing: .appInfo) {
+                Button("О программе") {
+                    NSApp.activate(ignoringOtherApps: true)
+                    NotificationCenter.default.post(name: NSNotification.Name("OpenAboutModal"), object: nil)
                 }
             }
-    
-        .defaultSize(width: 990, height: 710)
-        .commands {
+
             CommandGroup(replacing: .newItem) {
                 Button("Открыть аудиофайл...") {
                     AudioCapture.shared.importAndTranscribeFile()
@@ -46,6 +36,8 @@ struct GolosokApp: App {
                 .keyboardShortcut("o", modifiers: .command)
             }
         }
+
+        .defaultSize(width: 990, height: 710)
         
         MenuBarExtra("Голосок", systemImage: "waveform") {
             Button("Скопировать последнюю запись") {
