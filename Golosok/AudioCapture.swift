@@ -128,7 +128,7 @@ class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
             self.warningMessage = nil
             self.isRecording = false
             self.audioSamples = Array(repeating: 0.15, count: 9)
-            self.transcribedText = "Запись отменена"
+            self.transcribedText = String(localized: "Запись отменена")
             OverlayPanelManager.shared.hideOverlay()
         }
     }
@@ -142,7 +142,7 @@ class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
             }
             return
         case .denied, .restricted:
-            DispatchQueue.main.async { self.transcribedText = "Нет доступа к микрофону." }
+            DispatchQueue.main.async { self.transcribedText = String(localized: "Нет доступа к микрофону.") }
             return
         case .authorized: break
         @unknown default: break
@@ -172,7 +172,7 @@ class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
             DispatchQueue.main.async {
                 self.warningMessage = nil
                 self.isRecording = true
-                self.transcribedText = "Запись идет..."
+                self.transcribedText = String(localized: "Запись идет...")
                 OverlayPanelManager.shared.showOverlay()
             }
             timer = Timer.scheduledTimer(withTimeInterval: 0.05, repeats: true) { [weak self] _ in self?.updateMetering() }
@@ -193,7 +193,7 @@ class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
             self.isProcessingFile = false
             self.fileProcessingProgress = 0.0
             self.audioSamples = Array(repeating: 0.15, count: 9)
-            self.transcribedText = "Расшифровка..."
+            self.transcribedText = String(localized: "Расшифровка...")
         }
         
         DispatchQueue.global(qos: .userInitiated).async {
@@ -254,7 +254,7 @@ class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
                 self.warningMessage = nil
                 self.isProcessingFile = true
                 self.fileProcessingProgress = 0.0
-                self.transcribedText = "Извлечение аудио..."
+                self.transcribedText = String(localized: "Извлечение аудио...")
                 OverlayPanelManager.shared.showOverlay()
             }
             DispatchQueue.global(qos: .userInitiated).async {
@@ -277,7 +277,7 @@ class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
             if !conversionSuccess {
                 DispatchQueue.main.async {
                     self.isProcessingFile = false
-                    OverlayPanelManager.shared.showWarning(message: "Не удалось извлечь аудио")
+                    OverlayPanelManager.shared.showWarning(message: String(localized: "Не удалось извлечь аудио"))
                 }
                 return
             }
@@ -286,7 +286,7 @@ class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
         guard let inputFile = try? AVAudioFile(forReading: sourceURL) else {
             DispatchQueue.main.async {
                 self.isProcessingFile = false
-                OverlayPanelManager.shared.showWarning(message: "Ошибка чтения файла")
+                OverlayPanelManager.shared.showWarning(message: String(localized: "Ошибка чтения файла"))
             }
             return
         }
@@ -296,8 +296,8 @@ class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
         let realAudioSecs = isFileImport ? (Double(totalFrames) / sampleRate) : audioDurationSec
         
         let durationFormatted: String
-        if realAudioSecs >= 60.0 { durationFormatted = String(format: "%.0f мин", realAudioSecs / 60.0) }
-        else { durationFormatted = String(format: "%.1f сек", realAudioSecs) }
+        if realAudioSecs >= 60.0 { durationFormatted = String(format: String(localized: "%.0f мин"), realAudioSecs / 60.0) }
+        else { durationFormatted = String(format: String(localized: "%.1f сек"), realAudioSecs) }
         
         let chunkSizeInSeconds: Double = 25.0
         let framesPerChunk = AVAudioFrameCount(chunkSizeInSeconds * sampleRate)
@@ -318,7 +318,7 @@ class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
                 let chunkWavURL = FileManager.default.temporaryDirectory.appendingPathComponent("temp_chunk_\(chunkIndex).wav")
                 if writeBufferToWav(buffer: pcmBuffer, targetFormat: targetFormat, outputURL: chunkWavURL) {
                     let chunkText = runCLIOnWav(wavURL: chunkWavURL)
-                    if !chunkText.isEmpty && chunkText != "Речь не распознана" { accumulatedText.append(chunkText) }
+                    if !chunkText.isEmpty && chunkText != String(localized: "Речь не распознана") { accumulatedText.append(chunkText) }
                     try? FileManager.default.removeItem(at: chunkWavURL)
                 }
                 
@@ -340,7 +340,7 @@ class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
         DispatchQueue.main.async {
             self.isProcessingFile = false
             if prettyFormattedText.isEmpty {
-                OverlayPanelManager.shared.showWarning(message: "Речь не распознана")
+                OverlayPanelManager.shared.showWarning(message: String(localized: "Речь не распознана"))
             } else {
                 self.transcribedText = prettyFormattedText
                 let formatter = DateFormatter()
@@ -657,7 +657,7 @@ extension AudioCapture: URLSessionDownloadDelegate {
         let mbWritten = Double(totalBytesWritten) / (1024.0 * 1024.0)
         let mbTotal = Double(totalBytesExpectedToWrite) / (1024.0 * 1024.0)
         let percent = Int(progress * 100.0)
-        let text = String(format: "%.1f / %.1f МБ (%d%%)", mbWritten, mbTotal, percent)
+        let text = String(format: "%.0f / %.0f МБ (%d%%)", mbWritten, mbTotal, percent)
         DispatchQueue.main.async { self.fileProcessingProgress = progress; self.updateProgressText = text }
     }
     func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didFinishDownloadingTo location: URL) {

@@ -3,12 +3,39 @@ import SwiftUI
 struct SettingsView: View {
     @ObservedObject var audioCapture = AudioCapture.shared
     @ObservedObject var permissions = PermissionManager.shared
+    @ObservedObject var language = LanguageSettings.shared
     @State private var showingClearHistoryAlert = false
     @State private var showingAboutSheet = false
     
     var body: some View {
         ScrollView {
             VStack(spacing: 20) {
+                
+                // РАЗДЕЛ 0: ЯЗЫК
+                UICard {
+                    HStack {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Язык приложения")
+                                .font(UIStyleFont.body(size: 13, weight: .medium))
+                                .foregroundColor(.uiInk)
+                            Text("Приложение перезапустится автоматически")
+                                .font(UIStyleFont.body(size: 11, weight: .regular))
+                                .foregroundColor(.uiMidGray)
+                        }
+                        Spacer()
+                        Picker("", selection: Binding(
+                            get: { language.current },
+                            set: { language.select($0) }
+                        )) {
+                            Text("Система").tag(AppLanguage.system)
+                            Text("Русский").tag(AppLanguage.ru)
+                            Text("English").tag(AppLanguage.en)
+                        }
+                        .labelsHidden()
+                        .pickerStyle(MenuPickerStyle())
+                        .frame(width: 140)
+                    }
+                }
                 
                 // РАЗДЕЛ 1: ОСНОВНЫЕ
                 UICard {
@@ -52,8 +79,8 @@ struct SettingsView: View {
                                 }
                                 
                                 Text(permissions.isAccessibilityGranted ?
-                                     "Печатать расшифровку прямо в место курсора" :
-                                     "Выдайте доступ в Универсальном доступе macOS")
+                                     LocalizedStringKey("Печатать расшифровку прямо в место курсора") :
+                                     LocalizedStringKey("Выдайте доступ в Универсальном доступе macOS"))
                                     .font(UIStyleFont.body(size: 11, weight: .regular))
                                     .foregroundColor(.uiMidGray)
                             }
@@ -137,7 +164,7 @@ struct SettingsView: View {
                                 .font(UIStyleFont.body(size: 13, weight: .medium))
                                 .foregroundColor(.uiInk)
                             Spacer()
-                            UIBadge(text: "⌥ + ПРОБЕЛ")
+                            UIBadge(text: String(localized: "⌥ + ПРОБЕЛ"))
                         }
                         
                         Divider().background(Color.uiHairline)

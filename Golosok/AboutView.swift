@@ -101,7 +101,7 @@ struct TechBadge: View {
 }
 
 struct AboutLinkButton: View {
-    let title: String
+    let title: LocalizedStringKey
     let icon: String
     let action: () -> Void
     

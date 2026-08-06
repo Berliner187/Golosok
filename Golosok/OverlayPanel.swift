@@ -170,7 +170,7 @@ struct FloatingWidgetView: View {
                             .font(.system(size: 12, weight: .bold, design: .monospaced))
                             .foregroundColor(.white)
                     }
-                } else if audioCapture.transcribedText == "Расшифровка..." {
+                } else if audioCapture.transcribedText == String(localized: "Расшифровка...") {
                     HStack(spacing: 2.0) {
                         TimelineView(.animation) { timeline in
                             let time = timeline.date.timeIntervalSince1970 * 4.5
@@ -214,7 +214,7 @@ struct FloatingWidgetView: View {
             .clipShape(Capsule())
             .overlay(
                 Group {
-                    if audioCapture.transcribedText == "Расшифровка..." || audioCapture.isProcessingFile {
+                    if audioCapture.transcribedText == String(localized: "Расшифровка...") || audioCapture.isProcessingFile {
                         RotatingGlowBorder()
                     } else if audioCapture.warningMessage != nil {
                         Capsule().stroke(Color(hex: "#F59E0B").opacity(0.6), lineWidth: 1.2)
@@ -248,7 +248,7 @@ struct FloatingWidgetView: View {
     
     private func getGlowColor() -> Color {
         if audioCapture.warningMessage != nil { return Color(hex: "#F59E0B") }
-        if audioCapture.isProcessingFile || audioCapture.transcribedText == "Расшифровка..." { return Color(hex: "#6366F1") }
+        if audioCapture.isProcessingFile || audioCapture.transcribedText == String(localized: "Расшифровка...") { return Color(hex: "#6366F1") }
         return Color(hex: "#10B981")
     }
 }

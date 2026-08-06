@@ -32,9 +32,9 @@ struct DashboardCalculator {
     }()
     
     static var empty: DashboardCalculator {
-        let daysLabels = ["ПН", "ВТ", "СР", "ЧТ", "ПТ", "СБ", "ВС"]
+        let daysLabels = [String(localized: "ПН"), String(localized: "ВТ"), String(localized: "СР"), String(localized: "ЧТ"), String(localized: "ПТ"), String(localized: "СБ"), String(localized: "ВС")]
         return DashboardCalculator(
-            hoursSaved: "0.00", aiPower: "35.0x", levelName: "НОВИЧОК", a4Pages: "0", peakActivity: "НЕТ ДАННЫХ",
+            hoursSaved: "0.00", aiPower: "35.0x", levelName: String(localized: "НОВИЧОК"), a4Pages: "0", peakActivity: String(localized: "НЕТ ДАННЫХ"),
             wpm: 0, totalMinutes: "0.0", totalNotes: 0, avgLength: 0,
             weeklyTrend: daysLabels.map { DayTrendStat(day: $0, count: 0, chars: 0) }
         )
@@ -42,7 +42,7 @@ struct DashboardCalculator {
     
     static func calculate(from history: [TranscriptionItem]) -> DashboardCalculator {
         let count = history.count
-        let daysLabels = ["ПН", "ВТ", "СР", "ЧТ", "ПТ", "СБ", "ВС"]
+        let daysLabels = [String(localized: "ПН"), String(localized: "ВТ"), String(localized: "СР"), String(localized: "ЧТ"), String(localized: "ПТ"), String(localized: "СБ"), String(localized: "ВС")]
         
         if count == 0 { return empty }
         
@@ -52,24 +52,26 @@ struct DashboardCalculator {
         
         let level: String
         switch count {
-        case 0...5:       level = "НОВИЧОК"
-        case 6...20:      level = "ПОЛЬЗОВАТЕЛЬ"
-        case 21...50:     level = "ЛЮБИТЕЛЬ"
-        case 51...100:    level = "ОПЫТНЫЙ"
-        case 101...250:   level = "СПЕЦИАЛИСТ"
-        case 251...500:   level = "ЭКСПЕРТ"
-        case 501...1000:  level = "ПРОФИ"
-        case 1001...2500: level = "МАСТЕР"
-        case 2501...5000: level = "ВИРТУОЗ"
-        default:          level = "ЛЕГЕНДА"
+        case 0...5:       level = String(localized: "НОВИЧОК")
+        case 6...20:      level = String(localized: "ПОЛЬЗОВАТЕЛЬ")
+        case 21...50:     level = String(localized: "ЛЮБИТЕЛЬ")
+        case 51...100:    level = String(localized: "ОПЫТНЫЙ")
+        case 101...250:   level = String(localized: "СПЕЦИАЛИСТ")
+        case 251...500:   level = String(localized: "ЭКСПЕРТ")
+        case 501...1000:  level = String(localized: "ПРОФИ")
+        case 1001...2500: level = String(localized: "МАСТЕР")
+        case 2501...5000: level = String(localized: "ВИРТУОЗ")
+        default:          level = String(localized: "ЛЕГЕНДА")
         }
         
         var totalSecs: Double = 0.0
         var m = 0, d = 0, e = 0, n = 0
         
         for item in history {
-            let cleaned = item.duration.replacingOccurrences(of: " сек", with: "").replacingOccurrences(of: " мин", with: "")
-            let isMinutes = item.duration.contains("мин")
+            let cleaned = item.duration
+                .replacingOccurrences(of: " сек", with: "").replacingOccurrences(of: " мин", with: "")
+                .replacingOccurrences(of: " sec", with: "").replacingOccurrences(of: " min", with: "")
+            let isMinutes = item.duration.contains("мин") || item.duration.contains("min")
             totalSecs += (Double(cleaned) ?? 2.5) * (isMinutes ? 60 : 1)
             
             if let date = dateFormatter.date(from: item.date) {
@@ -85,7 +87,7 @@ struct DashboardCalculator {
         
         let peak: String
         let maxActivity = max(m, d, e, n)
-        if maxActivity == m { peak = "УТРО" } else if maxActivity == d { peak = "ДЕНЬ" } else if maxActivity == e { peak = "ВЕЧЕР" } else { peak = "НОЧЬ" }
+        if maxActivity == m { peak = String(localized: "УТРО") } else if maxActivity == d { peak = String(localized: "ДЕНЬ") } else if maxActivity == e { peak = String(localized: "ВЕЧЕР") } else { peak = String(localized: "НОЧЬ") }
         
         let totalMins = totalSecs / 60.0
         let savedHours = max(0.0, ((Double(totalChars) / 200.0) - totalMins) / 60.0)
@@ -151,7 +153,7 @@ struct DashboardView: View {
                         HStack(spacing: 6) {
                             if audioCapture.isDownloadingUpdate {
                                 ProgressView().scaleEffect(0.6)
-                                Text(audioCapture.updateProgressText.isEmpty ? "Скачивание..." : audioCapture.updateProgressText)
+                                Text(audioCapture.updateProgressText.isEmpty ? LocalizedStringKey("Скачивание...") : LocalizedStringKey(audioCapture.updateProgressText))
                                     .font(UIStyleFont.body(size: 10, weight: .bold))
                                     .foregroundColor(.white)
                                 Button(action: { audioCapture.cancelUpdateDownload() }) {
@@ -282,7 +284,7 @@ struct DashboardView: View {
 
 struct StatCard: View {
     let value: String
-    let label: String
+    let label: LocalizedStringKey
     var body: some View {
         UICard {
             VStack(alignment: .leading, spacing: 6) {

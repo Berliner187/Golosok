@@ -55,7 +55,7 @@ struct OnboardingView: View {
                             Spacer()
                             
                             if permissions.isMicGranted {
-                                UIBadge(text: "Готово")
+                                UIBadge(text: String(localized: "Готово"))
                             } else {
                                 UIPrimaryButton(title: "Разрешить") {
                                     permissions.requestMicPermission()
@@ -88,7 +88,7 @@ struct OnboardingView: View {
                             Spacer()
                             
                             if permissions.isAccessibilityGranted {
-                                UIBadge(text: "Готово")
+                                UIBadge(text: String(localized: "Готово"))
                             } else {
                                 UIOutlineButton(title: "Включить") {
                                     permissions.requestAccessibilityPermission()
@@ -123,7 +123,7 @@ struct OnboardingView: View {
                 }
                 .frame(maxWidth: 480)
                 
-                UIPrimaryButton(title: canContinue ? "Начать использование" : "Требуется доступ к микрофону") {
+                UIPrimaryButton(title: canContinue ? LocalizedStringKey("Начать использование") : LocalizedStringKey("Требуется доступ к микрофону")) {
                     if canContinue {
                         permissions.completeOnboarding()
                         isPresented = false

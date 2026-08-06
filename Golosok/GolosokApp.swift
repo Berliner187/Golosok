@@ -14,6 +14,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 struct GolosokApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     @ObservedObject var audioCapture = AudioCapture.shared
+
+    init() {
+        LanguageSettings.shared.apply()
+    }
     
     var body: some Scene {
         WindowGroup {

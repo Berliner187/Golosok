@@ -85,7 +85,7 @@ struct UICard<Content: View>: View {
 }
 
 struct UIOutlineButton: View {
-    let title: String
+    let title: LocalizedStringKey
     let action: () -> Void
     var body: some View {
         Button(action: action) {
@@ -103,7 +103,7 @@ struct UIOutlineButton: View {
 }
 
 struct UIDestructiveButton: View {
-    let title: String
+    let title: LocalizedStringKey
     let action: () -> Void
     var body: some View {
         Button(action: action) {
@@ -121,7 +121,7 @@ struct UIDestructiveButton: View {
 }
 
 struct UIPrimaryButton: View {
-    let title: String
+    let title: LocalizedStringKey
     let action: () -> Void
     var body: some View {
         Button(action: action) {

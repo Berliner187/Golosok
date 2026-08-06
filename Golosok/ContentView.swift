@@ -5,7 +5,7 @@ enum MainTab { case history, dashboard, settings }
 
 struct DateFormattingHelper {
     private static let inputFormatter: DateFormatter = { let df = DateFormatter(); df.dateFormat = "dd.MM.yyyy"; return df }()
-    private static let outputFormatter: DateFormatter = { let df = DateFormatter(); df.locale = Locale(identifier: "ru_RU"); df.dateFormat = "d MMMM yyyy"; return df }()
+    private static let outputFormatter: DateFormatter = { let df = DateFormatter(); df.locale = Locale.current; df.dateFormat = "d MMMM yyyy"; return df }()
     static func formatRussianDate(_ dateStr: String) -> (date: String, time: String) {
         let parts = dateStr.components(separatedBy: ", ")
         let datePart = parts.first ?? dateStr; let timePart = parts.count > 1 ? parts[1] : ""
@@ -142,7 +142,7 @@ struct ContentView: View {
             }.padding(8).background(Color.uiPaper).cornerRadius(8).overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.uiHairline, lineWidth: 1)).padding(.horizontal, 12).padding(.bottom, 8)
             ScrollView {
                 LazyVStack(spacing: 8) {
-                    if filteredHistory.isEmpty { Text(searchText.isEmpty ? "История пуста" : "Ничего не найдено").font(UIStyleFont.body(size: 13, weight: .regular)).foregroundColor(.uiMidGray).padding(.vertical, 20) }
+                    if filteredHistory.isEmpty { Text(searchText.isEmpty ? LocalizedStringKey("История пуста") : LocalizedStringKey("Ничего не найдено")).font(UIStyleFont.body(size: 13, weight: .regular)).foregroundColor(.uiMidGray).padding(.vertical, 20) }
                     else {
                         ForEach(filteredHistory) { item in
                             HistoryCard(item: item, isSelected: selectedItemId == item.id)
@@ -161,7 +161,7 @@ struct ContentView: View {
     private var sidebarFooter: some View {
         HStack {
             Circle().fill(audioCapture.isRecording ? Color.uiEmber : Color.green).frame(width: 8, height: 8)
-            Text(audioCapture.isRecording ? "Запись..." : "Готов к работе").font(UIStyleFont.body(size: 12, weight: .regular)).foregroundColor(.uiMidGray)
+            Text(audioCapture.isRecording ? LocalizedStringKey("Запись...") : LocalizedStringKey("Готов к работе")).font(UIStyleFont.body(size: 12, weight: .regular)).foregroundColor(.uiMidGray)
         }.padding(.horizontal, 16).padding(.bottom, 16)
     }
     
@@ -197,12 +197,12 @@ struct ContentView: View {
                             HStack(spacing: 8) {
                                 MetadataPill(icon: "waveform", text: selected.duration, color: Color.blue)
                                 MetadataPill(icon: "bolt.fill", text: selected.formattedSpeedup, color: Color.orange)
-                                MetadataPill(icon: "text.alignleft", text: "\(selected.text.count) зн", color: Color(hex: "#10B981"))
+                                MetadataPill(icon: "text.alignleft", text: "\(selected.text.count) " + String(localized: "зн"), color: Color(hex: "#10B981"))
                                 let readMin = max(1, selected.text.count / 900)
-                                MetadataPill(icon: "book.fill", text: "~\(readMin) мин чтения", color: Color.purple)
+                                MetadataPill(icon: "book.fill", text: "~\(readMin) " + String(localized: "мин чтения"), color: Color.purple)
                                 if audioCapture.hasAudioFile(for: selected) {
                                     Button(action: { audioCapture.toggleAudioPlayback(for: selected) }) {
-                                        HStack(spacing: 4) { Image(systemName: audioCapture.playingItemId == selected.id ? "pause.fill" : "play.fill").font(.system(size: 9, weight: .bold)); Text(audioCapture.playingItemId == selected.id ? "Пауза" : "Слушать голос").font(.system(size: 10, weight: .bold, design: .rounded)) }
+                                        HStack(spacing: 4) { Image(systemName: audioCapture.playingItemId == selected.id ? "pause.fill" : "play.fill").font(.system(size: 9, weight: .bold)); Text(audioCapture.playingItemId == selected.id ? LocalizedStringKey("Пауза") : LocalizedStringKey("Слушать голос")).font(.system(size: 10, weight: .bold, design: .rounded)) }
                                         .foregroundColor(.blue).padding(.horizontal, 8).padding(.vertical, 4).background(Color.blue.opacity(0.12)).cornerRadius(6)
                                     }.buttonStyle(.plain)
                                 }
@@ -232,28 +232,28 @@ struct ContentView: View {
                             LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
                                 CapabilityCard(
                                     icon: "keyboard",
-                                    badge: "⌥ + SPACE",
+                                    badge: String(localized: "⌥ + ПРОБЕЛ"),
                                     title: "Быстрый ввод",
                                     description: "Надиктуйте мысль – текст сразу появится под курсором в любом приложении"
                                 )
 
                                 CapabilityCard(
                                     icon: "video.fill",
-                                    badge: "⌘ + O / МЕНЮ",
+                                    badge: String(localized: "⌘ + O / МЕНЮ"),
                                     title: "Созвоны и файлы",
                                     description: "Расшифровка встреч Zoom, Телемоста и любых медиафайлов: MP3, MP4, WebM"
                                 )
 
                                 CapabilityCard(
                                     icon: "play.circle.fill",
-                                    badge: "ОРИГИНАЛ",
+                                    badge: String(localized: "ОРИГИНАЛ"),
                                     title: "Сверка аудио",
                                     description: "Слушайте исходный звук прямо в заметке, чтобы проверить соответствие с текстом"
                                 )
 
                                 CapabilityCard(
                                     icon: "doc.badge.gearshape.fill",
-                                    badge: "4 ФОРМАТА",
+                                    badge: String(localized: "4 ФОРМАТА"),
                                     title: "Экспорт",
                                     description: "Авто-деление на абзацы и сохранение в Markdown, CSV, TXT или JSON"
                                 )
@@ -278,7 +278,7 @@ struct ContentView: View {
 // MARK: - ВСПОМОГАТЕЛЬНЫЕ КОМПОНЕНТЫ
 
 struct CapabilityCard: View {
-    let icon: String; let badge: String; let title: String; let description: String
+    let icon: String; let badge: String; let title: LocalizedStringKey; let description: LocalizedStringKey
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack { Image(systemName: icon).font(.system(size: 16, weight: .semibold)).foregroundColor(.uiInk); Spacer(); UIBadge(text: badge) }
@@ -300,7 +300,7 @@ struct CopyFeedbackButton: View {
             }) {
                 HStack(spacing: 6) {
                 Image(systemName: isCopied ? "checkmark" : "doc.on.doc").font(.system(size: 11, weight: .medium))
-                Text(isCopied ? "Готово!" : "Скопировать")
+                Text(isCopied ? LocalizedStringKey("Готово!") : LocalizedStringKey("Скопировать"))
             }
             .lineLimit(1)
             .font(UIStyleFont.body(size: 13, weight: .medium))
@@ -315,7 +315,7 @@ struct CopyFeedbackButton: View {
 }
 
 struct SidebarTabButton: View {
-    let title: String
+    let title: LocalizedStringKey
     let icon: String
     let isActive: Bool
     let action: () -> Void
