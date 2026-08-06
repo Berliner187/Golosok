@@ -499,11 +499,33 @@ class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
     }
     
     private func runCLIOnWav(wavURL: URL) -> String {
-        guard let cliPath = Bundle.main.path(forResource: "transcribe-cli", ofType: nil),
-              let modelPath = Bundle.main.path(forResource: "gigaam", ofType: "gguf") else { return "" }
+        let store = ModelStore.shared
+        guard let model = store.model(named: store.activeModelID) else { return "" }
+        if model.isBundled {
+            guard let cliPath = Bundle.main.path(forResource: "transcribe-cli", ofType: nil),
+                  let modelPath = Bundle.main.path(forResource: model.fileName, ofType: "gguf") else { return "" }
+            let output = runCLIProcess(cliPath, arguments: ["-m", modelPath, wavURL.path])
+            let lines = output.components(separatedBy: .newlines)
+            if let textLine = lines.first(where: { $0.trimmingCharacters(in: .whitespaces).hasPrefix("text:") }) {
+                let extracted = String(textLine.trimmingCharacters(in: .whitespaces).dropFirst(5)).trimmingCharacters(in: .whitespacesAndNewlines)
+                if extracted != "(empty)" { return extracted }
+            }
+            return ""
+        } else {
+            guard let cliPath = Bundle.main.path(forResource: "whisper-cli", ofType: nil),
+                  let modelPath = store.localModelPath(for: model.id) else { return "" }
+            let output = runCLIProcess(cliPath, arguments: ["-m", modelPath, "-f", wavURL.path, "-l", model.languageCode, "-nt"])
+            let parts = output.components(separatedBy: .newlines)
+                .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                .filter { !$0.isEmpty && !$0.hasPrefix("[") && !$0.lowercased().hasPrefix("whisper") }
+            return parts.joined(separator: " ").trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+    }
+
+    private func runCLIProcess(_ executable: String, arguments: [String]) -> String {
         let process = Process()
-        process.executableURL = URL(fileURLWithPath: cliPath)
-        process.arguments = ["-m", modelPath, wavURL.path]
+        process.executableURL = URL(fileURLWithPath: executable)
+        process.arguments = arguments
         let outputPipe = Pipe()
         process.standardOutput = outputPipe
         process.standardError = Pipe()
@@ -511,13 +533,7 @@ class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
             try process.run()
             process.waitUntilExit()
             let data = outputPipe.fileHandleForReading.readDataToEndOfFile()
-            let rawOutput = String(data: data, encoding: .utf8) ?? ""
-            let lines = rawOutput.components(separatedBy: .newlines)
-            if let textLine = lines.first(where: { $0.trimmingCharacters(in: .whitespaces).hasPrefix("text:") }) {
-                let extracted = String(textLine.trimmingCharacters(in: .whitespaces).dropFirst(5)).trimmingCharacters(in: .whitespacesAndNewlines)
-                if extracted != "(empty)" { return extracted }
-            }
-            return ""
+            return String(data: data, encoding: .utf8) ?? ""
         } catch { return "" }
     }
     

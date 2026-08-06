@@ -4,6 +4,7 @@ struct SettingsView: View {
     @ObservedObject var audioCapture = AudioCapture.shared
     @ObservedObject var permissions = PermissionManager.shared
     @ObservedObject var language = LanguageSettings.shared
+    @ObservedObject var models = ModelStore.shared
     @State private var showingClearHistoryAlert = false
     @State private var showingAboutSheet = false
     
@@ -187,18 +188,29 @@ struct SettingsView: View {
                             .tracking(1.0)
                             .foregroundColor(.uiMidGray)
                         
-                        HStack {
+HStack {
                             Text("Языковая модель")
                                 .font(UIStyleFont.body(size: 13, weight: .medium))
                                 .foregroundColor(.uiInk)
                             Spacer()
-                            Text("Sber GigaAM v3 (E2E-RNNT)")
-                                .font(UIStyleFont.body(size: 12, weight: .regular))
-                                .foregroundColor(.uiMidGray)
+                            Picker("", selection: Binding(
+                                get: { models.activeModelID },
+                                set: { models.activeModelID = $0 }
+                            )) {
+                                ForEach(ModelStore.catalog) { m in
+                                    Text(LocalizedStringKey(m.name)).tag(m.id)
+                                }
+                            }
+                            .labelsHidden()
+                            .pickerStyle(MenuPickerStyle())
+                            .frame(width: 200)
                         }
-                        
+
+                        ActiveModelStatusRow()
+                            .padding(.vertical, 4)
+
                         Divider().background(Color.uiHairline)
-                        
+
                         HStack {
                             Text("Аппаратное ускорение")
                                 .font(UIStyleFont.body(size: 13, weight: .medium))
@@ -256,5 +268,40 @@ struct SettingsView: View {
                 audioCapture.clearAllHistory()
             }
         } message: { Text("Все сохраненные транскрипции будут удалены безвозвратно. Это действие нельзя отменить.") }
+    }
+}
+
+struct ActiveModelStatusRow: View {
+    @ObservedObject var models = ModelStore.shared
+
+    var body: some View {
+        if let active = models.model(named: models.activeModelID), !active.isBundled {
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(LocalizedStringKey(active.name))
+                        .font(UIStyleFont.body(size: 13, weight: .medium))
+                        .foregroundColor(.uiInk)
+                    Text("\(active.sizeMB) МБ — Apple Metal")
+                        .font(UIStyleFont.body(size: 11, weight: .regular))
+                        .foregroundColor(.uiMidGray)
+                }
+                Spacer()
+                if models.downloadingID == active.id {
+                    ProgressView(value: models.downloadProgress)
+                        .frame(width: 90)
+                    Text(LocalizedStringKey(models.downloadStatus))
+                        .font(UIStyleFont.body(size: 11, weight: .regular))
+                        .foregroundColor(.uiMidGray)
+                    UIOutlineButton(title: "Отмена") { models.cancel() }
+                } else if models.isDownloaded(active.id) {
+                    Text(LocalizedStringKey("RecognitionModel.Installed"))
+                        .font(UIStyleFont.body(size: 11, weight: .regular))
+                        .foregroundColor(.uiMidGray)
+                    UIOutlineButton(title: "Удалить") { models.remove(active.id) }
+                } else {
+                    UIOutlineButton(title: "Скачать") { models.download(active.id) }
+                }
+            }
+        }
     }
 }
