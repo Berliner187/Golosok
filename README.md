@@ -1,77 +1,83 @@
-# Голосок: Локальное распознавание речи для macOS
+# Golosok: Local Speech Recognition for macOS
 
-**Нативный голосовой ввод на базе Sber GigaAM v3. Инференс на Apple Silicon.**  
-Моментальный ввод текста по `⌥ + Space` и расшифровка медиафайлов без интернета.
+> **Read this in another language: [Русский](README_RU.md)**
+
+**Native voice dictation powered by Sber GigaAM v3. Inference on Apple Silicon.**  
+Instant text input via `⌥ + Space` and offline media file transcription.
 
 ![Golosok Demo 1](https://raw.githubusercontent.com/Berliner187/Golosok/main/.github/assets/promo.gif)
 
 ![Golosok Demo 2](https://raw.githubusercontent.com/Berliner187/Golosok/main/.github/assets/promo-2.gif)
 
-## Архитектура и возможности
+## Features & Architecture
 
-* **Полная автономность (Zero Cloud).** Инференс работает локально. Аудиопоток не покидает Ваш Mac. Максимальная приватность.
-* **Direct Input.** Жмете `⌥ + Space` — диктуете — текст мгновенно падает под курсор. Работает в любом софте: VS Code, Notion, Telegram, Xcode, Obsidian и другие.
-* **Аппаратное ускорение.** Модель скомпилирована под чипы Apple Silicon (M-series). Нагрузка ложится на CoreML / ANE.
-* **Понимание контекста.** Модель отлично понимает русский язык, рунглиш и автоматически расставляет пунктуацию.
-* **Пакетная обработка.** Офлайн-транскрибация файлов любой длины (MP3, WAV, M4A, MP4).
+* **Full Autonomy (Zero Cloud).** Inference runs 100% locally. Audio stream never leaves your Mac. Total privacy.
+* **Direct Input.** Press `⌥ + Space` — dictate — text drops instantly under your active cursor. Works in any app: VS Code, Notion, Telegram, Xcode, Obsidian, Slack, and more.
+* **Hardware Acceleration.** The model is optimized specifically for Apple Silicon (M-series). Execution is offloaded to CoreML / Apple Neural Engine (ANE) without CPU overheating.
+* **Context & Slang Awareness.** Excellent understanding of Russian, English, IT slang, code-switching ("Runglish"), and automatic punctuation placement.
+* **Batch File Processing.** Offline transcription for audio/video files of any duration (MP3, WAV, M4A, MP4, WebM).
 
-## Технические спецификации
+## Technical Specifications
 
-| Компонент | Спецификация |
+| Component | Specification |
 | :--- | :--- |
-| **ОС** | macOS 13.0+ (Sonoma, Sequoia, Tahoe) |
-| **Железо** | Apple Silicon (M1 / M2 / M3 / M4 / M5) |
-| **Модель** | GigaAM v3 RNN-T (GGUF Q8_0) |
-| **RAM (ожидание)** | ~30–50 МБ |
-| **RAM (инференс)** | ~300 МБ |
-| **Размер дистрибутива** | ~250 МБ |
+| **OS** | macOS 13.0+ (Ventura, Sonoma, Sequoia) |
+| **Hardware** | Apple Silicon (M1 / M2 / M3 / M4 / M5) |
+| **Model Engine** | GigaAM v3 RNN-T (GGUF Q8_0) / Whisper Large v3 |
+| **RAM (Idle)** | ~70 MB |
+| **RAM (Active Inference)** | ~100 MB |
+| **Distribution Size** | ~270 MB |
 
-## Установка
+## Installation
 
-1. Скачайте актуальный `Golosok.dmg` из раздела [Releases](../../releases).
-2. Перенесите `Golosok.app` в папку `/Applications`.
+1. Download the latest `Golosok.dmg` from the [Releases](../../releases) section.
+2. Drag `Golosok.app` into your `/Applications` folder.
 
-**Снятие карантина macOS (Gatekeeper):**  
-Проект поставляется как Open Source без платной подписи Apple Developer. Чтобы система не блокировала запуск, снимите атрибут карантина через Терминал:
+**Bypassing macOS Gatekeeper:**  
+This project is distributed as open-source software without an annual paid Apple Developer ID certificate. To prevent macOS from blocking the first launch, remove the quarantine attribute via Terminal:
 
 ```bash
 xattr -cr /Applications/Golosok.app
 ```
 
-*(Альтернатива в GUI: Control + Правый клик по иконке -> Открыть -> Подтвердить).*
+*(GUI Alternative: Control + Right-click on the app icon -> Open -> Confirm).*
 
-## Настройка доступов
+## System Permissions
 
-При первом старте система запросит два разрешения:
-1. **Микрофон** — для захвата голоса.
-2. **Универсальный доступ (Accessibility)** — для автоматической вставки текста через `Cmd + V` под курсор.
+On the first launch, the app will request two macOS permissions:
+1. **Microphone** — for capturing voice input.
+2. **Accessibility** — for automated text insertion (`Cmd + V`) directly under your active cursor.
 
-*(Если обновляетесь со старой версии и тумблер Универсального доступа завис — удалите приложение из списка через кнопку `-` и добавьте заново).*
+*(If you are updating from an older version and the Accessibility toggle seems frozen — remove Golosok from the system list using the `-` button and re-add it).*
 
-## Управление
+## Controls & Shortcuts
 
-Приложение работает в фоне. Управление завязано на горячие клавиши:
+Golosok runs silently in the background. Control is bound to global hotkeys:
 
-* **`⌥ + Space` (Option + Пробел) — Старт / Инференс**
-  * **1-е нажатие:** Активация записи (белый островок, зеленый эквалайзер).
-  * **2-е нажатие:** Стоп записи. Инференс (~0.1 сек) и мгновенная вставка в активное окно.
-* **`ESC` — Отмена**
-  * Хард-ресет диктовки без сохранения и вставки.
+* **`⌥ + Space` (Option + Space) — Start / Stop Dictation**
+  * **1st Press:** Activates recording (white island UI with green equalizer).
+  * **2nd Press:** Stops recording. Triggers inference (~0.1s) and pastes text into your focused input field.
+* **Push-to-Talk / Hold Mode** *(Selectable in Settings)*
+  * Hold `⌥ + Space` to record, release to instantly transcribe and paste.
+* **`ESC` — Cancel**
+  * Instant hard-reset of the current recording without pasting or saving.
 
-В меню-баре (иконка вейвформы) доступна история последних диктовок и копирование результатов в буфер обмена.
+A menu bar icon (`waveform`) provides access to recent dictation history, one-click clipboard copying, and app settings.
 
-## Сборка из исходников
+## Building from Source
+
+If you want to clone the repository and build the Xcode project manually:
 
 ```bash
-# 1. Клонировать репозиторий
+# 1. Clone the repository
 git clone https://github.com/Berliner187/Golosok.git
 cd Golosok
 
-# 2. Скачать веса модели GigaAM
+# 2. Download GigaAM model weights
 curl -L -o Golosok/gigaam.gguf https://huggingface.co/memoravox/gigaam-v3-e2e-rnnt-gguf/resolve/main/gigaam-v3-e2e-rnnt-Q8_0.gguf
 
-# 3. Открыть проект в Xcode
+# 3. Open project in Xcode
 open Golosok.xcodeproj
 ```
 
-В Xcode нажмите `⌘ + R` для сборки и запуска.
+In Xcode, press `⌘ + R` to build and run.
