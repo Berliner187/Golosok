@@ -232,7 +232,7 @@ struct ContentView: View {
                             LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
                                 CapabilityCard(
                                     icon: "keyboard",
-                                    badge: String(localized: "⌥ + ПРОБЕЛ"),
+                                    badge: NativeHotKeyManager.shared.displayName(),
                                     title: "Быстрый ввод",
                                     description: "Надиктуйте мысль – текст сразу появится под курсором в любом приложении"
                                 )

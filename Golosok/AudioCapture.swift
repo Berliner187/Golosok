@@ -552,12 +552,30 @@ class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
         let pid = target.processIdentifier
         target.activate(options: [.activateIgnoringOtherApps])
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+            guard self.canAcceptPaste(pid: pid) else { return }
             let source = CGEventSource(stateID: .combinedSessionState)
             guard let keyDown = CGEvent(keyboardEventSource: source, virtualKey: 0x09, keyDown: true),
                   let keyUp = CGEvent(keyboardEventSource: source, virtualKey: 0x09, keyDown: false) else { return }
             keyDown.flags = .maskCommand; keyUp.flags = .maskCommand
             keyDown.postToPid(pid)
             keyUp.postToPid(pid)
+        }
+    }
+
+    private func canAcceptPaste(pid: pid_t) -> Bool {
+        let app = AXUIElementCreateApplication(pid)
+        var focusedRef: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(app, kAXFocusedUIElementAttribute as CFString, &focusedRef) == .success,
+              let focusedElement = focusedRef else { return true }
+        var roleRef: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(focusedElement as! AXUIElement, kAXRoleAttribute as CFString, &roleRef) == .success,
+              let roleString = roleRef as? String else { return true }
+        switch roleString {
+        case "AXTextField", "AXTextArea", "AXTextView", "AXComboBox", "AXSearchField",
+             "AXDocument", "AXScrollArea", "AXWebArea":
+            return true
+        default:
+            return false
         }
     }
     

@@ -3,10 +3,22 @@ import AppKit
 
 class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
-        NativeHotKeyManager.shared.onHotKeyPressed = {
-            AudioCapture.shared.toggleRecording()
+        let hotKey = NativeHotKeyManager.shared
+        hotKey.onHotKeyPressed = {
+            if hotKey.mode == .pushToTalk {
+                if !AudioCapture.shared.isRecording {
+                    AudioCapture.shared.startRecording()
+                }
+            } else {
+                AudioCapture.shared.toggleRecording()
+            }
         }
-        NativeHotKeyManager.shared.registerOptionSpace()
+        hotKey.onHotKeyReleased = {
+            if hotKey.mode == .pushToTalk, AudioCapture.shared.isRecording {
+                AudioCapture.shared.stopRecording()
+            }
+        }
+        hotKey.register()
     }
 }
 

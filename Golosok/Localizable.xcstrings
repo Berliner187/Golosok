@@ -100,6 +100,7 @@
       }
     },
     "⌥ + ПРОБЕЛ" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -270,6 +271,70 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "GitHub"
+          }
+        }
+      }
+    },
+    "HotKey.Capture" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Press a key combination…"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Нажмите сочетание клавиш…"
+          }
+        }
+      }
+    },
+    "HotKey.ModePushToTalk" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Push-to-talk"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Рация — зажал, говоришь, отпустил"
+          }
+        }
+      }
+    },
+    "HotKey.ModeToggle" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Toggle"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Переключатель"
+          }
+        }
+      }
+    },
+    "HotKey.Taken" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Already in use"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Занято"
           }
         }
       }
@@ -788,6 +853,22 @@
         }
       }
     },
+    "Горячая клавиша" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hotkey"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Горячая клавиша"
+          }
+        }
+      }
+    },
     "Готов к работе" : {
       "localizations" : {
         "en" : {
@@ -917,6 +998,7 @@
       }
     },
     "Диктовка (Старт / Стоп)" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -1120,6 +1202,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Извлечение аудио..."
+          }
+        }
+      }
+    },
+    "Изменить" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Change"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Изменить"
           }
         }
       }
@@ -1955,6 +2053,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Расшифровка..."
+          }
+        }
+      }
+    },
+    "Режим диктовки" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dictation mode"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Режим диктовки"
           }
         }
       }

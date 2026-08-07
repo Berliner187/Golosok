@@ -157,8 +157,8 @@ extension ModelStore: URLSessionDownloadDelegate {
         }
     }
 
-    func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
-        guard let error else { return }
+    func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: (any Error)?) {
+        guard error != nil else { return }
         DispatchQueue.main.async {
             self.downloadingID = nil
             self.downloadStatus = "DownloadStatus.Failed"

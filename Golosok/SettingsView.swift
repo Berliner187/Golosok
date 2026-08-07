@@ -5,6 +5,7 @@ struct SettingsView: View {
     @ObservedObject var permissions = PermissionManager.shared
     @ObservedObject var language = LanguageSettings.shared
     @ObservedObject var models = ModelStore.shared
+    @ObservedObject var hotKey = HotKeySettings.shared
     @State private var showingClearHistoryAlert = false
     @State private var showingAboutSheet = false
     
@@ -161,14 +162,48 @@ struct SettingsView: View {
                             .foregroundColor(.uiMidGray)
                         
                         HStack {
-                            Text("Диктовка (Старт / Стоп)")
-                                .font(UIStyleFont.body(size: 13, weight: .medium))
-                                .foregroundColor(.uiInk)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Горячая клавиша")
+                                    .font(UIStyleFont.body(size: 13, weight: .medium))
+                                    .foregroundColor(.uiInk)
+                                if hotKey.isCapturing {
+                                    Text(LocalizedStringKey("HotKey.Capture"))
+                                        .font(UIStyleFont.body(size: 11, weight: .regular))
+                                        .foregroundColor(.uiMidGray)
+                                } else if hotKey.isTaken {
+                                    Text(LocalizedStringKey("HotKey.Taken"))
+                                        .font(UIStyleFont.body(size: 11, weight: .regular))
+                                        .foregroundColor(.uiWarn)
+                                }
+                            }
                             Spacer()
-                            UIBadge(text: String(localized: "⌥ + ПРОБЕЛ"))
+                            if hotKey.isCapturing {
+                                UIBadge(text: "…")
+                            } else {
+                                UIBadge(text: hotKey.hotKeyName)
+                            }
+                            UIOutlineButton(title: hotKey.isCapturing ? LocalizedStringKey("Отмена") : LocalizedStringKey("Изменить")) {
+                                if hotKey.isCapturing { hotKey.endCapture() } else { hotKey.beginCapture() }
+                            }
                         }
                         
                         Divider().background(Color.uiHairline)
+                        
+                        HStack {
+                            Text("Режим диктовки")
+                                .font(UIStyleFont.body(size: 13, weight: .medium))
+                                .foregroundColor(.uiInk)
+                            Spacer()
+                            Picker("", selection: $hotKey.mode) {
+                                Text(LocalizedStringKey("HotKey.ModeToggle")).tag(HotKeyMode.toggle)
+                                Text(LocalizedStringKey("HotKey.ModePushToTalk")).tag(HotKeyMode.pushToTalk)
+                            }
+                            .labelsHidden()
+                            .pickerStyle(MenuPickerStyle())
+                            .frame(width: 160)
+                        }
+                        
+                        Divider().overlay(Color.uiHairline)
                         
                         HStack {
                             Text("Отмена записи")
