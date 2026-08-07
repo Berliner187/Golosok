@@ -3,3 +3,4 @@ transcribe-cli
 DerivedData/
 xcuserdata/
 .DS_Store
+Golosok/whisper-cli

@@ -41,6 +41,7 @@ class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
     private var timer: Timer?
     private var startTime: Date?
     private var escMonitor: Any?
+    private var pasteTarget: NSRunningApplication?
     
     @Published var isRecording = false
     @Published var isProcessingFile = false
@@ -181,6 +182,7 @@ class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
     
     func stopRecording() {
         removeEscMonitor()
+        pasteTarget = NSWorkspace.shared.frontmostApplication
         timer?.invalidate()
         timer = nil
         audioRecorder?.stop()
@@ -196,7 +198,7 @@ class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
             self.transcribedText = String(localized: "Расшифровка...")
         }
         
-        DispatchQueue.global(qos: .userInitiated).async {
+        DispatchQueue.global(qos: .utility).async {
             self.processLongFileInChunks(fileURL: self.tempAudioURL, isFileImport: false, audioDurationSec: durationSec)
         }
     }
@@ -257,7 +259,7 @@ class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
                 self.transcribedText = String(localized: "Извлечение аудио...")
                 OverlayPanelManager.shared.showOverlay()
             }
-            DispatchQueue.global(qos: .userInitiated).async {
+            DispatchQueue.global(qos: .utility).async {
                 self.processLongFileInChunks(fileURL: fileURL, isFileImport: true, audioDurationSec: 0)
             }
         }
@@ -356,8 +358,12 @@ class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
                 NSPasteboard.general.clearContents()
                 NSPasteboard.general.setString(prettyFormattedText, forType: .string)
                 
-                SoundEffect.playSuccess()
-                if !isFileImport { self.pasteToActiveApp() }
+                if !isFileImport && self.autoPasteEnabled {
+                    self.pasteToActiveApp()
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { SoundEffect.playSuccess() }
+                } else {
+                    SoundEffect.playSuccess()
+                }
                 
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { OverlayPanelManager.shared.hideOverlay() }
             }
@@ -528,7 +534,7 @@ class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
         process.arguments = arguments
         let outputPipe = Pipe()
         process.standardOutput = outputPipe
-        process.standardError = Pipe()
+        process.standardError = FileHandle.nullDevice
         do {
             try process.run()
             process.waitUntilExit()
@@ -538,18 +544,20 @@ class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
     }
     
     private func pasteToActiveApp() {
-        guard autoPasteEnabled else { SoundEffect.playSuccess(); return }
+        guard autoPasteEnabled else { return }
         let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true]
         _ = AXIsProcessTrustedWithOptions(options as CFDictionary)
-        SoundEffect.playSuccess()
-        
-        DispatchQueue.main.asyncAfter(deadline: .now() + 5.2) {
+
+        guard let target = pasteTarget else { return }
+        let pid = target.processIdentifier
+        target.activate(options: [.activateIgnoringOtherApps])
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
             let source = CGEventSource(stateID: .combinedSessionState)
             guard let keyDown = CGEvent(keyboardEventSource: source, virtualKey: 0x09, keyDown: true),
                   let keyUp = CGEvent(keyboardEventSource: source, virtualKey: 0x09, keyDown: false) else { return }
             keyDown.flags = .maskCommand; keyUp.flags = .maskCommand
-            keyDown.post(tap: .cgSessionEventTap)
-            keyUp.post(tap: .cgSessionEventTap)
+            keyDown.postToPid(pid)
+            keyUp.postToPid(pid)
         }
     }
     
