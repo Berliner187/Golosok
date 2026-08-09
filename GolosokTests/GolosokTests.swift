@@ -81,4 +81,88 @@ struct GolosokTests {
         #expect(totalCounted == 3)
         #expect(totalChars == 10)
     }
+
+    @Test func timeOfDayBucketsByHour() {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "dd.MM.yyyy, HH:mm"
+        let cal = Calendar.current
+        func dated(_ hour: Int) -> String {
+            let d = cal.date(bySettingHour: hour, minute: 0, second: 0, of: Date())!
+            return formatter.string(from: d)
+        }
+        let items = [
+            TranscriptionItem(date: dated(7), text: "а", duration: "5.0 сек"),
+            TranscriptionItem(date: dated(14), text: "б", duration: "5.0 сек"),
+            TranscriptionItem(date: dated(21), text: "в", duration: "5.0 сек"),
+            TranscriptionItem(date: dated(2), text: "г", duration: "5.0 сек")
+        ]
+        let stats = DashboardCalculator.calculate(from: items, range: .all)
+        #expect(stats.timeOfDay.map(\.count) == [1, 1, 1, 1])
+    }
+
+    @Test func sizeHistogramBucketsChars() {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "dd.MM.yyyy, HH:mm"
+        let now = formatter.string(from: Date())
+        let items = [
+            TranscriptionItem(date: now, text: String(repeating: "а", count: 50), duration: "5.0 сек"),
+            TranscriptionItem(date: now, text: String(repeating: "б", count: 500), duration: "5.0 сек")
+        ]
+        let stats = DashboardCalculator.calculate(from: items, range: .all)
+        #expect(stats.sizeHistogram[0].count == 1)
+        #expect(stats.sizeHistogram[2].count == 1)
+    }
+
+    @Test func rangeFiltersOldNotes() {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "dd.MM.yyyy, HH:mm"
+        let cal = Calendar.current
+        let today = formatter.string(from: Date())
+        let oldDay = cal.date(byAdding: .day, value: -10, to: Date())!
+        let old = formatter.string(from: oldDay)
+        let items = [
+            TranscriptionItem(date: today, text: "сегодня", duration: "5.0 сек"),
+            TranscriptionItem(date: old, text: "старое", duration: "5.0 сек")
+        ]
+        let week = DashboardCalculator.calculate(from: items, range: .week)
+        let all = DashboardCalculator.calculate(from: items, range: .all)
+        #expect(week.sizeHistogram.reduce(0) { $0 + $1.count } == 1)
+        #expect(all.sizeHistogram.reduce(0) { $0 + $1.count } == 2)
+        #expect(week.weekdayAggregate.reduce(0) { $0 + $1.count } == 1)
+    }
+
+    @Test func activityCountsTheRightDay() {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "dd.MM.yyyy, HH:mm"
+        let cal = Calendar.current
+        let noon = cal.date(bySettingHour: 12, minute: 0, second: 0, of: Date()) ?? Date()
+        let items = [
+            TranscriptionItem(date: formatter.string(from: noon), text: "а", duration: "5.0 сек"),
+            TranscriptionItem(date: formatter.string(from: noon.addingTimeInterval(3600)), text: "б", duration: "5.0 сек")
+        ]
+        let stats = DashboardCalculator.calculate(from: items, range: .all)
+        let day = cal.startOfDay(for: noon)
+        let cell = stats.activity.first { $0.date == day }
+        #expect(cell?.count == 2)
+    }
+
+    @Test func levelProgressTargetsNextThreshold() {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "dd.MM.yyyy, HH:mm"
+        let now = formatter.string(from: Date())
+        let items = (0..<5).map { _ in TranscriptionItem(date: now, text: "а", duration: "5.0 сек") }
+        let stats = DashboardCalculator.calculate(from: items)
+        #expect(stats.levelProgress.nextThreshold == 6)
+        #expect(stats.levelProgress.isMaxed == false)
+    }
+
+    @Test func activityWindowMatchesSelectedRange() {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "dd.MM.yyyy, HH:mm"
+        let items = [TranscriptionItem(date: formatter.string(from: Date()), text: "а", duration: "5.0 сек")]
+        let stats = DashboardCalculator.calculate(from: items, range: .all)
+        #expect(stats.activity.count == 84)
+        let week = DashboardCalculator.calculate(from: items, range: .week)
+        #expect(week.activity.count == 7)
+    }
 }

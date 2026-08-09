@@ -20,7 +20,7 @@ struct UpdateInfo: Codable {
     let url: URL
 }
 
-struct TranscriptionItem: Identifiable, Codable {
+struct TranscriptionItem: Identifiable, Codable, Hashable {
     var id = UUID()
     let date: String
     let text: String
@@ -60,6 +60,8 @@ class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
     @Published var playingItemId: UUID? = nil
     private var audioPlayer: AVAudioPlayer?
     
+    @Published var isSuccessDone = false
+    
     @Published var soundEnabled: Bool = UserDefaults.standard.object(forKey: "soundEnabled") as? Bool ?? true {
         didSet { UserDefaults.standard.set(soundEnabled, forKey: "soundEnabled") }
     }
@@ -81,8 +83,14 @@ class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
     }
     
     @Published var history: [TranscriptionItem] = [] {
-        didSet { saveHistory() }
+        didSet {
+            guard !isLoadingHistory else { return }
+            saveHistory()
+            DashboardStatsStore.shared.refresh(history: history)
+        }
     }
+    
+    private var isLoadingHistory = false
     
     private let tempAudioURL = FileManager.default.temporaryDirectory.appendingPathComponent("temp_record.wav")
     
@@ -94,15 +102,24 @@ class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
         }
         
         loadHistory()
-        checkUpdates()
-        var launchCount = UserDefaults.standard.integer(forKey: "launch_count") + 1
-        UserDefaults.standard.set(launchCount, forKey: "launch_count")
-        Telemetry.shared.event("app_launch", [
-            "launch_count": launchCount,
-            "mic_granted": AVCaptureDevice.authorizationStatus(for: .audio) == .authorized,
-            "accessibility_granted": PermissionManager.shared.isAccessibilityGranted,
-            "model_id": ModelStore.shared.activeModelID
-        ])
+        DispatchQueue.main.asyncAfter(deadline: .now() + 4.5) { [weak self] in
+            self?.checkUpdates()
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 5.0) { [weak self] in
+            guard self != nil else { return }
+            let launchCount = UserDefaults.standard.integer(forKey: "launch_count") + 1
+            UserDefaults.standard.set(launchCount, forKey: "launch_count")
+            Telemetry.shared.event("app_launch", [
+                "launch_count": launchCount,
+                "mic_granted": AVCaptureDevice.authorizationStatus(for: .audio) == .authorized,
+                "accessibility_granted": PermissionManager.shared.isAccessibilityGranted,
+                "model_id": ModelStore.shared.activeModelID
+            ])
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 6.0) { [weak self] in
+            guard let self else { return }
+            DashboardStatsStore.shared.refresh(history: self.history)
+        }
     }
 
     private func setLaunchAtLogin(enabled: Bool) {
@@ -357,6 +374,7 @@ class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
                 OverlayPanelManager.shared.showWarning(message: String(localized: "Речь не распознана"))
             } else {
                 self.transcribedText = prettyFormattedText
+                self.isSuccessDone = true
                 let formatter = DateFormatter()
                 formatter.dateFormat = "dd.MM.yyyy, HH:mm"
                 let dateStr = formatter.string(from: Date())
@@ -714,6 +732,8 @@ class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
     private func saveHistory() { if let e = try? JSONEncoder().encode(history) { UserDefaults.standard.set(e, forKey: "transcription_history") } }
     private func loadHistory() {
         if let d = UserDefaults.standard.data(forKey: "transcription_history"), let dec = try? JSONDecoder().decode([TranscriptionItem].self, from: d) {
+            isLoadingHistory = true
+            defer { isLoadingHistory = false }
             self.history = dec.map { item in
                 if !item.text.contains("\n\n") && item.text.count > 120 {
                     let pretty = TextFormatter.formatIntoParagraphs(item.text)

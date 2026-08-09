@@ -12,6 +12,7 @@ class OverlayPanelManager {
                 self.warningHideWorkItem?.cancel()
                 self.warningHideWorkItem = nil
             }
+            AudioCapture.shared.isSuccessDone = false
             
             if self.panel == nil {
                 let newPanel = NSPanel(
@@ -91,6 +92,7 @@ class OverlayPanelManager {
             }) {
                 panel.orderOut(nil)
                 AudioCapture.shared.warningMessage = nil
+                AudioCapture.shared.isSuccessDone = false
             }
         }
     }
@@ -182,6 +184,16 @@ struct FloatingWidgetView: View {
                             }
                         }
                     }
+                } else if audioCapture.isSuccessDone {
+                    ZStack {
+                        Circle()
+                            .stroke(Color(hex: "#34D399").opacity(0.45), lineWidth: 2)
+                            .frame(width: 24, height: 24)
+                        Image(systemName: "checkmark")
+                            .font(.system(size: 13, weight: .bold))
+                            .foregroundColor(.white)
+                    }
+                    .transition(.scale.combined(with: .opacity))
                 } else {
                     HStack(spacing: 6) {
                         Circle()
@@ -218,6 +230,8 @@ struct FloatingWidgetView: View {
                         RotatingGlowBorder()
                     } else if audioCapture.warningMessage != nil {
                         Capsule().stroke(Color(hex: "#F59E0B").opacity(0.6), lineWidth: 1.2)
+                    } else if audioCapture.isSuccessDone {
+                        Capsule().stroke(Color(hex: "#34D399").opacity(0.75), lineWidth: 1.2)
                     } else {
                         Capsule().stroke(glassBorderGradient, lineWidth: 1.0)
                     }
@@ -243,12 +257,14 @@ struct FloatingWidgetView: View {
         if audioCapture.warningMessage != nil { return 210 }
         if audioCapture.isProcessingFile { return 110 }
         if audioCapture.isRecording { return 200 }
+        if audioCapture.isSuccessDone { return 150 }
         return 130
     }
     
     private func getGlowColor() -> Color {
         if audioCapture.warningMessage != nil { return Color(hex: "#F59E0B") }
         if audioCapture.isProcessingFile || audioCapture.transcribedText == String(localized: "Расшифровка...") { return Color(hex: "#6366F1") }
+        if audioCapture.isSuccessDone { return Color(hex: "#10B981") }
         return Color(hex: "#10B981")
     }
 }

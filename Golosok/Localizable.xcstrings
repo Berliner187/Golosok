@@ -11,6 +11,9 @@
         }
       }
     },
+    "/ %lld" : {
+
+    },
     "%.0f мин" : {
       "localizations" : {
         "en" : {
@@ -56,6 +59,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%.1f сек"
+          }
+        }
+      }
+    },
+    "%@ %lld %@ %@" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ %2$lld %3$@ %4$@"
           }
         }
       }
@@ -128,6 +141,38 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "4 ФОРМАТА"
+          }
+        }
+      }
+    },
+    "7 дней" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "7 days"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "7 дней"
+          }
+        }
+      }
+    },
+    "30 дней" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "30 days"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "30 дней"
           }
         }
       }
@@ -565,6 +610,23 @@
         }
       }
     },
+    "АКТИВНОСТЬ" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ACTIVITY"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "АКТИВНОСТЬ"
+          }
+        }
+      }
+    },
     "Акустический отклик при активации, копировании и ошибках" : {
       "localizations" : {
         "en" : {
@@ -613,6 +675,23 @@
         }
       }
     },
+    "Больше" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "MORE"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Больше"
+          }
+        }
+      }
+    },
     "Борд" : {
       "localizations" : {
         "en" : {
@@ -641,6 +720,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Быстрый ввод"
+          }
+        }
+      }
+    },
+    "ВАШ ТЕМП" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "YOUR PACE"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ВАШ ТЕМП"
           }
         }
       }
@@ -709,6 +805,22 @@
         }
       }
     },
+    "Всё время" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "All time"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Всё время"
+          }
+        }
+      }
+    },
     "Все сохраненные транскрипции будут удалены безвозвратно. Это действие нельзя отменить." : {
       "localizations" : {
         "en" : {
@@ -769,6 +881,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "ВТ"
+          }
+        }
+      }
+    },
+    "ВЫ ДОСТИГЛИ ВЕРШИНЫ" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "YOU REACHED THE TOP"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ВЫ ДОСТИГЛИ ВЕРШИНЫ"
           }
         }
       }
@@ -933,6 +1061,9 @@
         }
       }
     },
+    "Дата" : {
+
+    },
     "ДВИЖОК И УСКОРЕНИЕ" : {
       "localizations" : {
         "en" : {
@@ -997,6 +1128,22 @@
         }
       }
     },
+    "ДИАПАЗОН" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "RANGE"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ДИАПАЗОН"
+          }
+        }
+      }
+    },
     "Диктовка (Старт / Стоп)" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -1010,6 +1157,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Диктовка (Старт / Стоп)"
+          }
+        }
+      }
+    },
+    "ДО" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "TO"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ДО"
           }
         }
       }
@@ -1090,6 +1253,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Заметки"
+          }
+        }
+      }
+    },
+    "ЗАМЕТОК" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "NOTES"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ЗАМЕТОК"
           }
         }
       }
@@ -1271,6 +1450,23 @@
         }
       }
     },
+    "КОГДА ВЫ ГОВОРИТЕ" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "WHEN YOU SPEAK"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "КОГДА ВЫ ГОВОРИТЕ"
+          }
+        }
+      }
+    },
     "Копировать" : {
       "localizations" : {
         "en" : {
@@ -1383,6 +1579,23 @@
         }
       }
     },
+    "Меньше" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "LESS"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Меньше"
+          }
+        }
+      }
+    },
     "мин чтения" : {
       "localizations" : {
         "en" : {
@@ -1395,6 +1608,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "мин чтения"
+          }
+        }
+      }
+    },
+    "Минуты" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Minutes"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Минуты"
           }
         }
       }
@@ -1463,6 +1693,22 @@
         }
       }
     },
+    "НАЧАЛО ПЕРИОДА" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "START OF PERIOD"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "НАЧАЛО ПЕРИОДА"
+          }
+        }
+      }
+    },
     "Начать использование" : {
       "localizations" : {
         "en" : {
@@ -1491,6 +1737,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Не удалось извлечь аудио"
+          }
+        }
+      }
+    },
+    "НЕД." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "WK"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "НЕД."
           }
         }
       }
@@ -1574,6 +1837,9 @@
           }
         }
       }
+    },
+    "Номер" : {
+
     },
     "НОЧЬ" : {
       "localizations" : {
@@ -1683,6 +1949,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "ОСНОВНЫЕ"
+          }
+        }
+      }
+    },
+    "ОСТАЛОСЬ" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "REMAINING"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ОСТАЛОСЬ"
           }
         }
       }
@@ -1882,6 +2164,9 @@
         }
       }
     },
+    "ПИК" : {
+
+    },
     "ПИК АКТИВНОСТИ" : {
       "localizations" : {
         "en" : {
@@ -2044,6 +2329,23 @@
         }
       }
     },
+    "ПРОГРЕСС К УРОВНЮ" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "LEVEL PROGRESS"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ПРОГРЕСС К УРОВНЮ"
+          }
+        }
+      }
+    },
     "ПРОФИ" : {
       "localizations" : {
         "en" : {
@@ -2088,6 +2390,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Развернуть Голосок"
+          }
+        }
+      }
+    },
+    "РАЗМЕР ЗАМЕТКИ" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "NOTE SIZE"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "РАЗМЕР ЗАМЕТКИ"
           }
         }
       }
@@ -2220,6 +2539,23 @@
         }
       }
     },
+    "РИТМ НЕДЕЛИ" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "WEEK RHYTHM"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "РИТМ НЕДЕЛИ"
+          }
+        }
+      }
+    },
     "Русский" : {
       "localizations" : {
         "en" : {
@@ -2280,6 +2616,38 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Сверка аудио"
+          }
+        }
+      }
+    },
+    "СЕЙЧАС" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "NOW"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "СЕЙЧАС"
+          }
+        }
+      }
+    },
+    "СИМВОЛОВ" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "CHARS"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "СИМВОЛОВ"
           }
         }
       }
@@ -2396,6 +2764,23 @@
         }
       }
     },
+    "Скорость" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Speed"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Скорость"
+          }
+        }
+      }
+    },
     "Слушайте исходный звук прямо в заметке, чтобы проверить соответствие с текстом" : {
       "localizations" : {
         "en" : {
@@ -2445,6 +2830,7 @@
       }
     },
     "СОХРАНЕНО ЧАСОВ" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -2729,6 +3115,45 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "УТРО"
+          }
+        }
+      }
+    },
+    "ЧАСОВ" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "HOURS"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ЧАСОВ"
+          }
+        }
+      }
+    },
+    "ЧАСОВ СОХРАНЕНО" : {
+
+    },
+    "Часы" : {
+
+    },
+    "ЧАЩЕ" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "MOST"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ЧАЩЕ"
           }
         }
       }
