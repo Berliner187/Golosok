@@ -8,6 +8,7 @@ struct SettingsView: View {
     @ObservedObject var hotKey = HotKeySettings.shared
     @State private var showingClearHistoryAlert = false
     @State private var showingAboutSheet = false
+    @State private var showingLogsSheet = false
     
     var body: some View {
         ScrollView {
@@ -269,6 +270,21 @@ HStack {
                         }
                         .sheet(isPresented: $showingAboutSheet) {
                             AboutView()
+                        }
+
+                        Divider().background(Color.uiHairline)
+
+                        HStack {
+                            Text("Логи приложения")
+                                .font(UIStyleFont.body(size: 13, weight: .medium))
+                                .foregroundColor(.uiInk)
+                            Spacer()
+                            UIOutlineButton(title: "Открыть") {
+                                showingLogsSheet = true
+                            }
+                        }
+                        .sheet(isPresented: $showingLogsSheet) {
+                            LogsView()
                         }
                     }
                 }

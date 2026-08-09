@@ -57,7 +57,11 @@ class NativeHotKeyManager {
         let hotKeyID = EventHotKeyID(signature: OSType(0x474C534B), id: 1)
         let status = RegisterEventHotKey(keyCode, modifierFlags, hotKeyID, GetApplicationEventTarget(), 0, &hotKeyRef)
         if status != noErr {
+            AppLogger.shared.error("HotKey", "Не удалось зарегистрировать горячую клавишу", details: "status \(status), комбинация \(displayName())")
+            Telemetry.shared.event("hotkey_register_failed", ["error_detail": "status_\(status)"])
             NSLog("[HotKey] RegisterEventHotKey failed with status %d", status)
+        } else {
+            AppLogger.shared.info("HotKey", "Горячая клавиша зарегистрирована", details: displayName())
         }
     }
 

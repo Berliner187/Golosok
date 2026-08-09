@@ -1222,6 +1222,23 @@
         }
       }
     },
+    "Информация" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Info"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Информация"
+          }
+        }
+      }
+    },
     "История" : {
       "localizations" : {
         "en" : {
@@ -1254,6 +1271,22 @@
         }
       }
     },
+    "Копировать" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Copy"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Копировать"
+          }
+        }
+      }
+    },
     "ЛЕГЕНДА" : {
       "localizations" : {
         "en" : {
@@ -1266,6 +1299,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "ЛЕГЕНДА"
+          }
+        }
+      }
+    },
+    "Логи приложения" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Application Logs"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Логи приложения"
           }
         }
       }
@@ -1687,6 +1736,22 @@
         }
       }
     },
+    "Открыть файл" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Open file"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Открыть файл"
+          }
+        }
+      }
+    },
     "Отмена" : {
       "localizations" : {
         "en" : {
@@ -1764,6 +1829,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Ошибка чтения файла"
+          }
+        }
+      }
+    },
+    "Ошибки" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Errors"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ошибки"
           }
         }
       }
@@ -1881,6 +1963,22 @@
         }
       }
     },
+    "Пока нет записей" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No entries yet"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Пока нет записей"
+          }
+        }
+      }
+    },
     "Показатель" : {
       "localizations" : {
         "en" : {
@@ -1909,6 +2007,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "ПОЛЬЗОВАТЕЛЬ"
+          }
+        }
+      }
+    },
+    "Предупреждения" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Warnings"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Предупреждения"
           }
         }
       }

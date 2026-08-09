@@ -4,3 +4,6 @@ DerivedData/
 xcuserdata/
 .DS_Store
 Golosok/whisper-cli
+*.pbxproj
+Golosok/ffmpeg
+Golosok.xcodeproj/project.pbxproj

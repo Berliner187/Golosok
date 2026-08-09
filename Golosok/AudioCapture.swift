@@ -14,7 +14,7 @@ struct SoundEffect {
     static func playWarning() { LuxurySoundSynth.shared.playWarning() }
 }
 
-struct UpdateInfo {
+struct UpdateInfo: Codable {
     let version: String
     let codename: String
     let url: URL
@@ -95,7 +95,14 @@ class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
         
         loadHistory()
         checkUpdates()
-        sendTelemetry(eventType: "app_launch", audioDurationSec: 0, characterCount: 0, speedup: 0)
+        var launchCount = UserDefaults.standard.integer(forKey: "launch_count") + 1
+        UserDefaults.standard.set(launchCount, forKey: "launch_count")
+        Telemetry.shared.event("app_launch", [
+            "launch_count": launchCount,
+            "mic_granted": AVCaptureDevice.authorizationStatus(for: .audio) == .authorized,
+            "accessibility_granted": PermissionManager.shared.isAccessibilityGranted,
+            "model_id": ModelStore.shared.activeModelID
+        ])
     }
 
     private func setLaunchAtLogin(enabled: Bool) {
@@ -165,6 +172,7 @@ class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
             
             startTime = Date()
             SoundEffect.playStart()
+            AppLogger.shared.info("Recording", "Запись началась", details: "режим: \(HotKeySettings.shared.mode == .pushToTalk ? "рация" : "переключатель")")
             
             escMonitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { [weak self] event in
                 if event.keyCode == 53 { self?.cancelRecording() }
@@ -189,6 +197,8 @@ class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
         audioRecorder = nil
         
         let durationSec = Date().timeIntervalSince(startTime ?? Date())
+        
+        AppLogger.shared.info("Recording", "Запись остановлена", details: String(format: "длительность %.1f с, цель вставки: %@", durationSec, NSWorkspace.shared.frontmostApplication?.localizedName ?? "?"))
         
         DispatchQueue.main.async {
             self.isRecording = false
@@ -342,6 +352,8 @@ class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
         DispatchQueue.main.async {
             self.isProcessingFile = false
             if prettyFormattedText.isEmpty {
+                AppLogger.shared.warn("Recognition", "Речь не распознана", details: String(format: "аудио %.1f с", realAudioSecs))
+                Telemetry.shared.event("dictation_failed", ["audio_duration_sec": realAudioSecs])
                 OverlayPanelManager.shared.showWarning(message: String(localized: "Речь не распознана"))
             } else {
                 self.transcribedText = prettyFormattedText
@@ -379,8 +391,14 @@ class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
     }
 
     private func convertWithFFmpeg(inputURL: URL, outputURL: URL) -> Bool {
-        let ffmpegPaths = ["/opt/homebrew/bin/ffmpeg", "/usr/local/bin/ffmpeg", "/usr/bin/ffmpeg"]
-        guard let ffmpegPath = ffmpegPaths.first(where: { FileManager.default.fileExists(atPath: $0) }) else { return false }
+        let bundledFFmpeg = Bundle.main.path(forResource: "ffmpeg", ofType: nil)
+        var ffmpegPaths: [String] = []
+        if let bundledFFmpeg { ffmpegPaths.append(bundledFFmpeg) }
+        ffmpegPaths.append(contentsOf: ["/opt/homebrew/bin/ffmpeg", "/usr/local/bin/ffmpeg", "/usr/bin/ffmpeg"])
+        guard let ffmpegPath = ffmpegPaths.first(where: { FileManager.default.fileExists(atPath: $0) }) else {
+            AppLogger.shared.warn("Import", "ffmpeg не найден (встроенный или системный)", details: inputURL.lastPathComponent)
+            return false
+        }
         do {
             if FileManager.default.fileExists(atPath: outputURL.path) { try FileManager.default.removeItem(at: outputURL) }
             let process = Process()
@@ -388,7 +406,13 @@ class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
             process.arguments = ["-i", inputURL.path, "-vn", "-ar", "16000", "-ac", "1", "-c:a", "pcm_f32le", outputURL.path, "-y"]
             try process.run()
             process.waitUntilExit()
-            return process.terminationStatus == 0 && FileManager.default.fileExists(atPath: outputURL.path)
+            let ok = process.terminationStatus == 0 && FileManager.default.fileExists(atPath: outputURL.path)
+            if ok {
+                AppLogger.shared.info("Import", "Конвертация аудио выполнена", details: "ffmpeg: \(ffmpegPath)")
+            } else {
+                AppLogger.shared.warn("Import", "ffmpeg не смог конвертировать файл", details: "\(inputURL.lastPathComponent), exit \(process.terminationStatus)")
+            }
+            return ok
         } catch { return false }
     }
 
@@ -509,7 +533,10 @@ class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
         guard let model = store.model(named: store.activeModelID) else { return "" }
         if model.isBundled {
             guard let cliPath = Bundle.main.path(forResource: "transcribe-cli", ofType: nil),
-                  let modelPath = Bundle.main.path(forResource: model.fileName, ofType: "gguf") else { return "" }
+                  let modelPath = Bundle.main.path(forResource: model.fileName, ofType: "gguf") else {
+                AppLogger.shared.error("Recognition", "transcribe-cli или встроенная модель не найдены в бандле")
+                return ""
+            }
             let output = runCLIProcess(cliPath, arguments: ["-m", modelPath, wavURL.path])
             let lines = output.components(separatedBy: .newlines)
             if let textLine = lines.first(where: { $0.trimmingCharacters(in: .whitespaces).hasPrefix("text:") }) {
@@ -519,7 +546,10 @@ class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
             return ""
         } else {
             guard let cliPath = Bundle.main.path(forResource: "whisper-cli", ofType: nil),
-                  let modelPath = store.localModelPath(for: model.id) else { return "" }
+                  let modelPath = store.localModelPath(for: model.id) else {
+                AppLogger.shared.error("Recognition", "whisper-cli или модель \(model.id) не найдены", details: model.id)
+                return ""
+            }
             let output = runCLIProcess(cliPath, arguments: ["-m", modelPath, "-f", wavURL.path, "-l", model.languageCode, "-nt"])
             let parts = output.components(separatedBy: .newlines)
                 .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
@@ -552,7 +582,13 @@ class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
         let pid = target.processIdentifier
         target.activate(options: [.activateIgnoringOtherApps])
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-            guard self.canAcceptPaste(pid: pid) else { return }
+            guard self.canAcceptPaste(pid: pid) else {
+                AppLogger.shared.info("Paste", "Вставка пропущена: под фокусом нет редактируемого поля", details: target.localizedName)
+                Telemetry.shared.event("paste_skipped", ["paste_reason": "no_focus"])
+                return
+            }
+            AppLogger.shared.info("Paste", "Cmd+V отправлен", details: target.localizedName)
+            Telemetry.shared.event("paste_success", ["paste_method": "cgkey"])
             let source = CGEventSource(stateID: .combinedSessionState)
             guard let keyDown = CGEvent(keyboardEventSource: source, virtualKey: 0x09, keyDown: true),
                   let keyUp = CGEvent(keyboardEventSource: source, virtualKey: 0x09, keyDown: false) else { return }
@@ -580,25 +616,11 @@ class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
     }
     
     private func sendTelemetry(eventType: String, audioDurationSec: Double, characterCount: Int, speedup: Double) {
-        guard analyticsEnabled else { return }
-        guard let url = URL(string: "https://golosok.space/api/v1/telemetry/") else { return }
-        var deviceID = UserDefaults.standard.string(forKey: "anonymous_device_id")
-        if deviceID == nil { deviceID = UUID().uuidString; UserDefaults.standard.set(deviceID, forKey: "anonymous_device_id") }
-        let appVer = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? ""
-        let osVer = ProcessInfo.processInfo.operatingSystemVersionString
-        let payload: [String: Any] = [
-            "device_id": deviceID ?? "unknown", "app_version": appVer, "os_version": osVer,
-            "event_type": eventType, "audio_duration_sec": audioDurationSec,
-            "character_count": characterCount, "speedup_factor": speedup
-        ]
-        DispatchQueue.global(qos: .utility).async {
-            var request = URLRequest(url: url)
-            request.httpMethod = "POST"
-            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-            request.timeoutInterval = 10.0
-            request.httpBody = try? JSONSerialization.data(withJSONObject: payload)
-            URLSession.shared.dataTask(with: request).resume()
-        }
+        Telemetry.shared.event(eventType, [
+            "audio_duration_sec": audioDurationSec,
+            "character_count": characterCount,
+            "speedup_factor": speedup
+        ])
     }
     
     // ЭКСПОРТ В ВАЛИДНЫЙ UTF-8 С BOM ДЛЯ MS EXCEL / NUMBERS
@@ -624,7 +646,15 @@ class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
         }
     }
     
-    func checkUpdates() {
+    func checkUpdates(force: Bool = false) {
+        let lastCheck = UserDefaults.standard.object(forKey: "lastUpdateCheckAt") as? Date
+        if !force, let lastCheck, Date().timeIntervalSince(lastCheck) < 12 * 3600 {
+            if let data = UserDefaults.standard.data(forKey: "cachedUpdateInfo"),
+               let cached = try? JSONDecoder().decode(UpdateInfo?.self, from: data) {
+                DispatchQueue.main.async { self.updateInfo = cached }
+            }
+            return
+        }
         guard let url = URL(string: "https://api.github.com/repos/Berliner187/Golosok/releases/latest") else { return }
         let currentVer = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? ""
         let request = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalAndRemoteCacheData, timeoutInterval: 10.0)
@@ -634,15 +664,24 @@ class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
                   let assets = json["assets"] as? [[String: Any]],
                   let firstAsset = assets.first(where: { ($0["name"] as? String)?.hasSuffix(".dmg") == true }),
                   let downloadUrlString = firstAsset["browser_download_url"] as? String,
-                  let downloadUrl = URL(string: downloadUrlString) else { return }
+                  let downloadUrl = URL(string: downloadUrlString) else {
+                UserDefaults.standard.set(Date(), forKey: "lastUpdateCheckAt")
+                return
+            }
             let cleanCurrent = currentVer.replacingOccurrences(of: "v", with: "")
             let cleanLatest = tagName.replacingOccurrences(of: "v", with: "")
+            let result: UpdateInfo?
             if cleanLatest.compare(cleanCurrent, options: .numeric) == .orderedDescending {
-                DispatchQueue.main.async {
-                    let codename = releaseName.components(separatedBy: " ").last ?? "UPDATE"
-                    self.updateInfo = UpdateInfo(version: tagName, codename: codename.uppercased(), url: downloadUrl)
-                }
-            } else { DispatchQueue.main.async { self.updateInfo = nil } }
+                let codename = releaseName.components(separatedBy: " ").last ?? "UPDATE"
+                result = UpdateInfo(version: tagName, codename: codename.uppercased(), url: downloadUrl)
+            } else {
+                result = nil
+            }
+            UserDefaults.standard.set(Date(), forKey: "lastUpdateCheckAt")
+            if let encoded = try? JSONEncoder().encode(result) {
+                UserDefaults.standard.set(encoded, forKey: "cachedUpdateInfo")
+            }
+            DispatchQueue.main.async { self.updateInfo = result }
         }.resume()
     }
     

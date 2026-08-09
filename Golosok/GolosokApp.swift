@@ -3,6 +3,10 @@ import AppKit
 
 class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
+        let mic = PermissionManager.shared.isMicGranted
+        let ax = PermissionManager.shared.isAccessibilityGranted
+        AppLogger.shared.info("App", "Запуск Golosok",
+                              details: "версия \(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "?"), микрофон: \(mic), доступ AX: \(ax)")
         let hotKey = NativeHotKeyManager.shared
         hotKey.onHotKeyPressed = {
             if hotKey.mode == .pushToTalk {

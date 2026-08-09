@@ -101,9 +101,13 @@ final class ModelStore: NSObject, ObservableObject {
         downloadStatus = "DownloadStatus.Connecting"
         downloadingID = id
         downloadProgress = 0
+        AppLogger.shared.info("Models", "Начало скачивания модели", details: "\(id) — \(sizeMB(for: model))")
+        Telemetry.shared.event("model_download_start", ["model_id": id, "model_size_mb": model.sizeMB])
         task = session?.downloadTask(with: url)
         task?.resume()
     }
+
+    private func sizeMB(for model: RecognitionModel) -> Int { model.sizeMB }
 
     func cancel() {
         task?.cancel()
@@ -144,11 +148,15 @@ extension ModelStore: URLSessionDownloadDelegate {
             let dest = modelsDir.appendingPathComponent(model.fileName)
             if FileManager.default.fileExists(atPath: dest.path) { try? FileManager.default.removeItem(at: dest) }
             try FileManager.default.moveItem(at: location, to: dest)
+            AppLogger.shared.info("Models", "Модель скачана", details: id)
+            Telemetry.shared.event("model_download_done", ["model_id": id, "model_size_mb": model.sizeMB])
             DispatchQueue.main.async {
                 self.downloadingID = nil
                 self.downloadStatus = "DownloadStatus.Ready"
             }
         } catch {
+            AppLogger.shared.error("Models", "Ошибка сохранения модели", details: "\(id): \(error.localizedDescription)")
+            Telemetry.shared.event("model_download_failed", ["model_id": id, "error_stage": "move", "error_detail": String(describing: error)])
             DispatchQueue.main.async {
                 self.downloadingID = nil
                 self.downloadStatus = "DownloadStatus.Failed"
@@ -159,6 +167,9 @@ extension ModelStore: URLSessionDownloadDelegate {
 
     func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: (any Error)?) {
         guard error != nil else { return }
+        let id = downloadingID
+        AppLogger.shared.error("Models", "Скачивание модели прервано", details: "\(id ?? "?") — \(error?.localizedDescription ?? "ошибка")")
+        Telemetry.shared.event("model_download_failed", ["model_id": id ?? "?", "error_stage": "network", "error_detail": error?.localizedDescription ?? ""])
         DispatchQueue.main.async {
             self.downloadingID = nil
             self.downloadStatus = "DownloadStatus.Failed"
