@@ -262,7 +262,7 @@ struct DashboardView: View {
                                 Button(action: { audioCapture.downloadAndInstallUpdate() }) {
                                     HStack(spacing: 4) {
                                         Image(systemName: "arrow.down.circle.fill")
-                                        Text("Доступна \(update.codename)")
+                                        Text(String(format: String(localized: "Доступна %@"), update.codename))
                                     }
                                     .font(UIStyleFont.body(size: 10, weight: .bold))
                                     .foregroundColor(.white)

@@ -3,6 +3,12 @@
   "strings" : {
     "" : {
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : ""
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
@@ -65,6 +71,12 @@
     },
     "%@ %lld %@ %@" : {
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ %2$lld %3$@ %4$@"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "new",
@@ -75,6 +87,12 @@
     },
     "%lld" : {
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
@@ -88,6 +106,12 @@
     },
     "%lld%%" : {
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld%%"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
@@ -179,6 +203,12 @@
     },
     "Apple Metal (MTL0)" : {
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Apple Metal (MTL0)"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
@@ -205,6 +235,12 @@
     },
     "Design & Dev by Kozak • 2026" : {
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Design & Dev by Kozak • 2026"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
@@ -215,6 +251,12 @@
     },
     "Design & Development by Kozak • 2026" : {
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Design & Development by Kozak • 2026"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
@@ -225,6 +267,12 @@
     },
     "Design by Kozak" : {
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Design by Kozak"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
@@ -302,6 +350,12 @@
     },
     "Excel (.csv)" : {
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Excel (.csv)"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
@@ -312,6 +366,12 @@
     },
     "GitHub" : {
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "GitHub"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
@@ -386,6 +446,12 @@
     },
     "JSON (.json)" : {
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "JSON (.json)"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
@@ -396,6 +462,12 @@
     },
     "Markdown (.md)" : {
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Markdown (.md)"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
@@ -474,6 +546,12 @@
     "Sber GigaAM v3 (E2E-RNNT)" : {
       "extractionState" : "stale",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sber GigaAM v3 (E2E-RNNT)"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
@@ -611,7 +689,6 @@
       }
     },
     "АКТИВНОСТЬ" : {
-      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -725,7 +802,6 @@
       }
     },
     "ВАШ ТЕМП" : {
-      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -1198,7 +1274,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%@ is available"
+            "value" : "Available %@"
           }
         },
         "ru" : {
@@ -1451,7 +1527,6 @@
       }
     },
     "КОГДА ВЫ ГОВОРИТЕ" : {
-      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -2165,7 +2240,20 @@
       }
     },
     "ПИК" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "PEAK"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ПИК"
+          }
+        }
+      }
     },
     "ПИК АКТИВНОСТИ" : {
       "localizations" : {
@@ -2296,6 +2384,22 @@
         }
       }
     },
+    "ПОСЛЕДНИЕ ЗАМЕТКИ" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "RECENT NOTES"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ПОСЛЕДНИЕ ЗАМЕТКИ"
+          }
+        }
+      }
+    },
     "Предупреждения" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -2330,7 +2434,6 @@
       }
     },
     "ПРОГРЕСС К УРОВНЮ" : {
-      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -2395,7 +2498,6 @@
       }
     },
     "РАЗМЕР ЗАМЕТКИ" : {
-      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -2540,7 +2642,6 @@
       }
     },
     "РИТМ НЕДЕЛИ" : {
-      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -3137,7 +3238,20 @@
       }
     },
     "ЧАСОВ СОХРАНЕНО" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "HOURS SAVED"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ЧАСОВ СОХРАНЕНО"
+          }
+        }
+      }
     },
     "Часы" : {
 

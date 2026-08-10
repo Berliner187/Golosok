@@ -98,15 +98,15 @@ struct ChartEmptyView: View {
 }
 
 struct ChartCardHeader<Trailing: View>: View {
-    let title: String
+    let title: LocalizedStringKey
     let trailing: Trailing
 
-    init(title: String, @ViewBuilder trailing: () -> Trailing) {
+    init(title: LocalizedStringKey, @ViewBuilder trailing: () -> Trailing) {
         self.title = title
         self.trailing = trailing()
     }
 
-    init(title: String) where Trailing == EmptyView {
+    init(title: LocalizedStringKey) where Trailing == EmptyView {
         self.title = title
         self.trailing = EmptyView()
     }
