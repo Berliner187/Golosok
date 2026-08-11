@@ -30,6 +30,163 @@ struct NativeTextView: NSViewRepresentable {
     }
 }
 
+struct SyncedPlayerView: View {
+    let text: String
+    let words: [TimedWord]
+    let audioDuration: Double
+    let itemID: UUID
+    @ObservedObject var audioCapture = AudioCapture.shared
+
+    private var isPlaying: Bool {
+        audioCapture.playingItemId == itemID && audioCapture.isPlayerPlaying
+    }
+
+    private var playhead: Double {
+        audioCapture.playingItemId == itemID ? audioCapture.playheadTime : 0
+    }
+
+    private var currentWordIndex: Int? {
+        guard audioCapture.playingItemId == itemID else { return nil }
+        let t = audioCapture.playheadTime
+        guard !words.isEmpty else { return nil }
+        var lo = 0, hi = words.count - 1
+        while lo <= hi {
+            let mid = (lo + hi) / 2
+            if t >= words[mid].start && t < words[mid].end { return mid }
+            if t < words[mid].start { hi = mid - 1 } else { lo = mid + 1 }
+        }
+        if t >= words[words.count - 1].end { return words.count - 1 }
+        return nil
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 10) {
+                Button(action: { audioCapture.toggleSyncedPlayback(for: itemID) }) {
+                    Image(systemName: isPlaying ? "pause.fill" : "play.fill")
+                        .font(.system(size: 12, weight: .bold))
+                        .frame(width: 26, height: 26)
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(.blue)
+
+                Text(formatTime(playhead))
+                    .font(.system(size: 11, weight: .medium, design: .monospaced))
+                    .foregroundColor(.uiMidGray)
+
+                Slider(value: Binding(
+                    get: { playhead },
+                    set: { audioCapture.seekSynced(to: $0, for: itemID) }
+                ), in: 0...max(audioDuration, 0.01))
+
+                Text(formatTime(audioDuration))
+                    .font(.system(size: 11, weight: .medium, design: .monospaced))
+                    .foregroundColor(.uiMidGray)
+            }
+
+            SyncedTextView(text: text, words: words, currentWordIndex: currentWordIndex) { time in
+                audioCapture.seekSynced(to: time, for: itemID)
+            }
+        }
+    }
+
+    private func formatTime(_ seconds: Double) -> String {
+        let total = Int(max(0, seconds).rounded())
+        return String(format: "%02d:%02d", total / 60, total % 60)
+    }
+}
+
+struct SyncedTextView: NSViewRepresentable {
+    let text: String
+    let words: [TimedWord]
+    let currentWordIndex: Int?
+    let onSeek: (Double) -> Void
+
+    func makeCoordinator() -> Coordinator { Coordinator(onSeek: onSeek) }
+
+    func makeNSView(context: Context) -> NSScrollView {
+        let scrollView = NSTextView.scrollableTextView()
+        guard let textView = scrollView.documentView as? NSTextView else { return scrollView }
+        textView.isEditable = false
+        textView.isSelectable = true
+        textView.drawsBackground = false
+        textView.isAutomaticLinkDetectionEnabled = false
+        textView.font = NSFont.systemFont(ofSize: 15, weight: .regular)
+        textView.textColor = NSColor(Color.uiInk)
+        textView.textContainerInset = NSSize(width: 0, height: 10)
+        textView.linkTextAttributes = [
+            .foregroundColor: NSColor(Color.uiInk),
+            .underlineStyle: 0,
+            .cursor: NSCursor.pointingHand
+        ]
+        textView.delegate = context.coordinator
+        return scrollView
+    }
+
+    func updateNSView(_ nsView: NSScrollView, context: Context) {
+        guard let textView = nsView.documentView as? NSTextView else { return }
+        context.coordinator.onSeek = onSeek
+
+        let ranges = context.coordinator.wordRanges(text: text, words: words)
+        let attributed = NSMutableAttributedString(string: text, attributes: [
+            .font: NSFont.systemFont(ofSize: 15, weight: .regular),
+            .foregroundColor: NSColor(Color.uiInk)
+        ])
+        if !ranges.isEmpty {
+            for (i, range) in ranges.enumerated() where i < words.count {
+                let url = URL(string: "golosok://seek/\(words[i].start)")
+                attributed.addAttribute(.link, value: url as Any, range: range)
+                attributed.addAttribute(.underlineStyle, value: 0, range: range)
+                if i == currentWordIndex {
+                    attributed.addAttribute(.backgroundColor, value: NSColor.blue.withAlphaComponent(0.18), range: range)
+                }
+            }
+        }
+        textView.textStorage?.setAttributedString(attributed)
+        if let index = currentWordIndex, index < ranges.count {
+            textView.scrollRangeToVisible(ranges[index])
+        }
+    }
+
+    final class Coordinator: NSObject, NSTextViewDelegate {
+        var onSeek: (Double) -> Void
+        init(onSeek: @escaping (Double) -> Void) { self.onSeek = onSeek }
+
+        func textView(_ textView: NSTextView, clickedOnLink link: Any, at charIndex: Int) -> Bool {
+            guard let url = link as? URL, url.scheme == "golosok",
+                  let time = Double(url.lastPathComponent) else { return false }
+            onSeek(time)
+            return true
+        }
+
+        func wordRanges(text: String, words: [TimedWord]) -> [NSRange] {
+            guard !words.isEmpty else { return [] }
+            var ranges: [NSRange] = []
+            let nsText = text as NSString
+            let length = nsText.length
+            var searchFrom = 0
+            var wordIndex = 0
+
+            while wordIndex < words.count && searchFrom < length {
+                while searchFrom < length {
+                    let scalar = UnicodeScalar(nsText.character(at: searchFrom))
+                    if !CharacterSet.whitespacesAndNewlines.contains(scalar ?? " ") { break }
+                    searchFrom += 1
+                }
+                guard searchFrom < length else { return [] }
+                let word = words[wordIndex].text
+                let searchRange = NSRange(location: searchFrom, length: length - searchFrom)
+                let range = nsText.range(of: word, options: [], range: searchRange)
+                guard range.location != NSNotFound, range.location == searchFrom else { return [] }
+                ranges.append(range)
+                searchFrom = range.location + range.length
+                wordIndex += 1
+            }
+            return wordIndex == words.count ? ranges : []
+        }
+    }
+}
+
 struct ContentView: View {
     @ObservedObject var audioCapture = AudioCapture.shared
     @ObservedObject var permissions = PermissionManager.shared
@@ -42,6 +199,7 @@ struct ContentView: View {
     @State private var searchText = ""
     @State private var itemToDelete: UUID?
     @State private var showingDeleteAlert = false
+    @State private var selectedTimings: (words: [TimedWord], duration: Double)?
     
     @State private var showAboutSheet = false
     
@@ -200,7 +358,7 @@ struct ContentView: View {
                                 MetadataPill(icon: "text.alignleft", text: "\(selected.text.count) " + String(localized: "зн"), color: Color(hex: "#10B981"))
                                 let readMin = max(1, selected.text.count / 900)
                                 MetadataPill(icon: "book.fill", text: "~\(readMin) " + String(localized: "мин чтения"), color: Color.purple)
-                                if audioCapture.hasAudioFile(for: selected) {
+                                if selectedTimings == nil && audioCapture.hasAudioFile(for: selected) {
                                     Button(action: { audioCapture.toggleAudioPlayback(for: selected) }) {
                                         HStack(spacing: 4) { Image(systemName: audioCapture.playingItemId == selected.id ? "pause.fill" : "play.fill").font(.system(size: 9, weight: .bold)); Text(audioCapture.playingItemId == selected.id ? LocalizedStringKey("Пауза") : LocalizedStringKey("Слушать голос")).font(.system(size: 10, weight: .bold, design: .rounded)) }
                                         .foregroundColor(.blue).padding(.horizontal, 8).padding(.vertical, 4).background(Color.blue.opacity(0.12)).cornerRadius(6)
@@ -209,7 +367,11 @@ struct ContentView: View {
                             }
                             
                             Divider().background(Color.uiHairline).padding(.vertical, 4)
-                            NativeTextView(text: selected.text)
+                            if let timings = selectedTimings {
+                                SyncedPlayerView(text: selected.text, words: timings.words, audioDuration: timings.duration, itemID: selected.id)
+                            } else {
+                                NativeTextView(text: selected.text)
+                            }
                         }
                     }
                 } else {
@@ -263,15 +425,29 @@ struct ContentView: View {
                 }
             }.padding(20)
         }
+        .onAppear { loadSelectedTimings() }
+        .onChange(of: selectedItemId) { newId in
+            audioCapture.stopSyncedPlayback()
+            if let id = newId { selectedTimings = audioCapture.timings(for: id) } else { selectedTimings = nil }
+        }
         .alert("Удалить запись?", isPresented: $showingDeleteAlert) {
             Button("Отмена", role: .cancel) { }
             Button("Удалить", role: .destructive) {
                 if let id = itemToDelete, let idx = audioCapture.history.firstIndex(where: { $0.id == id }) {
                     SoundEffect.playDelete()
-                    withAnimation { audioCapture.deleteItem(at: idx); if selectedItemId == id { selectedItemId = nil } }
+                    withAnimation {
+                        audioCapture.stopSyncedPlayback()
+                        audioCapture.deleteItem(at: idx)
+                        if selectedItemId == id { selectedItemId = nil }
+                    }
                 }
             }
         } message: { Text("Это действие нельзя отменить.") }
+    }
+
+    private func loadSelectedTimings() {
+        if let id = selectedItemId { selectedTimings = audioCapture.timings(for: id) }
+        else { selectedTimings = nil }
     }
 }
 

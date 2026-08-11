@@ -34,6 +34,17 @@ struct TranscriptionItem: Identifiable, Codable, Hashable {
     }
 }
 
+struct TimedWord: Codable, Hashable {
+    let text: String
+    let start: Double
+    let end: Double
+}
+
+struct TimingFilePayload: Codable {
+    let words: [TimedWord]
+    let duration: Double
+}
+
 class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
     static let shared = AudioCapture()
     
@@ -58,7 +69,11 @@ class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
     private var downloadTask: URLSessionDownloadTask?
     
     @Published var playingItemId: UUID? = nil
+    @Published var playheadTime: Double = 0
     private var audioPlayer: AVAudioPlayer?
+    private var playbackTimer: Timer?
+
+    var isPlayerPlaying: Bool { audioPlayer?.isPlaying == true }
     
     @Published var isSuccessDone = false
     
@@ -333,6 +348,7 @@ class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
         let totalChunks = max(1, Int(ceil(Double(totalFrames) / Double(framesPerChunk))))
         
         var accumulatedText: [String] = []
+        var accumulatedWords: [TimedWord] = []
         let targetFormat = AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: 16000, channels: 1, interleaved: false)!
         
         for chunkIndex in 0..<totalChunks {
@@ -346,8 +362,13 @@ class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
                 
                 let chunkWavURL = FileManager.default.temporaryDirectory.appendingPathComponent("temp_chunk_\(chunkIndex).wav")
                 if writeBufferToWav(buffer: pcmBuffer, targetFormat: targetFormat, outputURL: chunkWavURL) {
-                    let chunkText = runCLIOnWav(wavURL: chunkWavURL)
+                    let chunkResult = runCLIOnWav(wavURL: chunkWavURL)
+                    let chunkText = chunkResult.text
                     if !chunkText.isEmpty && chunkText != String(localized: "Речь не распознана") { accumulatedText.append(chunkText) }
+                    let chunkStart = Double(chunkIndex) * chunkSizeInSeconds
+                    for word in chunkResult.words {
+                        accumulatedWords.append(TimedWord(text: word.text, start: word.start + chunkStart, end: word.end + chunkStart))
+                    }
                     try? FileManager.default.removeItem(at: chunkWavURL)
                 }
                 
@@ -361,10 +382,6 @@ class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
         let prettyFormattedText = TextFormatter.formatIntoParagraphs(rawText)
         let processingTimeSecs = Date().timeIntervalSince(processStartTime)
         let calculatedSpeedup = max(1.0, realAudioSecs / max(0.1, processingTimeSecs))
-        
-        if isFileImport {
-            try? FileManager.default.removeItem(at: tempWavURL)
-        }
         
         DispatchQueue.main.async {
             self.isProcessingFile = false
@@ -382,6 +399,10 @@ class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
                 let newItem = TranscriptionItem(id: UUID(), date: dateStr, text: prettyFormattedText, duration: durationFormatted, speedup: calculatedSpeedup, isUnread: true)
                 
                 self.saveAudioForNote(id: newItem.id, sourceURL: sourceURL)
+                if !accumulatedWords.isEmpty {
+                    self.saveTimingsForNote(id: newItem.id, words: accumulatedWords, duration: realAudioSecs)
+                }
+                if isFileImport { try? FileManager.default.removeItem(at: sourceURL) }
                 self.history.insert(newItem, at: 0)
                 
                 NotificationCenter.default.post(name: NSNotification.Name("AutoSelectNote"), object: newItem.id)
@@ -524,6 +545,92 @@ class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
         try? fm.copyItem(at: sourceURL, to: destURL)
     }
     
+    private func audioFileURL(for id: UUID) -> URL? {
+        guard let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else { return nil }
+        return appSupport.appendingPathComponent("Golosok/Audio/\(id.uuidString).wav")
+    }
+    
+    private func timingsFileURL(for id: UUID) -> URL? {
+        guard let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else { return nil }
+        return appSupport.appendingPathComponent("Golosok/Audio/\(id.uuidString).segments.json")
+    }
+    
+    private func saveTimingsForNote(id: UUID, words: [TimedWord], duration: Double) {
+        guard let url = timingsFileURL(for: id),
+              let data = try? JSONEncoder().encode(TimingFilePayload(words: words, duration: duration)) else { return }
+        try? data.write(to: url, options: .atomic)
+        AppLogger.shared.info("Recognition", "Тайминги слов сохранены", details: "\(words.count) слов, длительность \(String(format: "%.1f с", duration))")
+    }
+    
+    func timings(for id: UUID) -> (words: [TimedWord], duration: Double)? {
+        guard let url = timingsFileURL(for: id),
+              let data = try? Data(contentsOf: url),
+              let payload = try? JSONDecoder().decode(TimingFilePayload.self, from: data),
+              !payload.words.isEmpty else { return nil }
+        return (payload.words, payload.duration)
+    }
+    
+    func toggleSyncedPlayback(for id: UUID) {
+        guard let fileURL = audioFileURL(for: id) else { return }
+        if playingItemId == id {
+            if audioPlayer?.isPlaying == true {
+                audioPlayer?.pause(); stopPlaybackTimer()
+            } else {
+                audioPlayer?.play(); startPlaybackTimer(for: id)
+            }
+            return
+        }
+        audioPlayer?.stop()
+        do { audioPlayer = try AVAudioPlayer(contentsOf: fileURL) } catch { return }
+        audioPlayer?.play()
+        playingItemId = id
+        playheadTime = 0
+        startPlaybackTimer(for: id)
+    }
+    
+    func seekSynced(to time: Double, for id: UUID) {
+        guard let player = audioPlayer else { return }
+        player.currentTime = min(max(time, 0), player.duration)
+        if playingItemId == id {
+            if !player.isPlaying { player.play() }
+            playheadTime = player.currentTime
+        }
+    }
+    
+    func stopSyncedPlayback() {
+        audioPlayer?.stop()
+        playingItemId = nil
+        playheadTime = 0
+        stopPlaybackTimer()
+    }
+    
+    private func startPlaybackTimer(for id: UUID) {
+        stopPlaybackTimer()
+        let timer = Timer(timeInterval: 0.1, repeats: true) { [weak self] _ in
+            guard let self, let player = self.audioPlayer else {
+                self?.stopPlaybackTimer()
+                return
+            }
+            guard self.playingItemId == id else { self.stopPlaybackTimer(); return }
+            if player.isPlaying {
+                self.playheadTime = player.currentTime
+            } else {
+                if player.duration > 0 && player.currentTime >= player.duration - 0.05 {
+                    self.stopSyncedPlayback()
+                } else {
+                    self.stopPlaybackTimer()
+                }
+            }
+        }
+        RunLoop.main.add(timer, forMode: .common)
+        playbackTimer = timer
+    }
+    
+    private func stopPlaybackTimer() {
+        playbackTimer?.invalidate()
+        playbackTimer = nil
+    }
+    
     func hasAudioFile(for item: TranscriptionItem) -> Bool {
         guard let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else { return false }
         let fileURL = appSupport.appendingPathComponent("Golosok/Audio/\(item.id.uuidString).wav")
@@ -546,34 +653,129 @@ class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
         } catch { return false }
     }
     
-    private func runCLIOnWav(wavURL: URL) -> String {
+    private func runCLIOnWav(wavURL: URL) -> (text: String, words: [TimedWord]) {
         let store = ModelStore.shared
-        guard let model = store.model(named: store.activeModelID) else { return "" }
+        guard let model = store.model(named: store.activeModelID) else { return ("", []) }
         if model.isBundled {
             guard let cliPath = Bundle.main.path(forResource: "transcribe-cli", ofType: nil),
                   let modelPath = Bundle.main.path(forResource: model.fileName, ofType: "gguf") else {
                 AppLogger.shared.error("Recognition", "transcribe-cli или встроенная модель не найдены в бандле")
-                return ""
+                return ("", [])
             }
-            let output = runCLIProcess(cliPath, arguments: ["-m", modelPath, wavURL.path])
+            let output = runCLIProcess(cliPath, arguments: ["-m", modelPath, "--timestamps", "word", wavURL.path])
+            let words = Self.finalizeWords(parseGigaAMTokens(output))
             let lines = output.components(separatedBy: .newlines)
             if let textLine = lines.first(where: { $0.trimmingCharacters(in: .whitespaces).hasPrefix("text:") }) {
                 let extracted = String(textLine.trimmingCharacters(in: .whitespaces).dropFirst(5)).trimmingCharacters(in: .whitespacesAndNewlines)
-                if extracted != "(empty)" { return extracted }
+                if extracted != "(empty)" { return (extracted, words) }
             }
-            return ""
+            return ("", words)
         } else {
             guard let cliPath = Bundle.main.path(forResource: "whisper-cli", ofType: nil),
                   let modelPath = store.localModelPath(for: model.id) else {
                 AppLogger.shared.error("Recognition", "whisper-cli или модель \(model.id) не найдены", details: model.id)
-                return ""
+                return ("", [])
             }
-            let output = runCLIProcess(cliPath, arguments: ["-m", modelPath, "-f", wavURL.path, "-l", model.languageCode, "-nt"])
+            let output = runCLIProcess(cliPath, arguments: ["-m", modelPath, "-f", wavURL.path, "-l", model.languageCode, "-nt", "-ojf"])
             let parts = output.components(separatedBy: .newlines)
                 .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
                 .filter { !$0.isEmpty && !$0.hasPrefix("[") && !$0.lowercased().hasPrefix("whisper") }
-            return parts.joined(separator: " ").trimmingCharacters(in: .whitespacesAndNewlines)
+            let text = parts.joined(separator: " ").trimmingCharacters(in: .whitespacesAndNewlines)
+            return (text, Self.finalizeWords(readWhisperWords(wavURL: wavURL)))
         }
+    }
+
+    private func parseGigaAMTokens(_ output: String) -> [TimedWord] {
+        var words: [TimedWord] = []
+        var currentText = ""
+        var wordStart = -1.0
+        var wordEnd = -1.0
+        let pattern = #"\[\s*([0-9.]+)\s*->\s*([0-9.]+)\]\s*p=[0-9.eE+-]+\s*(.+)"#
+        guard let regex = try? NSRegularExpression(pattern: pattern) else { return [] }
+        let nsOutput = output as NSString
+        let matches = regex.matches(in: output, range: NSRange(location: 0, length: nsOutput.length))
+        for m in matches where m.numberOfRanges == 4 {
+            let s = Double(nsOutput.substring(with: m.range(at: 1))) ?? -1
+            let e = Double(nsOutput.substring(with: m.range(at: 2))) ?? -1
+            var body = nsOutput.substring(with: m.range(at: 3)).trimmingCharacters(in: .whitespacesAndNewlines)
+            if body.isEmpty { continue }
+            if body.hasPrefix("[_") && body.hasSuffix("_]") { continue }
+            let startsNewWord: Bool
+            if body.hasPrefix("▁") {
+                body = String(body.dropFirst())
+                startsNewWord = true
+            } else {
+                startsNewWord = false
+            }
+            if currentText.isEmpty || startsNewWord {
+                if !currentText.isEmpty { words.append(TimedWord(text: currentText, start: max(wordStart, 0), end: max(wordEnd, 0))) }
+                currentText = body
+                wordStart = s
+                wordEnd = e
+            } else {
+                currentText += body
+                wordEnd = e
+            }
+        }
+        if !currentText.isEmpty { words.append(TimedWord(text: currentText, start: max(wordStart, 0), end: max(wordEnd, 0))) }
+        return words
+    }
+
+    private static func finalizeWords(_ words: [TimedWord]) -> [TimedWord] {
+        guard !words.isEmpty else { return [] }
+        var result = words
+        for i in 0..<(result.count - 1) {
+            let nextStart = result[i + 1].start
+            var end = result[i].end
+            if end <= result[i].start || end >= nextStart { end = nextStart }
+            if end <= result[i].start { end = result[i].start + 0.3 }
+            result[i] = TimedWord(text: result[i].text, start: result[i].start, end: end)
+        }
+        let last = result.count - 1
+        if result[last].end <= result[last].start {
+            result[last] = TimedWord(text: result[last].text, start: result[last].start, end: result[last].start + 0.3)
+        }
+        return result
+    }
+
+    private func readWhisperWords(wavURL: URL) -> [TimedWord] {
+        let jsonURL = wavURL.appendingPathExtension("json")
+        defer { try? FileManager.default.removeItem(at: jsonURL) }
+        guard let data = try? Data(contentsOf: jsonURL),
+              let json = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
+              let transcription = json["transcription"] as? [[String: Any]] else { return [] }
+
+        var words: [TimedWord] = []
+        var currentText = ""
+        var wordStart = -1.0
+        var wordEnd = -1.0
+
+        for entry in transcription {
+            guard let tokens = entry["tokens"] as? [[String: Any]] else { continue }
+            for token in tokens {
+                guard let raw = token["text"] as? String,
+                      let offsets = token["offsets"] as? [String: Any],
+                      let from = offsets["from"] as? Double,
+                      let to = offsets["to"] as? Double else { continue }
+                let body = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+                if body.isEmpty || (body.hasPrefix("[_") && body.hasSuffix("_]")) { continue }
+                if currentText.isEmpty || raw.hasPrefix(" ") {
+                    if !currentText.isEmpty { words.append(TimedWord(text: currentText, start: max(wordStart, 0), end: max(wordEnd, 0))) }
+                    currentText = body
+                    wordStart = from
+                    wordEnd = to
+                } else {
+                    currentText += body
+                    wordEnd = to
+                }
+            }
+            if !currentText.isEmpty {
+                words.append(TimedWord(text: currentText, start: max(wordStart, 0), end: max(wordEnd, 0)))
+                currentText = ""
+            }
+        }
+
+        return Self.finalizeWords(words)
     }
 
     private func runCLIProcess(_ executable: String, arguments: [String]) -> String {
@@ -748,6 +950,8 @@ class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
         guard let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else { return }
         let fileURL = appSupport.appendingPathComponent("Golosok/Audio/\(id.uuidString).wav")
         if FileManager.default.fileExists(atPath: fileURL.path) { try? FileManager.default.removeItem(at: fileURL) }
+        let segURL = appSupport.appendingPathComponent("Golosok/Audio/\(id.uuidString).segments.json")
+        if FileManager.default.fileExists(atPath: segURL.path) { try? FileManager.default.removeItem(at: segURL) }
     }
 }
 
