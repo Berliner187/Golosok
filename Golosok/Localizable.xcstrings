@@ -3077,10 +3077,36 @@
       }
     },
     "Субтитры (.srt)" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Subtitles (.srt)"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Субтитры (.srt)"
+          }
+        }
+      }
     },
     "Субтитры (.vtt)" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Subtitles (.vtt)"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Субтитры (.vtt)"
+          }
+        }
+      }
     },
     "Текст (.txt)" : {
       "localizations" : {
