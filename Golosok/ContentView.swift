@@ -56,7 +56,7 @@ struct SyncedPlayerView: View {
             if t < words[mid].start { hi = mid - 1 } else { lo = mid + 1 }
         }
         if t >= words[words.count - 1].end { return words.count - 1 }
-        return nil
+        return lo > 0 ? lo - 1 : nil
     }
 
     var body: some View {
@@ -125,31 +125,45 @@ struct SyncedTextView: NSViewRepresentable {
 
     func updateNSView(_ nsView: NSScrollView, context: Context) {
         guard let textView = nsView.documentView as? NSTextView else { return }
-        context.coordinator.onSeek = onSeek
+        let coordinator = context.coordinator
+        coordinator.onSeek = onSeek
 
-        let ranges = context.coordinator.wordRanges(text: text, words: words)
-        let attributed = NSMutableAttributedString(string: text, attributes: [
-            .font: NSFont.systemFont(ofSize: 15, weight: .regular),
-            .foregroundColor: NSColor(Color.uiInk)
-        ])
-        if !ranges.isEmpty {
-            for (i, range) in ranges.enumerated() where i < words.count {
+        if coordinator.cachedText != text || coordinator.cachedWords != words {
+            coordinator.cachedText = text
+            coordinator.cachedWords = words
+            coordinator.cachedRanges = coordinator.wordRanges(text: text, words: words)
+            coordinator.highlightedIndex = nil
+
+            let attributed = NSMutableAttributedString(string: text, attributes: [
+                .font: NSFont.systemFont(ofSize: 15, weight: .regular),
+                .foregroundColor: NSColor(Color.uiInk)
+            ])
+            for (i, range) in coordinator.cachedRanges.enumerated() where i < words.count && range.location != NSNotFound {
                 let url = URL(string: "golosok://seek/\(words[i].start)")
                 attributed.addAttribute(.link, value: url as Any, range: range)
                 attributed.addAttribute(.underlineStyle, value: 0, range: range)
-                if i == currentWordIndex {
-                    attributed.addAttribute(.backgroundColor, value: NSColor.blue.withAlphaComponent(0.18), range: range)
-                }
             }
+            textView.textStorage?.setAttributedString(attributed)
         }
-        textView.textStorage?.setAttributedString(attributed)
-        if let index = currentWordIndex, index < ranges.count {
-            textView.scrollRangeToVisible(ranges[index])
+        coordinator.applyHighlight(in: textView, currentWordIndex: currentWordIndex)
+
+        if let index = currentWordIndex, index != coordinator.lastScrolledIndex, index < coordinator.cachedRanges.count {
+            let range = coordinator.cachedRanges[index]
+            if range.location != NSNotFound {
+                textView.scrollRangeToVisible(range)
+                coordinator.lastScrolledIndex = index
+            }
         }
     }
 
     final class Coordinator: NSObject, NSTextViewDelegate {
         var onSeek: (Double) -> Void
+        var cachedText: String?
+        var cachedWords: [TimedWord]?
+        var cachedRanges: [NSRange] = []
+        var highlightedIndex: Int?
+        var lastScrolledIndex: Int?
+
         init(onSeek: @escaping (Double) -> Void) { self.onSeek = onSeek }
 
         func textView(_ textView: NSTextView, clickedOnLink link: Any, at charIndex: Int) -> Bool {
@@ -159,30 +173,122 @@ struct SyncedTextView: NSViewRepresentable {
             return true
         }
 
+        func applyHighlight(in textView: NSTextView, currentWordIndex: Int?) {
+            if let prev = highlightedIndex, prev != currentWordIndex, prev < cachedRanges.count {
+                let range = cachedRanges[prev]
+                if range.location != NSNotFound {
+                    textView.textStorage?.removeAttribute(.backgroundColor, range: range)
+                }
+            }
+            highlightedIndex = currentWordIndex
+            if let index = currentWordIndex, index < cachedRanges.count {
+                let range = cachedRanges[index]
+                if range.location != NSNotFound {
+                    textView.textStorage?.addAttribute(.backgroundColor, value: NSColor.blue.withAlphaComponent(0.18), range: range)
+                }
+            }
+        }
+
         func wordRanges(text: String, words: [TimedWord]) -> [NSRange] {
-            guard !words.isEmpty else { return [] }
-            var ranges: [NSRange] = []
+            guard !words.isEmpty, !text.isEmpty else { return [] }
             let nsText = text as NSString
             let length = nsText.length
-            var searchFrom = 0
-            var wordIndex = 0
 
-            while wordIndex < words.count && searchFrom < length {
-                while searchFrom < length {
-                    let scalar = UnicodeScalar(nsText.character(at: searchFrom))
-                    if !CharacterSet.whitespacesAndNewlines.contains(scalar ?? " ") { break }
-                    searchFrom += 1
-                }
-                guard searchFrom < length else { return [] }
-                let word = words[wordIndex].text
-                let searchRange = NSRange(location: searchFrom, length: length - searchFrom)
-                let range = nsText.range(of: word, options: [], range: searchRange)
-                guard range.location != NSNotFound, range.location == searchFrom else { return [] }
-                ranges.append(range)
-                searchFrom = range.location + range.length
-                wordIndex += 1
+            func isWhitespace(_ c: unichar) -> Bool {
+                CharacterSet.whitespacesAndNewlines.contains(UnicodeScalar(c) ?? " ")
             }
-            return wordIndex == words.count ? ranges : []
+            func normalized(_ s: String) -> String {
+                s.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: Locale(identifier: "ru_RU"))
+                    .filter { $0.isLetter || $0.isNumber }
+                    .lowercased()
+            }
+
+            var tokens: [NSRange] = []
+            var scan = 0
+            while scan < length {
+                if isWhitespace(nsText.character(at: scan)) { scan += 1; continue }
+                let start = scan
+                while scan < length && !isWhitespace(nsText.character(at: scan)) { scan += 1 }
+                tokens.append(NSRange(location: start, length: scan - start))
+            }
+            guard !tokens.isEmpty else { return [] }
+
+            let n = words.count
+            let m = tokens.count
+
+            // Fast path: exact positional alignment.
+            var pos = 0
+            var strict = true
+            for w in words {
+                let word = w.text
+                while pos < length && isWhitespace(nsText.character(at: pos)) { pos += 1 }
+                guard pos < length else { strict = false; break }
+                let found = nsText.range(of: word, options: [], range: NSRange(location: pos, length: length - pos))
+                if found.location != pos { strict = false; break }
+                pos += found.length
+            }
+            if strict {
+                var ranges: [NSRange] = []
+                pos = 0
+                for w in words {
+                    while pos < length && isWhitespace(nsText.character(at: pos)) { pos += 1 }
+                    let word = w.text as NSString
+                    ranges.append(NSRange(location: pos, length: word.length))
+                    pos += word.length
+                }
+                return ranges
+            }
+
+            // Robust path: longest-common-subsequence alignment on normalized tokens.
+            let textNorm = tokens.map { normalized(nsText.substring(with: $0)) }
+            let wordNorm = words.map { normalized($0.text) }
+            let maxCells = 5_000_000
+            if n * m <= maxCells {
+                var dp = [[Int16]](repeating: [Int16](repeating: 0, count: m + 1), count: n + 1)
+                var back = [[Int8]](repeating: [Int8](repeating: 0, count: m + 1), count: n + 1)
+                for a in stride(from: n - 1, through: 0, by: -1) {
+                    for b in stride(from: m - 1, through: 0, by: -1) {
+                        let wn = wordNorm[a]
+                        if !wn.isEmpty && wn == textNorm[b] {
+                            dp[a][b] = dp[a + 1][b + 1] + 1
+                            back[a][b] = 1
+                        } else if dp[a + 1][b] >= dp[a][b + 1] {
+                            dp[a][b] = dp[a + 1][b]
+                            back[a][b] = 2
+                        } else {
+                            dp[a][b] = dp[a][b + 1]
+                            back[a][b] = 3
+                        }
+                    }
+                }
+                var ranges = [NSRange](repeating: NSRange(location: NSNotFound, length: 0), count: n)
+                var a = 0, b = 0
+                while a < n && b < m {
+                    if back[a][b] == 1 { ranges[a] = tokens[b]; a += 1; b += 1 }
+                    else if back[a][b] == 2 { a += 1 }
+                    else { b += 1 }
+                }
+                return ranges
+            }
+
+            // Greedy fallback for very large texts.
+            var ranges = [NSRange](repeating: NSRange(location: NSNotFound, length: 0), count: n)
+            pos = 0
+            for (k, w) in words.enumerated() {
+                let word = w.text
+                guard !word.isEmpty else { continue }
+                while pos < length && isWhitespace(nsText.character(at: pos)) { pos += 1 }
+                guard pos < length else { break }
+                let rest = NSRange(location: pos, length: length - pos)
+                if nsText.range(of: word, options: [], range: rest).location == pos {
+                    ranges[k] = NSRange(location: pos, length: (word as NSString).length)
+                    pos += (word as NSString).length
+                } else if nsText.range(of: word, options: [.caseInsensitive, .diacriticInsensitive], range: rest).location == pos {
+                    ranges[k] = NSRange(location: pos, length: (word as NSString).length)
+                    pos += (word as NSString).length
+                }
+            }
+            return ranges
         }
     }
 }

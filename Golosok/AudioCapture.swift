@@ -72,6 +72,7 @@ class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
     @Published var playheadTime: Double = 0
     private var audioPlayer: AVAudioPlayer?
     private var playbackTimer: Timer?
+    private var preloadedPlayerId: UUID?
 
     var isPlayerPlaying: Bool { audioPlayer?.isPlaying == true }
     
@@ -567,21 +568,43 @@ class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
               let data = try? Data(contentsOf: url),
               let payload = try? JSONDecoder().decode(TimingFilePayload.self, from: data),
               !payload.words.isEmpty else { return nil }
-        return (payload.words, payload.duration)
+        preloadAudio(for: id)
+        return (Self.normalizedWords(payload.words, duration: payload.duration), payload.duration)
     }
-    
-    func toggleSyncedPlayback(for id: UUID) {
+
+    static func normalizedWords(_ words: [TimedWord], duration: Double) -> [TimedWord] {
+        guard let last = words.last, last.end > duration * 100 else { return words }
+        return words.map { TimedWord(text: $0.text, start: $0.start / 1000, end: $0.end / 1000) }
+    }
+
+    private func preloadAudio(for id: UUID) {
+        guard preloadedPlayerId != id else { return }
+        preloadedPlayerId = id
         guard let fileURL = audioFileURL(for: id) else { return }
+        DispatchQueue.global(qos: .utility).async { [weak self] in
+            guard let player = try? AVAudioPlayer(contentsOf: fileURL) else { return }
+            DispatchQueue.main.async {
+                guard self?.preloadedPlayerId == id, self?.playingItemId == nil else { return }
+                self?.audioPlayer = player
+            }
+        }
+    }
+
+    func toggleSyncedPlayback(for id: UUID) {
+        guard audioFileURL(for: id) != nil else { return }
         if playingItemId == id {
             if audioPlayer?.isPlaying == true {
                 audioPlayer?.pause(); stopPlaybackTimer()
-            } else {
-                audioPlayer?.play(); startPlaybackTimer(for: id)
+            } else if let player = audioPlayer {
+                player.play(); startPlaybackTimer(for: id)
             }
             return
         }
         audioPlayer?.stop()
-        do { audioPlayer = try AVAudioPlayer(contentsOf: fileURL) } catch { return }
+        if preloadedPlayerId != id, let url = audioFileURL(for: id) {
+            do { audioPlayer = try AVAudioPlayer(contentsOf: url) } catch { return }
+        }
+        preloadedPlayerId = nil
         audioPlayer?.play()
         playingItemId = id
         playheadTime = 0
@@ -592,14 +615,18 @@ class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
         guard let player = audioPlayer else { return }
         player.currentTime = min(max(time, 0), player.duration)
         if playingItemId == id {
-            if !player.isPlaying { player.play() }
-            playheadTime = player.currentTime
+            if !player.isPlaying {
+                player.play()
+                startPlaybackTimer(for: id)
+            }
+            playheadTime = time
         }
     }
     
     func stopSyncedPlayback() {
         audioPlayer?.stop()
         playingItemId = nil
+        preloadedPlayerId = nil
         playheadTime = 0
         stopPlaybackTimer()
     }
@@ -741,26 +768,44 @@ class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
     private func readWhisperWords(wavURL: URL) -> [TimedWord] {
         let jsonURL = wavURL.appendingPathExtension("json")
         defer { try? FileManager.default.removeItem(at: jsonURL) }
-        guard let data = try? Data(contentsOf: jsonURL),
-              let json = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
+        guard let data = try? Data(contentsOf: jsonURL) else {
+            AppLogger.shared.warn("Recognition", "whisper JSON не найден", details: jsonURL.lastPathComponent)
+            return []
+        }
+        guard let json = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
               let transcription = json["transcription"] as? [[String: Any]] else { return [] }
 
+        let wavEndSecs = Self.audioDurationSeconds(of: wavURL)
         var words: [TimedWord] = []
-        var currentText = ""
-        var wordStart = -1.0
-        var wordEnd = -1.0
 
         for entry in transcription {
             guard let tokens = entry["tokens"] as? [[String: Any]] else { continue }
+
+            var segmentWords: [TimedWord] = []
+            var currentText = ""
+            var wordStart = -1.0
+            var wordEnd = -1.0
+            var reliable = true
+            var lastEnd = -1.0
+
+            func appendSegmentWord(_ text: String, _ start: Double, _ end: Double) {
+                let w = TimedWord(text: text, start: max(start, 0), end: max(end, 0))
+                segmentWords.append(w)
+                if start < 0 || end < 0 || end <= start || start < lastEnd { reliable = false }
+                lastEnd = max(lastEnd, end)
+            }
+
             for token in tokens {
                 guard let raw = token["text"] as? String,
                       let offsets = token["offsets"] as? [String: Any],
-                      let from = offsets["from"] as? Double,
-                      let to = offsets["to"] as? Double else { continue }
+                      let fromMs = offsets["from"] as? Double,
+                      let toMs = offsets["to"] as? Double else { continue }
+                let from = fromMs / 1000.0
+                let to = toMs / 1000.0
                 let body = raw.trimmingCharacters(in: .whitespacesAndNewlines)
                 if body.isEmpty || (body.hasPrefix("[_") && body.hasSuffix("_]")) { continue }
                 if currentText.isEmpty || raw.hasPrefix(" ") {
-                    if !currentText.isEmpty { words.append(TimedWord(text: currentText, start: max(wordStart, 0), end: max(wordEnd, 0))) }
+                    if !currentText.isEmpty { appendSegmentWord(currentText, wordStart, wordEnd) }
                     currentText = body
                     wordStart = from
                     wordEnd = to
@@ -769,13 +814,45 @@ class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
                     wordEnd = to
                 }
             }
-            if !currentText.isEmpty {
-                words.append(TimedWord(text: currentText, start: max(wordStart, 0), end: max(wordEnd, 0)))
-                currentText = ""
+            if !currentText.isEmpty { appendSegmentWord(currentText, wordStart, wordEnd) }
+
+            if !reliable && segmentWords.count > 1 {
+                let offsets = entry["offsets"] as? [String: Any]
+                var fromSecs = ((offsets?["from"] as? Double) ?? 0) / 1000.0
+                var toSecs = ((offsets?["to"] as? Double) ?? 0) / 1000.0
+                if wavEndSecs > 0 {
+                    fromSecs = min(max(fromSecs, 0), wavEndSecs)
+                    toSecs = min(toSecs, wavEndSecs)
+                }
+                if toSecs <= fromSecs { toSecs = fromSecs + Double(segmentWords.count) * 0.3 }
+                segmentWords = Self.interpolateTimings(segmentWords, from: fromSecs, to: toSecs)
             }
+            words.append(contentsOf: segmentWords)
         }
 
         return Self.finalizeWords(words)
+    }
+
+    private static func audioDurationSeconds(of url: URL) -> Double {
+        guard let file = try? AVAudioFile(forReading: url) else { return 0 }
+        return Double(file.length) / file.processingFormat.sampleRate
+    }
+
+    static func interpolateTimings(_ words: [TimedWord], from startSecs: Double, to endSecs: Double) -> [TimedWord] {
+        guard words.count > 1, endSecs > startSecs else { return words }
+        var weights: [Double] = words.map { max(1.0, Double(($0.text as NSString).length)) }
+        let total = weights.reduce(0, +)
+        guard total > 0 else { return words }
+        var result: [TimedWord] = []
+        var cursor = startSecs
+        var acc = 0.0
+        for (i, w) in words.enumerated() {
+            acc += weights[i]
+            let wordEndSecs = startSecs + min(1.0, acc / total) * (endSecs - startSecs)
+            result.append(TimedWord(text: w.text, start: cursor, end: max(wordEndSecs, cursor + 0.001)))
+            cursor = max(wordEndSecs, cursor + 0.001)
+        }
+        return result
     }
 
     private func runCLIProcess(_ executable: String, arguments: [String]) -> String {

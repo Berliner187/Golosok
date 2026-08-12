@@ -165,4 +165,100 @@ struct GolosokTests {
         let week = DashboardCalculator.calculate(from: items, range: .week)
         #expect(week.activity.count == 7)
     }
+
+    // MARK: - Synced word alignment
+
+    private func timedWords(_ texts: [String]) -> [TimedWord] {
+        texts.enumerated().map { TimedWord(text: $0.element, start: Double($0.offset), end: Double($0.offset) + 1) }
+    }
+
+    private func wordRanges(_ text: String, _ words: [TimedWord]) -> [NSRange] {
+        SyncedTextView.Coordinator(onSeek: { _ in }).wordRanges(text: text, words: words)
+    }
+
+    @Test func exactWordsProducePositionalRanges() {
+        let text = "Привет! Это проверка."
+        let words = timedWords(["Привет!", "Это", "проверка."])
+        let ranges = wordRanges(text, words)
+        #expect(ranges.count == 3)
+        #expect(ranges[0] == NSRange(location: 0, length: 7))
+        #expect(ranges[1] == NSRange(location: 8, length: 3))
+        #expect(ranges[2] == NSRange(location: 12, length: 9))
+    }
+
+    @Test func caseInsensitiveTokensStillAlign() {
+        let text = "Привет мир"
+        let words = timedWords(["привет", "мир"])
+        let ranges = wordRanges(text, words)
+        #expect(ranges[0].location == 0)
+        #expect(ranges[1].location == 7)
+    }
+
+    @Test func extraTextWordIsSkippedByAlignment() {
+        let text = "один два три"
+        let words = timedWords(["один", "три"])
+        let ranges = wordRanges(text, words)
+        #expect(ranges[0] == NSRange(location: 0, length: 4))
+        #expect(ranges[1] == NSRange(location: 9, length: 3))
+    }
+
+    @Test func missingWordBecomesNotFoundPlaceholder() {
+        let text = "привет мир"
+        let words = timedWords(["привет", "неттакого", "мир"])
+        let ranges = wordRanges(text, words)
+        #expect(ranges.count == 3)
+        #expect(ranges[0] == NSRange(location: 0, length: 6))
+        #expect(ranges[1].location == NSNotFound)
+        #expect(ranges[2] == NSRange(location: 7, length: 3))
+    }
+
+    @Test func punctuationAttachedToTokensStillAligns() {
+        let text = "Числа 1, 2, 3 и всё."
+        let words = timedWords(["Числа", "1,", "2,", "3", "и", "всё."])
+        let ranges = wordRanges(text, words)
+        #expect(ranges.allSatisfy { $0.location != NSNotFound })
+        #expect(ranges.count == 6)
+    }
+
+    @Test func emptyWordsProduceNoRanges() {
+        #expect(wordRanges("", timedWords(["слово"])).isEmpty)
+        #expect(wordRanges("текст", []).isEmpty)
+    }
+
+    // MARK: - Whisper timing interpolation
+
+    @Test func interpolateTimingsSpreadsAcrossRange() {
+        let words = timedWords(["а", "б", "в"])
+        let result = AudioCapture.interpolateTimings(words, from: 1.0, to: 4.0)
+        #expect(result.count == 3)
+        #expect(result[0].start == 1.0)
+        #expect(result[2].end <= 4.001)
+        for i in 1..<result.count {
+            #expect(result[i].start >= result[i - 1].end)
+            #expect(result[i].end > result[i].start)
+        }
+    }
+
+    @Test func interpolateTimingsPreservesOrder() {
+        let words = timedWords(["один", "два", "три"])
+        let result = AudioCapture.interpolateTimings(words, from: 0, to: 3.0)
+        #expect(result.map(\.text) == ["один", "два", "три"])
+        #expect(result[0].start == 0)
+        #expect(result.last?.end == 3.0)
+    }
+
+    // MARK: - Whisper ms→s migration
+
+    @Test func millisecondTimingsAreConvertedToSeconds() {
+        let words = [TimedWord(text: "Привет", start: 0, end: 7650.5), TimedWord(text: "мир", start: 7650.5, end: 8000)]
+        let result = AudioCapture.normalizedWords(words, duration: 7.6)
+        #expect(result[0].end == 7.6505)
+        #expect(result[1].start == 7.6505)
+    }
+
+    @Test func secondTimingsStayUntouched() {
+        let words = [TimedWord(text: "Так,", start: 0.76, end: 1.04), TimedWord(text: "звук", start: 1.2, end: 1.48)]
+        let result = AudioCapture.normalizedWords(words, duration: 6.6)
+        #expect(result == words)
+    }
 }
