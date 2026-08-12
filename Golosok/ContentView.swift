@@ -450,6 +450,9 @@ struct ContentView: View {
                                         Button("Текст (.txt)") { audioCapture.exportTranscription(selected, format: "txt") }
                                         Button("Excel (.csv)") { audioCapture.exportTranscription(selected, format: "csv") }
                                         Button("JSON (.json)") { audioCapture.exportTranscription(selected, format: "json") }
+                                        Divider()
+                                        Button("Субтитры (.srt)") { audioCapture.exportTranscription(selected, format: "srt") }
+                                        Button("Субтитры (.vtt)") { audioCapture.exportTranscription(selected, format: "vtt") }
                                     } label: {
                                         HStack(spacing: 4) { Image(systemName: "square.and.arrow.up").font(.system(size: 11, weight: .medium)); Text("Экспорт").font(UIStyleFont.body(size: 13, weight: .medium)); Image(systemName: "chevron.down").font(.system(size: 8, weight: .bold)).foregroundColor(.uiMidGray) }
                                         .lineLimit(1).foregroundColor(.uiInk).padding(.vertical, 8).padding(.horizontal, 14).background(Color.uiPaper).cornerRadius(18).overlay(RoundedRectangle(cornerRadius: 18).stroke(Color.uiHairline, lineWidth: 1))
