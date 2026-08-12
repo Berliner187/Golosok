@@ -74,7 +74,7 @@ class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
     private var playbackTimer: Timer?
     private var preloadedPlayerId: UUID?
 
-    var isPlayerPlaying: Bool { audioPlayer?.isPlaying == true }
+    @Published var isPlayerPlaying: Bool = false
     
     @Published var isSuccessDone = false
     
@@ -594,9 +594,9 @@ class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
         guard audioFileURL(for: id) != nil else { return }
         if playingItemId == id {
             if audioPlayer?.isPlaying == true {
-                audioPlayer?.pause(); stopPlaybackTimer()
+                audioPlayer?.pause(); stopPlaybackTimer(); isPlayerPlaying = false
             } else if let player = audioPlayer {
-                player.play(); startPlaybackTimer(for: id)
+                player.play(); startPlaybackTimer(for: id); isPlayerPlaying = true
             }
             return
         }
@@ -608,6 +608,7 @@ class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
         audioPlayer?.play()
         playingItemId = id
         playheadTime = 0
+        isPlayerPlaying = true
         startPlaybackTimer(for: id)
     }
     
@@ -618,6 +619,7 @@ class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
             if !player.isPlaying {
                 player.play()
                 startPlaybackTimer(for: id)
+                isPlayerPlaying = true
             }
             playheadTime = time
         }
@@ -628,6 +630,7 @@ class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
         playingItemId = nil
         preloadedPlayerId = nil
         playheadTime = 0
+        isPlayerPlaying = false
         stopPlaybackTimer()
     }
     
@@ -667,8 +670,8 @@ class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
     func toggleAudioPlayback(for item: TranscriptionItem) {
         guard let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else { return }
         let fileURL = appSupport.appendingPathComponent("Golosok/Audio/\(item.id.uuidString).wav")
-        if playingItemId == item.id { audioPlayer?.stop(); playingItemId = nil; return }
-        do { audioPlayer = try AVAudioPlayer(contentsOf: fileURL); audioPlayer?.play(); playingItemId = item.id } catch {}
+        if playingItemId == item.id { audioPlayer?.stop(); playingItemId = nil; isPlayerPlaying = false; return }
+        do { audioPlayer = try AVAudioPlayer(contentsOf: fileURL); audioPlayer?.play(); playingItemId = item.id; isPlayerPlaying = true } catch {}
     }
     
     private func writeBufferToWav(buffer: AVAudioPCMBuffer, targetFormat: AVAudioFormat, outputURL: URL) -> Bool {

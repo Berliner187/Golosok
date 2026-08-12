@@ -541,11 +541,9 @@ struct ContentView: View {
             Button("Удалить", role: .destructive) {
                 if let id = itemToDelete, let idx = audioCapture.history.firstIndex(where: { $0.id == id }) {
                     SoundEffect.playDelete()
-                    withAnimation {
-                        audioCapture.stopSyncedPlayback()
-                        audioCapture.deleteItem(at: idx)
-                        if selectedItemId == id { selectedItemId = nil }
-                    }
+                    audioCapture.stopSyncedPlayback()
+                    audioCapture.deleteItem(at: idx)
+                    if selectedItemId == id { selectedItemId = nil; selectedTimings = nil }
                 }
             }
         } message: { Text("Это действие нельзя отменить.") }
