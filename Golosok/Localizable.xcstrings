@@ -3373,6 +3373,38 @@
           }
         }
       }
+    },
+    "MP3, MP4, WebM, MKV, WAV и другие" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "MP3, MP4, WebM, MKV, WAV and more"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "MP3, MP4, WebM, MKV, WAV и другие"
+          }
+        }
+      }
+    },
+    "Перетащите файл — начнётся расшифровка" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Drop a file to start transcription"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Перетащите файл — начнётся расшифровка"
+          }
+        }
+      }
     }
   },
   "version" : "1.0"

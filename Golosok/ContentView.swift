@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import UniformTypeIdentifiers
 
 enum MainTab { case history, dashboard, settings }
 
@@ -22,6 +23,7 @@ struct NativeTextView: NSViewRepresentable {
         textView.isEditable = false; textView.isSelectable = true; textView.drawsBackground = false
         textView.font = NSFont.systemFont(ofSize: 15, weight: .regular); textView.textColor = NSColor(Color.uiInk)
         textView.textContainerInset = NSSize(width: 0, height: 10)
+        textView.unregisterDraggedTypes()
         return scrollView
     }
     func updateNSView(_ nsView: NSScrollView, context: Context) {
@@ -120,6 +122,7 @@ struct SyncedTextView: NSViewRepresentable {
             .cursor: NSCursor.pointingHand
         ]
         textView.delegate = context.coordinator
+        textView.unregisterDraggedTypes()
         return scrollView
     }
 
@@ -308,6 +311,7 @@ struct ContentView: View {
     @State private var selectedTimings: (words: [TimedWord], duration: Double)?
     
     @State private var showAboutSheet = false
+    @State private var isFileDropTargeted = false
     
     var filteredHistory: [TranscriptionItem] {
         if searchText.isEmpty { return audioCapture.history }
@@ -343,6 +347,42 @@ struct ContentView: View {
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("OpenAboutModal"))) { _ in
             showAboutSheet = true
         }
+        .onDrop(of: [UTType.fileURL], isTargeted: $isFileDropTargeted) { providers in
+            handleDroppedProviders(providers)
+        }
+        .overlay {
+            if isFileDropTargeted {
+                FileDropOverlay()
+                    .allowsHitTesting(false)
+                    .transition(.opacity)
+            }
+        }
+        .animation(.easeOut(duration: 0.16), value: isFileDropTargeted)
+    }
+
+    private func handleDroppedProviders(_ providers: [NSItemProvider]) -> Bool {
+        let fileType = UTType.fileURL.identifier
+        let loaders = providers.filter { $0.hasItemConformingToTypeIdentifier(fileType) }
+        guard !loaders.isEmpty else { return false }
+        var urls: [URL] = []
+        let group = DispatchGroup()
+        for provider in loaders {
+            group.enter()
+            provider.loadItem(forTypeIdentifier: fileType, options: nil) { item, _ in
+                defer { group.leave() }
+                if let url = item as? URL {
+                    urls.append(url)
+                } else if let data = item as? Data, let url = URL(dataRepresentation: data, relativeTo: nil) {
+                    urls.append(url)
+                } else if let str = item as? String, let url = URL(string: str) {
+                    urls.append(url)
+                }
+            }
+        }
+        group.notify(queue: .main) {
+            if !urls.isEmpty { audioCapture.importFiles(urls) }
+        }
+        return true
     }
     
     var mainInterface: some View {
@@ -646,5 +686,53 @@ struct HistoryCard: View {
         .padding(12).background(isSelected ? Color.uiPaper : Color.clear).cornerRadius(12)
         .overlay(RoundedRectangle(cornerRadius: 12).stroke(isSelected ? Color.uiHairline : Color.clear, lineWidth: 1))
         .shadow(color: isSelected ? Color.black.opacity(0.04) : Color.clear, radius: 4, x: 0, y: 2)
+    }
+}
+
+struct FileDropOverlay: View {
+    var body: some View {
+        ZStack {
+            Rectangle()
+                .fill(.regularMaterial)
+            LinearGradient(
+                colors: [Color.blue.opacity(0.10), Color.blue.opacity(0.04)],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+
+            VStack(spacing: 18) {
+                ZStack {
+                    Circle()
+                        .fill(Color.blue.opacity(0.12))
+                        .frame(width: 76, height: 76)
+                    Image(systemName: "arrow.down.doc.fill")
+                        .font(.system(size: 30, weight: .medium))
+                        .foregroundColor(.blue)
+                }
+
+                VStack(spacing: 6) {
+                    Text(LocalizedStringKey("Перетащите файл — начнётся расшифровка"))
+                        .font(UIStyleFont.display(size: 17, weight: .bold))
+                        .foregroundColor(.uiInk)
+                        .multilineTextAlignment(.center)
+                    Text(LocalizedStringKey("MP3, MP4, WebM, MKV, WAV и другие"))
+                        .font(UIStyleFont.body(size: 12, weight: .regular))
+                        .foregroundColor(.uiMidGray)
+                }
+            }
+            .padding(.horizontal, 48)
+            .padding(.vertical, 40)
+            .background(
+                RoundedRectangle(cornerRadius: 24)
+                    .fill(Color.uiPaper)
+                    .shadow(color: .black.opacity(0.14), radius: 28, x: 0, y: 10)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 24)
+                    .strokeBorder(style: StrokeStyle(lineWidth: 2, dash: [8, 6]))
+                    .foregroundColor(Color.blue.opacity(0.55))
+            )
+        }
+        .ignoresSafeArea()
     }
 }

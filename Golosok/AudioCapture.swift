@@ -292,7 +292,7 @@ class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
         }
         
         let panel = NSOpenPanel()
-        panel.allowsMultipleSelection = false
+        panel.allowsMultipleSelection = true
         panel.canChooseDirectories = false
         panel.canChooseFiles = true
         let webmType = UTType(filenameExtension: "webm") ?? .movie
@@ -300,24 +300,80 @@ class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
         let oggType = UTType(filenameExtension: "ogg") ?? .audio
         panel.allowedContentTypes = [.audio, .movie, .mp3, .mpeg4Audio, .wav, webmType, mkvType, oggType]
         
-        if panel.runModal() == .OK, let fileURL = panel.url {
+        if panel.runModal() == .OK, !panel.urls.isEmpty {
+            importFiles(panel.urls)
+        }
+    }
+    
+    func importFiles(_ urls: [URL]) {
+        guard !isRecording, !isProcessingFile else {
+            SoundEffect.playCancel()
+            return
+        }
+        let media = urls.filter { Self.isMediaURL($0) }
+        guard !media.isEmpty else { return }
+        DispatchQueue.main.async {
+            self.warningMessage = nil
+            self.isProcessingFile = true
+            self.fileProcessingProgress = 0.0
+            self.transcribedText = String(localized: "Извлечение аудио...")
+            OverlayPanelManager.shared.showOverlay()
+        }
+        DispatchQueue.global(qos: .utility).async {
+            self.processQueue(media)
+        }
+    }
+    
+    private func processQueue(_ urls: [URL]) {
+        processNextInQueue(urls, index: 0)
+    }
+    
+    private func processNextInQueue(_ urls: [URL], index: Int) {
+        guard index < urls.count else {
             DispatchQueue.main.async {
-                self.warningMessage = nil
-                self.isProcessingFile = true
-                self.fileProcessingProgress = 0.0
-                self.transcribedText = String(localized: "Извлечение аудио...")
-                OverlayPanelManager.shared.showOverlay()
+                self.isProcessingFile = false
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { OverlayPanelManager.shared.hideOverlay() }
             }
-            DispatchQueue.global(qos: .utility).async {
-                self.processLongFileInChunks(fileURL: fileURL, isFileImport: true, audioDurationSec: 0)
+            return
+        }
+        let url = urls[index]
+        DispatchQueue.main.async {
+            self.warningMessage = nil
+            self.isProcessingFile = true
+            self.fileProcessingProgress = 0.0
+            self.transcribedText = String(localized: "Извлечение аудио...")
+            OverlayPanelManager.shared.showOverlay()
+        }
+        DispatchQueue.global(qos: .utility).async { [weak self] in
+            guard let self else { return }
+            self.processLongFileInChunks(fileURL: url, isFileImport: true, audioDurationSec: 0) {
+                DispatchQueue.main.async { self.processNextInQueue(urls, index: index + 1) }
             }
         }
     }
     
-    private func processLongFileInChunks(fileURL: URL, isFileImport: Bool, audioDurationSec: Double) {
+    private static func isMediaURL(_ url: URL) -> Bool {
+        let ext = url.pathExtension.lowercased()
+        let mediaExts: Set<String> = ["mp3", "m4a", "wav", "aiff", "aif", "aac", "flac", "ogg", "opus", "mp4", "mov", "m4v", "webm", "mkv", "avi"]
+        if mediaExts.contains(ext) { return true }
+        if let values = try? url.resourceValues(forKeys: [.contentTypeKey]), let ut = values.contentType {
+            return ut.conforms(to: .audio) || ut.conforms(to: .movie)
+        }
+        return false
+    }
+    
+    private func processLongFileInChunks(fileURL: URL, isFileImport: Bool, audioDurationSec: Double, completion: (() -> Void)? = nil) {
         let processStartTime = Date()
         let tempWavURL = FileManager.default.temporaryDirectory.appendingPathComponent("temp_file_full.wav")
         let sourceURL = isFileImport ? tempWavURL : fileURL
+        
+        func finish() {
+            if let completion {
+                completion()
+            } else {
+                DispatchQueue.main.async { self.isProcessingFile = false }
+            }
+        }
         
         if isFileImport {
             var conversionSuccess = false
@@ -327,18 +383,18 @@ class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
             
             if !conversionSuccess {
                 DispatchQueue.main.async {
-                    self.isProcessingFile = false
                     OverlayPanelManager.shared.showWarning(message: String(localized: "Не удалось извлечь аудио"))
                 }
+                finish()
                 return
             }
         }
         
         guard let inputFile = try? AVAudioFile(forReading: sourceURL) else {
             DispatchQueue.main.async {
-                self.isProcessingFile = false
                 OverlayPanelManager.shared.showWarning(message: String(localized: "Ошибка чтения файла"))
             }
+            finish()
             return
         }
         
@@ -391,7 +447,6 @@ class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
         let calculatedSpeedup = max(1.0, realAudioSecs / max(0.1, processingTimeSecs))
         
         DispatchQueue.main.async {
-            self.isProcessingFile = false
             if prettyFormattedText.isEmpty {
                 AppLogger.shared.warn("Recognition", "Речь не распознана", details: String(format: "аудио %.1f с", realAudioSecs))
                 Telemetry.shared.event("dictation_failed", ["audio_duration_sec": realAudioSecs])
@@ -423,10 +478,13 @@ class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
                     SoundEffect.playSuccess()
                 }
                 
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { OverlayPanelManager.shared.hideOverlay() }
+                if completion == nil {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { OverlayPanelManager.shared.hideOverlay() }
+                }
             }
             
             self.sendTelemetry(eventType: isFileImport ? "file_import" : "dictation", audioDurationSec: realAudioSecs, characterCount: rawText.count, speedup: calculatedSpeedup)
+            finish()
         }
     }
     
