@@ -122,7 +122,16 @@ class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
         if UserDefaults.standard.object(forKey: "analyticsEnabled") == nil {
             self.analyticsEnabled = true
         }
-        
+
+        let currentVer = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? ""
+        if let lastActive = UserDefaults.standard.string(forKey: "lastActiveVersion"), lastActive != currentVer {
+            UserDefaults.standard.removeObject(forKey: "cachedUpdateInfo")
+            UserDefaults.standard.removeObject(forKey: "updateCheckETag")
+            UserDefaults.standard.removeObject(forKey: "lastUpdateCheckAt")
+            DispatchQueue.main.async { self.updateInfo = nil }
+        }
+        UserDefaults.standard.set(currentVer, forKey: "lastActiveVersion")
+
         loadHistory()
         DispatchQueue.main.asyncAfter(deadline: .now() + 4.5) { [weak self] in
             self?.checkUpdates()
@@ -944,9 +953,11 @@ class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
     
     private func pasteToActiveApp() {
         guard autoPasteEnabled else { return }
-        let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true]
-        _ = AXIsProcessTrustedWithOptions(options as CFDictionary)
-
+        guard AXIsProcessTrusted() else {
+            AppLogger.shared.warn("Paste", "Доступ AX недоступен — пропускаем вставку. Пользователь должен включить её в Настройках.")
+            Telemetry.shared.event("paste_skipped", ["paste_reason": "no_ax_access"])
+            return
+        }
         guard let target = pasteTarget else { return }
         let pid = target.processIdentifier
         target.activate(options: [.activateIgnoringOtherApps])
@@ -1117,43 +1128,73 @@ class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
         }
     }
     
-    func checkUpdates(force: Bool = false) {
+func checkUpdates(force: Bool = false) {
         let lastCheck = UserDefaults.standard.object(forKey: "lastUpdateCheckAt") as? Date
-        if !force, let lastCheck, Date().timeIntervalSince(lastCheck) < 12 * 3600 {
-            if let data = UserDefaults.standard.data(forKey: "cachedUpdateInfo"),
-               let cached = try? JSONDecoder().decode(UpdateInfo?.self, from: data) {
-                DispatchQueue.main.async { self.updateInfo = cached }
+        let currentVer = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? ""
+
+        if !force, let lastCheck, Date().timeIntervalSince(lastCheck) < 4 * 3600 {
+            if let data = UserDefaults.standard.data(forKey: "cachedUpdateInfo") {
+                if let cached = try? JSONDecoder().decode(UpdateInfo.self, from: data),
+                   Self.compareVersions(cached.version, currentVer) == .orderedDescending {
+                    DispatchQueue.main.async { self.updateInfo = cached }
+                } else {
+                    UserDefaults.standard.removeObject(forKey: "cachedUpdateInfo")
+                    DispatchQueue.main.async { self.updateInfo = nil }
+                }
             }
             return
         }
         guard let url = URL(string: "https://api.github.com/repos/Berliner187/Golosok/releases/latest") else { return }
-        let currentVer = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? ""
-        let request = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalAndRemoteCacheData, timeoutInterval: 10.0)
-        URLSession.shared.dataTask(with: request) { data, _, _ in
+        var request = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalAndRemoteCacheData, timeoutInterval: 10.0)
+        request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
+        if let etag = UserDefaults.standard.string(forKey: "updateCheckETag") {
+            request.setValue(etag, forHTTPHeaderField: "If-None-Match")
+        }
+        URLSession.shared.dataTask(with: request) { data, response, _ in
+            let http = response as? HTTPURLResponse
+            if http?.statusCode == 304 {
+                UserDefaults.standard.set(Date(), forKey: "lastUpdateCheckAt")
+                return
+            }
+            if let etag = http?.value(forHTTPHeaderField: "Etag") {
+                UserDefaults.standard.set(etag, forKey: "updateCheckETag")
+            }
+            defer { UserDefaults.standard.set(Date(), forKey: "lastUpdateCheckAt") }
             guard let data = data, let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
                   let tagName = json["tag_name"] as? String, let releaseName = json["name"] as? String,
                   let assets = json["assets"] as? [[String: Any]],
                   let firstAsset = assets.first(where: { ($0["name"] as? String)?.hasSuffix(".dmg") == true }),
                   let downloadUrlString = firstAsset["browser_download_url"] as? String,
-                  let downloadUrl = URL(string: downloadUrlString) else {
-                UserDefaults.standard.set(Date(), forKey: "lastUpdateCheckAt")
-                return
-            }
-            let cleanCurrent = currentVer.replacingOccurrences(of: "v", with: "")
-            let cleanLatest = tagName.replacingOccurrences(of: "v", with: "")
+                  let downloadUrl = URL(string: downloadUrlString) else { return }
             let result: UpdateInfo?
-            if cleanLatest.compare(cleanCurrent, options: .numeric) == .orderedDescending {
+            if Self.compareVersions(tagName, currentVer) == .orderedDescending {
                 let codename = releaseName.components(separatedBy: " ").last ?? "UPDATE"
                 result = UpdateInfo(version: tagName, codename: codename.uppercased(), url: downloadUrl)
             } else {
                 result = nil
+                UserDefaults.standard.removeObject(forKey: "updateCheckETag")
             }
-            UserDefaults.standard.set(Date(), forKey: "lastUpdateCheckAt")
-            if let encoded = try? JSONEncoder().encode(result) {
+            if let result, let encoded = try? JSONEncoder().encode(result) {
                 UserDefaults.standard.set(encoded, forKey: "cachedUpdateInfo")
+            } else {
+                UserDefaults.standard.removeObject(forKey: "cachedUpdateInfo")
             }
             DispatchQueue.main.async { self.updateInfo = result }
         }.resume()
+    }
+
+    static func compareVersions(_ a: String, _ b: String) -> ComparisonResult {
+        let cleanA = a.replacingOccurrences(of: "v", with: "")
+        let cleanB = b.replacingOccurrences(of: "v", with: "")
+        let ta = cleanA.split(separator: ".").compactMap { Int($0) }
+        let tb = cleanB.split(separator: ".").compactMap { Int($0) }
+        let n = max(ta.count, tb.count)
+        for i in 0..<n {
+            let av = i < ta.count ? ta[i] : 0
+            let bv = i < tb.count ? tb[i] : 0
+            if av != bv { return av < bv ? .orderedAscending : .orderedDescending }
+        }
+        return .orderedSame
     }
     
     func cancelUpdateDownload() {
@@ -1182,19 +1223,41 @@ class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
         history.forEach { deleteAudioFile(for: $0.id) }
         history.removeAll()
     }
-    private func saveHistory() { if let e = try? JSONEncoder().encode(history) { UserDefaults.standard.set(e, forKey: "transcription_history") } }
+    private func historyStoreURL() -> URL? {
+        guard let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else { return nil }
+        let dir = appSupport.appendingPathComponent("Golosok", isDirectory: true)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        return dir.appendingPathComponent("history.json")
+    }
+    private func saveHistory() {
+        guard let url = historyStoreURL(), let data = try? JSONEncoder().encode(history) else { return }
+        try? data.write(to: url, options: .atomic)
+    }
     private func loadHistory() {
-        if let d = UserDefaults.standard.data(forKey: "transcription_history"), let dec = try? JSONDecoder().decode([TranscriptionItem].self, from: d) {
-            isLoadingHistory = true
-            defer { isLoadingHistory = false }
-            self.history = dec.map { item in
-                if !item.text.contains("\n\n") && item.text.count > 120 {
-                    let pretty = TextFormatter.formatIntoParagraphs(item.text)
-                    return TranscriptionItem(id: item.id, date: item.date, text: pretty, duration: item.duration, speedup: item.speedup, isUnread: item.isUnread)
-                }
-                return item
-            }
+        guard let url = historyStoreURL() else { return }
+        var items: [TranscriptionItem] = []
+        var needsSave = false
+        if !FileManager.default.fileExists(atPath: url.path),
+           let udData = UserDefaults.standard.data(forKey: "transcription_history"),
+           let dec = try? JSONDecoder().decode([TranscriptionItem].self, from: udData) {
+            items = dec
+            UserDefaults.standard.removeObject(forKey: "transcription_history")
+            needsSave = true
+        } else if let data = try? Data(contentsOf: url),
+                  let dec = try? JSONDecoder().decode([TranscriptionItem].self, from: data) {
+            items = dec
         }
+        isLoadingHistory = true
+        defer { isLoadingHistory = false }
+        self.history = items.map { item in
+            if !item.text.contains("\n\n") && item.text.count > 120 {
+                needsSave = true
+                let pretty = TextFormatter.formatIntoParagraphs(item.text)
+                return TranscriptionItem(id: item.id, date: item.date, text: pretty, duration: item.duration, speedup: item.speedup, isUnread: item.isUnread)
+            }
+            return item
+        }
+        if needsSave { saveHistory() }
     }
 
     private func deleteAudioFile(for id: UUID) {

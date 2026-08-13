@@ -304,4 +304,14 @@ struct GolosokTests {
         #expect(AudioCapture.srtTime(3661.5) == "01:01:01,500")
         #expect(AudioCapture.vttTime(3661.5) == "01:01:01.500")
     }
+
+    // MARK: - Version comparison (update check)
+
+    @Test func versionComparisonHandlesSuffixes() {
+        #expect(AudioCapture.compareVersions("v1.12.2", "1.12.1") == .orderedDescending)
+        #expect(AudioCapture.compareVersions("1.10.0", "1.12.1") == .orderedAscending)
+        #expect(AudioCapture.compareVersions("1.12.1", "1.12.1") == .orderedSame)
+        #expect(AudioCapture.compareVersions("2.0", "1.99.9") == .orderedDescending)
+        #expect(AudioCapture.compareVersions("1.0", "1.0.1") == .orderedAscending)
+    }
 }

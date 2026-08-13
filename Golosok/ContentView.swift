@@ -347,6 +347,9 @@ struct ContentView: View {
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("OpenAboutModal"))) { _ in
             showAboutSheet = true
         }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            audioCapture.checkUpdates()
+        }
         .onDrop(of: [UTType.fileURL], isTargeted: $isFileDropTargeted) { providers in
             handleDroppedProviders(providers)
         }

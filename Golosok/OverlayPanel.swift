@@ -225,7 +225,7 @@ struct FloatingWidgetView: View {
                         
                         Text(audioCapture.formattedRecordingTime)
                             .font(.system(size: 13, weight: .bold, design: .monospaced))
-                            .foregroundColor(.white)
+                            .foregroundColor(Color.dynamic(light: "#047857", dark: "#34D399"))
                     }
                     
                     Spacer()
