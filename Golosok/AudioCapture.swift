@@ -332,7 +332,7 @@ class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
         guard index < urls.count else {
             DispatchQueue.main.async {
                 self.isProcessingFile = false
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { OverlayPanelManager.shared.hideOverlay() }
+                OverlayPanelManager.shared.scheduleHide(after: 0.8)
             }
             return
         }
@@ -479,7 +479,7 @@ class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
                 }
                 
                 if completion == nil {
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { OverlayPanelManager.shared.hideOverlay() }
+                    OverlayPanelManager.shared.scheduleHide(after: 0.8)
                 }
             }
             

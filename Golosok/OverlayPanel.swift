@@ -4,14 +4,12 @@ import AppKit
 class OverlayPanelManager {
     static let shared = OverlayPanelManager()
     private var panel: NSPanel?
-    private var warningHideWorkItem: DispatchWorkItem?
+    private var pendingHideWorkItem: DispatchWorkItem?
     
     func showOverlay() {
         DispatchQueue.main.async {
-            if AudioCapture.shared.warningMessage == nil {
-                self.warningHideWorkItem?.cancel()
-                self.warningHideWorkItem = nil
-            }
+            self.pendingHideWorkItem?.cancel()
+            self.pendingHideWorkItem = nil
             AudioCapture.shared.isSuccessDone = false
             
             if self.panel == nil {
@@ -60,8 +58,7 @@ class OverlayPanelManager {
     
     func showWarning(message: String) {
         DispatchQueue.main.async {
-            self.warningHideWorkItem?.cancel()
-            
+            self.pendingHideWorkItem?.cancel()
             AudioCapture.shared.warningMessage = message
             AudioCapture.shared.isProcessingFile = false
             SoundEffect.playWarning()
@@ -70,16 +67,24 @@ class OverlayPanelManager {
             let workItem = DispatchWorkItem { [weak self] in
                 self?.hideOverlay()
             }
-            self.warningHideWorkItem = workItem
-            
+            self.pendingHideWorkItem = workItem
             DispatchQueue.main.asyncAfter(deadline: .now() + 3.5, execute: workItem)
+        }
+    }
+    
+    func scheduleHide(after delay: Double) {
+        DispatchQueue.main.async {
+            self.pendingHideWorkItem?.cancel()
+            let workItem = DispatchWorkItem { [weak self] in self?.hideOverlay() }
+            self.pendingHideWorkItem = workItem
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: workItem)
         }
     }
     
     func hideOverlay() {
         DispatchQueue.main.async {
-            self.warningHideWorkItem?.cancel()
-            self.warningHideWorkItem = nil
+            self.pendingHideWorkItem?.cancel()
+            self.pendingHideWorkItem = nil
             
             guard let panel = self.panel else { return }
             let currentFrame = panel.frame
@@ -136,6 +141,30 @@ struct RotatingGlowBorder: View {
     }
 }
 
+struct SuccessCheckView: View {
+    @State private var appeared = false
+
+    var body: some View {
+        ZStack {
+            Circle()
+                .stroke(Color(hex: "#34D399").opacity(0.45), lineWidth: 2)
+                .frame(width: 24, height: 24)
+            Image(systemName: "checkmark")
+                .font(.system(size: 13, weight: .bold))
+                .foregroundColor(.white)
+        }
+        .scaleEffect(appeared ? 1.0 : 0.2)
+        .offset(y: appeared ? 0 : -10)
+        .opacity(appeared ? 1 : 0)
+        .onAppear {
+            appeared = false
+            withAnimation(.spring(response: 0.4, dampingFraction: 0.52)) {
+                appeared = true
+            }
+        }
+    }
+}
+
 struct FloatingWidgetView: View {
     @ObservedObject var audioCapture = AudioCapture.shared
     @State private var isAppeared = false
@@ -185,15 +214,8 @@ struct FloatingWidgetView: View {
                         }
                     }
                 } else if audioCapture.isSuccessDone {
-                    ZStack {
-                        Circle()
-                            .stroke(Color(hex: "#34D399").opacity(0.45), lineWidth: 2)
-                            .frame(width: 24, height: 24)
-                        Image(systemName: "checkmark")
-                            .font(.system(size: 13, weight: .bold))
-                            .foregroundColor(.white)
-                    }
-                    .transition(.scale.combined(with: .opacity))
+                    SuccessCheckView()
+                        .transition(.opacity)
                 } else {
                     HStack(spacing: 6) {
                         Circle()

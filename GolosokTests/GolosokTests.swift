@@ -42,7 +42,7 @@ struct GolosokTests {
         let stats = DashboardCalculator.calculate(from: [])
         #expect(stats.totalNotes == 0)
         #expect(stats.hoursSaved == "0.00")
-        #expect(stats.levelName == "НОВИЧОК")
+        #expect(stats.levelName == String(localized: "НОВИЧОК"))
         #expect(stats.wpm == 0)
     }
 
