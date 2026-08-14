@@ -289,6 +289,12 @@ HStack {
                     }
                 }
                 
+                // РАЗДЕЛ 3.5: ИИ-ПРОВАЙДЕР
+                AIProviderSection()
+
+                // РАЗДЕЛ 3.6: АККАУНТ
+                AccountSection()
+
                 // РАЗДЕЛ 4: ДАННЫЕ
                 UICard {
                     HStack {
@@ -311,7 +317,7 @@ HStack {
         }
         .background(Color.uiCanvas)
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
-            permissions.checkPermissions()
+            permissions.refreshPermissions()
         }
         .alert("Стереть всю историю?", isPresented: $showingClearHistoryAlert) {
             Button("Отмена", role: .cancel) { }

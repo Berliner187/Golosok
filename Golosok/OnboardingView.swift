@@ -140,7 +140,7 @@ struct OnboardingView: View {
             .padding(40)
         }
         .onReceive(timer) { _ in
-            permissions.checkPermissions()
+            permissions.refreshPermissions()
         }
     }
 }

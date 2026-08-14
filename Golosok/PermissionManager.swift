@@ -30,6 +30,20 @@ class PermissionManager: ObservableObject {
         self.isMicGranted = (micStatus == .authorized)
         self.isAccessibilityGranted = AXIsProcessTrusted()
     }
+
+    // Асинхронная проверка — не блокирует главный поток системным IPC
+    // (AXIsProcessTrusted может дёргать TCC-демон). Для didBecomeActive и таймера.
+    func refreshPermissions() {
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            let mic = AVCaptureDevice.authorizationStatus(for: .audio) == .authorized
+            let ax = AXIsProcessTrusted()
+            DispatchQueue.main.async {
+                guard let self else { return }
+                self.isMicGranted = mic
+                self.isAccessibilityGranted = ax
+            }
+        }
+    }
     
     func requestMicPermission() {
         AVCaptureDevice.requestAccess(for: .audio) { granted in

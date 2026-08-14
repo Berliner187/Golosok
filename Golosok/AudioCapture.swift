@@ -232,7 +232,9 @@ class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
                 self.transcribedText = String(localized: "Запись идет...")
                 OverlayPanelManager.shared.showOverlay()
             }
-            timer = Timer.scheduledTimer(withTimeInterval: 0.05, repeats: true) { [weak self] _ in self?.updateMetering() }
+            let meteringTimer = Timer(timeInterval: 0.05, repeats: true) { [weak self] _ in self?.updateMetering() }
+            RunLoop.main.add(meteringTimer, forMode: .common)
+            timer = meteringTimer
         } catch {}
     }
     
@@ -291,6 +293,7 @@ class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
         DispatchQueue.main.async {
             self.formattedRecordingTime = timeStr
             self.audioSamples = newSamples
+            OverlayPanelManager.shared.keepFront()
         }
     }
 
@@ -445,7 +448,10 @@ class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
                 }
                 
                 if isFileImport {
-                    DispatchQueue.main.async { self.fileProcessingProgress = Double(chunkIndex + 1) / Double(totalChunks) }
+                    DispatchQueue.main.async {
+                        self.fileProcessingProgress = Double(chunkIndex + 1) / Double(totalChunks)
+                        OverlayPanelManager.shared.keepFront()
+                    }
                 }
             }
         }
@@ -501,6 +507,30 @@ class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
         if let idx = history.firstIndex(where: { $0.id == id }) {
             if history[idx].isUnread == true { history[idx].isUnread = false }
         }
+    }
+
+    func appendTextToNote(id: UUID, text: String) {
+        guard let idx = history.firstIndex(where: { $0.id == id }) else { return }
+        let item = history[idx]
+        let current = item.text.trimmingCharacters(in: .whitespacesAndNewlines)
+        let newText = current.isEmpty ? text : current + "\n\n----------------\n\n" + text
+        history[idx] = TranscriptionItem(id: item.id, date: item.date, text: newText, duration: item.duration, speedup: item.speedup, isUnread: item.isUnread)
+    }
+
+    func replaceNoteText(id: UUID, text: String) {
+        guard let idx = history.firstIndex(where: { $0.id == id }) else { return }
+        let item = history[idx]
+        history[idx] = TranscriptionItem(id: item.id, date: item.date, text: text, duration: item.duration, speedup: item.speedup, isUnread: item.isUnread)
+    }
+
+    @discardableResult
+    func addNote(text: String) -> UUID {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "dd.MM.yyyy, HH:mm"
+        let dateStr = formatter.string(from: Date())
+        let item = TranscriptionItem(id: UUID(), date: dateStr, text: text, duration: "—", speedup: nil, isUnread: false)
+        history.insert(item, at: 0)
+        return item.id
     }
 
     private func convertWithFFmpeg(inputURL: URL, outputURL: URL) -> Bool {

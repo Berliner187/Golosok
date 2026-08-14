@@ -306,16 +306,18 @@ struct ContentView: View {
     @State private var showOnboarding = false
     
     @State private var searchText = ""
+    @State private var filteredResults: [TranscriptionItem] = []
+    @State private var searchDebounce: DispatchWorkItem?
     @State private var itemToDelete: UUID?
     @State private var showingDeleteAlert = false
     @State private var selectedTimings: (words: [TimedWord], duration: Double)?
     
     @State private var showAboutSheet = false
     @State private var isFileDropTargeted = false
+    @State private var aiRequest: AIActionRequest?
     
-    var filteredHistory: [TranscriptionItem] {
-        if searchText.isEmpty { return audioCapture.history }
-        else { return audioCapture.history.filter { $0.text.localizedCaseInsensitiveContains(searchText) } }
+    private var displayedHistory: [TranscriptionItem] {
+        searchText.isEmpty ? audioCapture.history : filteredResults
     }
     
     var body: some View {
@@ -353,6 +355,9 @@ struct ContentView: View {
         .onDrop(of: [UTType.fileURL], isTargeted: $isFileDropTargeted) { providers in
             handleDroppedProviders(providers)
         }
+        .onChange(of: searchText) { newValue in
+            scheduleSearch(newValue)
+        }
         .overlay {
             if isFileDropTargeted {
                 FileDropOverlay()
@@ -386,6 +391,32 @@ struct ContentView: View {
             if !urls.isEmpty { audioCapture.importFiles(urls) }
         }
         return true
+    }
+
+    private func scheduleSearch(_ query: String) {
+        searchDebounce?.cancel()
+        if query.isEmpty {
+            filteredResults = []
+            return
+        }
+        let item = DispatchWorkItem {
+            self.performSearch(query)
+        }
+        searchDebounce = item
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.22, execute: item)
+    }
+
+    private func performSearch(_ query: String) {
+        let history = audioCapture.history
+        DispatchQueue.global(qos: .userInitiated).async {
+            let results = history.filter {
+                $0.text.range(of: query, options: [.caseInsensitive, .diacriticInsensitive]) != nil
+            }
+            DispatchQueue.main.async {
+                guard self.searchText == query else { return }
+                self.filteredResults = results
+            }
+        }
     }
     
     var mainInterface: some View {
@@ -449,9 +480,9 @@ struct ContentView: View {
             }.padding(8).background(Color.uiPaper).cornerRadius(8).overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.uiHairline, lineWidth: 1)).padding(.horizontal, 12).padding(.bottom, 8)
             ScrollView {
                 LazyVStack(spacing: 8) {
-                    if filteredHistory.isEmpty { Text(searchText.isEmpty ? LocalizedStringKey("История пуста") : LocalizedStringKey("Ничего не найдено")).font(UIStyleFont.body(size: 13, weight: .regular)).foregroundColor(.uiMidGray).padding(.vertical, 20) }
+                    if displayedHistory.isEmpty { Text(searchText.isEmpty ? LocalizedStringKey("История пуста") : LocalizedStringKey("Ничего не найдено")).font(UIStyleFont.body(size: 13, weight: .regular)).foregroundColor(.uiMidGray).padding(.vertical, 20) }
                     else {
-                        ForEach(filteredHistory) { item in
+                        ForEach(displayedHistory) { item in
                             HistoryCard(item: item, isSelected: selectedItemId == item.id)
                                 .contentShape(Rectangle())
                                 .onTapGesture {
@@ -488,6 +519,20 @@ struct ContentView: View {
                                 Spacer(minLength: 12)
                                 HStack(spacing: 8) {
                                     CopyFeedbackButton(textToCopy: selected.text)
+                                    Menu {
+                                        ForEach(AIPromptTemplates.all) { template in
+                                            Button(LocalizedStringKey(template.title)) {
+                                                aiRequest = AIActionRequest(template: template, noteID: selected.id, noteText: selected.text)
+                                            }
+                                        }
+                                    } label: {
+                                        HStack(spacing: 4) {
+                                            Image(systemName: "sparkles").font(.system(size: 11, weight: .medium))
+                                            Text("ИИ").font(UIStyleFont.body(size: 13, weight: .medium))
+                                            Image(systemName: "chevron.down").font(.system(size: 8, weight: .bold)).foregroundColor(.uiMidGray)
+                                        }
+                                        .lineLimit(1).foregroundColor(.uiInk).padding(.vertical, 8).padding(.horizontal, 14).background(Color.uiPaper).cornerRadius(18).overlay(RoundedRectangle(cornerRadius: 18).stroke(Color.uiHairline, lineWidth: 1))
+                                    }.menuStyle(.borderlessButton).fixedSize(horizontal: true, vertical: false)
                                     Menu {
                                         Button("Markdown (.md)") { audioCapture.exportTranscription(selected, format: "md") }
                                         Button("Текст (.txt)") { audioCapture.exportTranscription(selected, format: "txt") }
@@ -581,6 +626,16 @@ struct ContentView: View {
         .onChange(of: selectedItemId) { newId in
             audioCapture.stopSyncedPlayback()
             if let id = newId { selectedTimings = audioCapture.timings(for: id) } else { selectedTimings = nil }
+        }
+        .sheet(item: $aiRequest) { request in
+            AIResultSheet(request: request) { newID in
+                withAnimation {
+                    self.selectedItemId = newID
+                    self.searchText = ""
+                    self.selectedTimings = nil
+                }
+                audioCapture.markAsRead(id: newID)
+            }
         }
         .alert("Удалить запись?", isPresented: $showingDeleteAlert) {
             Button("Отмена", role: .cancel) { }

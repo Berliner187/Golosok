@@ -22,7 +22,7 @@ final class Telemetry: NSObject {
         (UserDefaults.standard.object(forKey: "analyticsEnabled") as? Bool) ?? true
     }
 
-    private var deviceID: String {
+    var deviceID: String {
         if let id = UserDefaults.standard.string(forKey: "anonymous_device_id") { return id }
         let id = UUID().uuidString
         UserDefaults.standard.set(id, forKey: "anonymous_device_id")

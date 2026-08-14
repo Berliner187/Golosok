@@ -22,6 +22,9 @@ class OverlayPanelManager {
                 newPanel.isOpaque = false
                 newPanel.backgroundColor = .clear
                 newPanel.hasShadow = false
+                newPanel.appearance = NSApp.effectiveAppearance
+                newPanel.hidesOnDeactivate = false
+                newPanel.isReleasedWhenClosed = false
                 newPanel.level = .screenSaver
                 newPanel.isFloatingPanel = true
                 newPanel.ignoresMouseEvents = true
@@ -101,6 +104,11 @@ class OverlayPanelManager {
             }
         }
     }
+
+    func keepFront() {
+        guard let panel = self.panel, panel.alphaValue > 0, !panel.isVisible else { return }
+        panel.orderFrontRegardless()
+    }
 }
 
 struct CircularProgressView: View {
@@ -167,6 +175,7 @@ struct SuccessCheckView: View {
 
 struct FloatingWidgetView: View {
     @ObservedObject var audioCapture = AudioCapture.shared
+    @Environment(\.colorScheme) private var colorScheme
     @State private var isAppeared = false
     
     let greenGradient = LinearGradient(colors: [Color(hex: "#34D399"), Color(hex: "#059669")], startPoint: .top, endPoint: .bottom)
@@ -225,7 +234,8 @@ struct FloatingWidgetView: View {
                         
                         Text(audioCapture.formattedRecordingTime)
                             .font(.system(size: 13, weight: .bold, design: .monospaced))
-                            .foregroundColor(Color.dynamic(light: "#047857", dark: "#34D399"))
+                            .foregroundColor(timerColor)
+                            .shadow(color: timerColor.opacity(0.55), radius: 2, x: 0, y: 0)
                     }
                     
                     Spacer()
@@ -288,5 +298,9 @@ struct FloatingWidgetView: View {
         if audioCapture.isProcessingFile || audioCapture.transcribedText == String(localized: "Расшифровка...") { return Color(hex: "#6366F1") }
         if audioCapture.isSuccessDone { return Color(hex: "#10B981") }
         return Color(hex: "#10B981")
+    }
+
+    private var timerColor: Color {
+        colorScheme == .dark ? Color(hex: "#10B981") : Color(hex: "#047857")
     }
 }

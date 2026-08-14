@@ -201,6 +201,23 @@
         }
       }
     },
+    "API-ключ" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "API key"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "API-ключ"
+          }
+        }
+      }
+    },
     "Apple Metal (MTL0)" : {
       "localizations" : {
         "en" : {
@@ -229,6 +246,56 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "APPLE SILICON • GIGAAM V3 • NEURAL ENGINE"
+          }
+        }
+      }
+    },
+    "Base URL" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Base URL"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Base URL"
+          }
+        }
+      }
+    },
+    "BYO-ключ. Транскрипция уходит напрямую в ваш OpenAI-совместимый сервис — Голосок не выступает оператором данных." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bring your own key. Transcription goes straight to your OpenAI-compatible service — Golosok never acts as a data operator."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "BYO-ключ. Транскрипция уходит напрямую в ваш OpenAI-совместимый сервис — Голосок не выступает оператором данных."
+          }
+        }
+      }
+    },
+    "DeepSeek" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "DeepSeek"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "DeepSeek"
           }
         }
       }
@@ -380,6 +447,26 @@
         }
       }
     },
+    "gls_…" : {
+
+    },
+    "Groq" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Groq"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Groq"
+          }
+        }
+      }
+    },
     "HotKey.Capture" : {
       "localizations" : {
         "en" : {
@@ -460,6 +547,9 @@
         }
       }
     },
+    "llama3.2" : {
+
+    },
     "Markdown (.md)" : {
       "localizations" : {
         "en" : {
@@ -472,6 +562,56 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Markdown (.md)"
+          }
+        }
+      }
+    },
+    "MP3, MP4, WebM, MKV, WAV и другие" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "MP3, MP4, WebM, MKV, WAV and more"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "MP3, MP4, WebM, MKV, WAV и другие"
+          }
+        }
+      }
+    },
+    "Ollama (локально)" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ollama (local)"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ollama (локально)"
+          }
+        }
+      }
+    },
+    "OpenAI" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenAI"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenAI"
           }
         }
       }
@@ -688,6 +828,38 @@
         }
       }
     },
+    "Авторизуйтесь на сайте, скопируйте токен авторизации и вставьте его в раздел Аккаунт ниже для активации. Запросы отправляются через наш сервер." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sign in on the website, copy your authorization token and paste it into the Account section below to activate. Requests go through our server."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Авторизуйтесь на сайте, скопируйте токен авторизации и вставьте его в раздел Аккаунт ниже для активации. Запросы отправляются через наш сервер."
+          }
+        }
+      }
+    },
+    "АККАУНТ" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ACCOUNT"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "АККАУНТ"
+          }
+        }
+      }
+    },
     "АКТИВНОСТЬ" : {
       "localizations" : {
         "en" : {
@@ -732,6 +904,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Аппаратное ускорение"
+          }
+        }
+      }
+    },
+    "Базовый" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Basic"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Базовый"
           }
         }
       }
@@ -833,6 +1021,22 @@
         }
       }
     },
+    "Взято из кэша" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "From cache"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Взято из кэша"
+          }
+        }
+      }
+    },
     "ВИРТУОЗ" : {
       "localizations" : {
         "en" : {
@@ -861,6 +1065,38 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Включить"
+          }
+        }
+      }
+    },
+    "Войдите на сайте и вставьте токен приложения" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sign in on the website and paste your app token"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Войдите на сайте и вставьте токен приложения"
+          }
+        }
+      }
+    },
+    "Войти на сайте" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sign in"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Войти на сайте"
           }
         }
       }
@@ -925,6 +1161,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "ВСЕГО ЗАМЕТОК"
+          }
+        }
+      }
+    },
+    "Вставить ниже" : {
+
+    },
+    "Вставить под текст" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Insert below"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Вставить под текст"
           }
         }
       }
@@ -1009,6 +1265,22 @@
         }
       }
     },
+    "Генерация…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Generating…"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Генерация…"
+          }
+        }
+      }
+    },
     "Голосовой ввод и транскрибация на Вашем Mac" : {
       "localizations" : {
         "en" : {
@@ -1053,6 +1325,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "ГОЛОСОК ™2026"
+          }
+        }
+      }
+    },
+    "Голосок+" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Golosok+"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Голосок+"
           }
         }
       }
@@ -1237,6 +1525,22 @@
         }
       }
     },
+    "До" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Until"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "До"
+          }
+        }
+      }
+    },
     "ДО" : {
       "localizations" : {
         "en" : {
@@ -1301,6 +1605,40 @@
         }
       }
     },
+    "Заголовок" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Title"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Заголовок"
+          }
+        }
+      }
+    },
+    "Задачи и действия" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Action items"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Задачи и действия"
+          }
+        }
+      }
+    },
     "Закрыть" : {
       "localizations" : {
         "en" : {
@@ -1313,6 +1651,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Закрыть"
+          }
+        }
+      }
+    },
+    "Заменить" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Replace"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Заменить"
           }
         }
       }
@@ -1413,6 +1767,39 @@
         }
       }
     },
+    "Заполните baseURL и модель" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fill in the base URL and model"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Заполните baseURL и модель"
+          }
+        }
+      }
+    },
+    "Запросы идут через сервер Голосок — используется токен вашего аккаунта. Ключ на сервере не покидает его." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Requests go through the Golosok server using your account token. The key never leaves the server."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Запросы идут через сервер Голосок — используется токен вашего аккаунта. Ключ на сервере не покидает его."
+          }
+        }
+      }
+    },
     "Запуск при входе" : {
       "localizations" : {
         "en" : {
@@ -1473,6 +1860,70 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Изменить"
+          }
+        }
+      }
+    },
+    "ИИ" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "AI"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ИИ"
+          }
+        }
+      }
+    },
+    "ИИ-ПРОВАЙДЕР" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "AI PROVIDER"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ИИ-ПРОВАЙДЕР"
+          }
+        }
+      }
+    },
+    "ИИ-провайдер не настроен" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "AI provider isn't configured"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ИИ-провайдер не настроен"
+          }
+        }
+      }
+    },
+    "ИИ-провайдер не настроен. Добавьте ключ в Настройках → ИИ-провайдер." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "AI provider isn't configured. Add a key in Settings → AI Provider."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ИИ-провайдер не настроен. Добавьте ключ в Настройках → ИИ-провайдер."
           }
         }
       }
@@ -1704,6 +2155,54 @@
         }
       }
     },
+    "Модель" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Model"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Модель"
+          }
+        }
+      }
+    },
+    "Модель вернула пустой ответ" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Model returned an empty response"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Модель вернула пустой ответ"
+          }
+        }
+      }
+    },
+    "Модель выбирается на сайте — по подписке." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Model is chosen on the website, based on your subscription."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Модель выбирается на сайте — по подписке."
+          }
+        }
+      }
+    },
     "МОЩНОСТЬ ИИ" : {
       "localizations" : {
         "en" : {
@@ -1800,6 +2299,23 @@
         }
       }
     },
+    "Не подключён" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Not connected"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Не подключён"
+          }
+        }
+      }
+    },
     "Не удалось извлечь аудио" : {
       "localizations" : {
         "en" : {
@@ -1812,6 +2328,38 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Не удалось извлечь аудио"
+          }
+        }
+      }
+    },
+    "Не удалось разобрать ответ" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Couldn't parse response"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Не удалось разобрать ответ"
+          }
+        }
+      }
+    },
+    "Не удалось разобрать ответ сервера" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Couldn't parse server response"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Не удалось разобрать ответ сервера"
           }
         }
       }
@@ -1845,6 +2393,38 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "НЕДЕЛЬНЫЙ ТРЕНД"
+          }
+        }
+      }
+    },
+    "Некорректный baseURL" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Invalid base URL"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Некорректный baseURL"
+          }
+        }
+      }
+    },
+    "Некорректный адрес сервера" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Invalid server address"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Некорректный адрес сервера"
           }
         }
       }
@@ -1893,6 +2473,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Ничего не найдено"
+          }
+        }
+      }
+    },
+    "Новая заметка" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "New note"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Новая заметка"
           }
         }
       }
@@ -1960,6 +2556,39 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "О программе Golosok"
+          }
+        }
+      }
+    },
+    "Облако" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cloud"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Облако"
+          }
+        }
+      }
+    },
+    "Облачные модели на серверах Голоска — по подписке" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cloud models on Golosok servers — by subscription"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Облачные модели на серверах Голоска — по подписке"
           }
         }
       }
@@ -2040,6 +2669,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "ОСТАЛОСЬ"
+          }
+        }
+      }
+    },
+    "Отключить" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Disconnect"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Отключить"
           }
         }
       }
@@ -2158,7 +2803,6 @@
       }
     },
     "Ошибка" : {
-      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -2170,6 +2814,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Ошибка"
+          }
+        }
+      }
+    },
+    "Ошибка сервера" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Server error"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ошибка сервера"
           }
         }
       }
@@ -2219,6 +2879,72 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Пауза"
+          }
+        }
+      }
+    },
+    "Перевод на английский" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Translate to English"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Перевод на английский"
+          }
+        }
+      }
+    },
+    "Перегенерировать" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Regenerate"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Перегенерировать"
+          }
+        }
+      }
+    },
+    "Переписать в пост или письмо" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rewrite as post or email"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Переписать в пост или письмо"
+          }
+        }
+      }
+    },
+    "Перетащите файл — начнётся расшифровка" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Drop a file to start transcription"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Перетащите файл — начнётся расшифровка"
           }
         }
       }
@@ -2287,6 +3013,22 @@
         }
       }
     },
+    "Повторить" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Retry"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Повторить"
+          }
+        }
+      }
+    },
     "Поддержка" : {
       "localizations" : {
         "en" : {
@@ -2316,6 +3058,86 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Подключение..."
+          }
+        }
+      }
+    },
+    "Подключено" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Connected"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Подключено"
+          }
+        }
+      }
+    },
+    "Подключите аккаунт" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Connect your account"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Подключите аккаунт"
+          }
+        }
+      }
+    },
+    "Подключите аккаунт, чтобы использовать облачный ИИ «Голосок+» без собственного API-ключа." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Connect your account to use Golosok+ cloud AI — no API key needed."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Подключите аккаунт, чтобы использовать облачный ИИ «Голосок+» без собственного API-ключа."
+          }
+        }
+      }
+    },
+    "Подключить" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Connect"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Подключить"
+          }
+        }
+      }
+    },
+    "Подписка активна" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Subscription active"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Подписка активна"
           }
         }
       }
@@ -2433,6 +3255,39 @@
         }
       }
     },
+    "Проверить" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Test"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Проверить"
+          }
+        }
+      }
+    },
+    "Проверка токена…" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Verifying token…"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Проверка токена…"
+          }
+        }
+      }
+    },
     "ПРОГРЕСС К УРОВНЮ" : {
       "localizations" : {
         "en" : {
@@ -2445,6 +3300,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "ПРОГРЕСС К УРОВНЮ"
+          }
+        }
+      }
+    },
+    "Протокол встречи" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Meeting minutes"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Протокол встречи"
           }
         }
       }
@@ -2477,6 +3349,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "ПТ"
+          }
+        }
+      }
+    },
+    "Пустой ответ сервера" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Empty server response"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Пустой ответ сервера"
           }
         }
       }
@@ -2689,6 +3577,23 @@
         }
       }
     },
+    "Саммари" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Summary"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Саммари"
+          }
+        }
+      }
+    },
     "СБ" : {
       "localizations" : {
         "en" : {
@@ -2733,6 +3638,38 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "СЕЙЧАС"
+          }
+        }
+      }
+    },
+    "Сервер доступен через аккаунт" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Server available via account"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Сервер доступен через аккаунт"
+          }
+        }
+      }
+    },
+    "Сетевая ошибка" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Network error"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Сетевая ошибка"
           }
         }
       }
@@ -3124,6 +4061,39 @@
         }
       }
     },
+    "Токен не принят" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Token rejected"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Токен не принят"
+          }
+        }
+      }
+    },
+    "Токен отклонён сервером" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Token rejected by server"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Токен отклонён сервером"
+          }
+        }
+      }
+    },
     "Транскрибировать аудиофайл..." : {
       "localizations" : {
         "en" : {
@@ -3396,38 +4366,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Языковая модель"
-          }
-        }
-      }
-    },
-    "MP3, MP4, WebM, MKV, WAV и другие" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "MP3, MP4, WebM, MKV, WAV and more"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "MP3, MP4, WebM, MKV, WAV и другие"
-          }
-        }
-      }
-    },
-    "Перетащите файл — начнётся расшифровка" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Drop a file to start transcription"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Перетащите файл — начнётся расшифровка"
           }
         }
       }

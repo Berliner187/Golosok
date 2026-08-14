@@ -77,10 +77,8 @@ struct UICard<Content: View>: View {
     var body: some View {
         content
             .padding(20)
-            .background(Color.uiPaper)
-            .cornerRadius(24)
-            .overlay(RoundedRectangle(cornerRadius: 24).stroke(Color.uiHairline, lineWidth: 1))
-            .shadow(color: Color.black.opacity(0.05), radius: 6, x: 0, y: 2)
+            .background(RoundedRectangle(cornerRadius: 24, style: .continuous).fill(Color.uiPaper))
+            .overlay(RoundedRectangle(cornerRadius: 24, style: .continuous).stroke(Color.uiHairline, lineWidth: 1))
     }
 }
 
