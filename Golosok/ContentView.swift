@@ -663,6 +663,34 @@ struct ContentView: View {
                                     title: "Экспорт",
                                     description: "Авто-деление на абзацы и сохранение в Markdown, CSV, TXT или JSON"
                                 )
+
+                                CapabilityCard(
+                                    icon: "arrow.down.doc.fill",
+                                    badge: String(localized: "ЛЮБОЙ ФОРМАТ"),
+                                    title: "Drag & drop",
+                                    description: "Перетащите медиафайл в окно — расшифровка начнётся автоматически"
+                                )
+
+                                CapabilityCard(
+                                    icon: "wand.and.stars",
+                                    badge: String(localized: "СВОИ ШАБЛОНЫ"),
+                                    title: "Кастомные промпты",
+                                    description: "Создавайте, редактируйте и удаляйте ИИ-промпты под свои задачи"
+                                )
+
+                                CapabilityCard(
+                                    icon: "icloud.fill",
+                                    badge: String(localized: "ОБЛАКО"),
+                                    title: "Голосок+",
+                                    description: "Облачные модели и расшифровка на сервере — по подписке"
+                                )
+
+                                CapabilityCard(
+                                    icon: "chart.bar.fill",
+                                    badge: String(localized: "СТАТИСТИКА"),
+                                    title: "Дашборд",
+                                    description: "Сводка по расшифровкам, активности и темпу работы за период"
+                                )
                             }
                         }.padding(12).frame(maxWidth: .infinity, maxHeight: .infinity)
                     }

@@ -119,7 +119,7 @@ struct AIProviderSection: View {
                             .background(isSelected ? Color.uiPaper.opacity(0.15) : accent.opacity(0.14))
                             .cornerRadius(10)
                     }
-                    Text(LocalizedStringKey(proxy.hint))
+                    Text(proxy.hint)
                         .font(UIStyleFont.body(size: 11, weight: .regular))
                         .foregroundColor(isSelected ? Color.uiPaper.opacity(0.72) : .uiMidGray)
                 }

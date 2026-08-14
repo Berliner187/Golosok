@@ -1,4 +1,5 @@
 import Foundation
+import SwiftUI
 
 struct AIChatMessage: Codable {
     let role: String
@@ -8,7 +9,7 @@ struct AIChatMessage: Codable {
 struct AIProviderPreset: Identifiable {
     let id: String
     let name: String
-    let hint: String
+    let hint: LocalizedStringKey
     let baseURL: String
     let defaultModel: String
     let needsKey: Bool

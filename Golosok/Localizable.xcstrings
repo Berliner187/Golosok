@@ -451,6 +451,9 @@
         }
       }
     },
+    "deepseek-chat" : {
+
+    },
     "Design & Dev by Kozak • 2026" : {
       "localizations" : {
         "en" : {
@@ -550,6 +553,22 @@
         }
       }
     },
+    "Drag & drop" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Drag & drop"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Drag & drop"
+          }
+        }
+      }
+    },
     "English" : {
       "localizations" : {
         "en" : {
@@ -599,6 +618,9 @@
       }
     },
     "gls_…" : {
+
+    },
+    "gpt-4o-mini, gpt-4o" : {
 
     },
     "Groq" : {
@@ -698,7 +720,13 @@
         }
       }
     },
+    "llama-3.3-70b-versatile" : {
+
+    },
     "llama3.2" : {
+
+    },
+    "LM Studio / локальный сервер" : {
 
     },
     "Markdown (.md)" : {
@@ -1592,6 +1620,22 @@
     "Дата" : {
 
     },
+    "Дашборд" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dashboard"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Дашборд"
+          }
+        }
+      }
+    },
     "ДВИЖОК И УСКОРЕНИЕ" : {
       "localizations" : {
         "en" : {
@@ -2206,6 +2250,22 @@
         }
       }
     },
+    "Кастомные промпты" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Custom prompts"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Кастомные промпты"
+          }
+        }
+      }
+    },
     "КОГДА ВЫ ГОВОРИТЕ" : {
       "localizations" : {
         "en" : {
@@ -2298,6 +2358,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "ЛЮБИТЕЛЬ"
+          }
+        }
+      }
+    },
+    "ЛЮБОЙ ФОРМАТ" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ANY FORMAT"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ЛЮБОЙ ФОРМАТ"
           }
         }
       }
@@ -2853,8 +2929,39 @@
         }
       }
     },
+    "ОБЛАКО" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "CLOUD"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ОБЛАКО"
+          }
+        }
+      }
+    },
+    "Облачные модели и расшифровка на сервере — по подписке" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cloud models and transcription on the server — by subscription"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Облачные модели и расшифровка на сервере — по подписке"
+          }
+        }
+      }
+    },
     "Облачные модели на серверах Голоска — по подписке" : {
-      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -3239,6 +3346,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Переписать в пост/письмо"
+          }
+        }
+      }
+    },
+    "Перетащите медиафайл в окно — расшифровка начнётся автоматически" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Drop a media file into the window — transcription starts automatically"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Перетащите медиафайл в окно — расшифровка начнётся автоматически"
           }
         }
       }
@@ -4018,6 +4141,38 @@
         }
       }
     },
+    "Сводка по расшифровкам, активности и темпу работы за период" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Summary of transcriptions, activity and work pace over a period"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Сводка по расшифровкам, активности и темпу работы за период"
+          }
+        }
+      }
+    },
+    "СВОИ ШАБЛОНЫ" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OWN TEMPLATES"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "СВОИ ШАБЛОНЫ"
+          }
+        }
+      }
+    },
     "СЕЙЧАС" : {
       "localizations" : {
         "en" : {
@@ -4259,6 +4414,22 @@
         }
       }
     },
+    "Создавайте, редактируйте и удаляйте ИИ-промпты под свои задачи" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Create, edit and delete AI prompts for your own tasks"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Создавайте, редактируйте и удаляйте ИИ-промпты под свои задачи"
+          }
+        }
+      }
+    },
     "СОХРАНЕНО ЧАСОВ" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -4353,6 +4524,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Сразу открывать в истории"
+          }
+        }
+      }
+    },
+    "СТАТИСТИКА" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "STATS"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "СТАТИСТИКА"
           }
         }
       }
