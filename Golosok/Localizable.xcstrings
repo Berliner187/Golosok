@@ -36,6 +36,22 @@
         }
       }
     },
+    "%.0f сек" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%.0f sec"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%.0f сек"
+          }
+        }
+      }
+    },
     "%.1f / %.1f МБ (%d%%)" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -54,6 +70,7 @@
       }
     },
     "%.1f сек" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -721,9 +738,6 @@
       }
     },
     "llama-3.3-70b-versatile" : {
-
-    },
-    "llama3.2" : {
 
     },
     "LM Studio / локальный сервер" : {
@@ -2620,6 +2634,22 @@
         }
       }
     },
+    "Начните вводить текст…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Start typing…"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Начните вводить текст…"
+          }
+        }
+      }
+    },
     "Не подключён" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -2778,6 +2808,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Нет доступа к микрофону."
+          }
+        }
+      }
+    },
+    "Нет скачанных моделей — запустите Ollama и нажмите ↻" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No downloaded models — launch Ollama and press ↻"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Нет скачанных моделей — запустите Ollama и нажмите ↻"
           }
         }
       }
@@ -2973,6 +3019,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Облачные модели на серверах Голоска — по подписке"
+          }
+        }
+      }
+    },
+    "Обновить список моделей" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Refresh models list"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Обновить список моделей"
           }
         }
       }
@@ -3943,6 +4005,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Расшифровка..."
+          }
+        }
+      }
+    },
+    "Редактировать" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Edit"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Редактировать"
           }
         }
       }

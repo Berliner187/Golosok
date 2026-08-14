@@ -25,6 +25,14 @@ extension NSColor {
         }
         self.init(red: CGFloat(r) / 255, green: CGFloat(g) / 255, blue: CGFloat(b) / 255, alpha: CGFloat(a) / 255)
     }
+
+    static let transcriptHighlight: NSColor = NSColor(name: nil) { appearance in
+        if appearance.name == .darkAqua {
+            return NSColor.systemBlue.withAlphaComponent(0.5)
+        } else {
+            return NSColor.blue.withAlphaComponent(0.18)
+        }
+    }
 }
 
 // MARK: - Hex & Dynamic Initializers for SwiftUI Color

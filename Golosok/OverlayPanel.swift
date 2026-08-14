@@ -6,7 +6,7 @@ class OverlayPanelManager {
     private var panel: NSPanel?
     private var pendingHideWorkItem: DispatchWorkItem?
     
-    func showOverlay() {
+    func showOverlay(completion: (() -> Void)? = nil) {
         DispatchQueue.main.async {
             self.pendingHideWorkItem?.cancel()
             self.pendingHideWorkItem = nil
@@ -56,6 +56,8 @@ class OverlayPanelManager {
                     self.panel?.animator().setFrameOrigin(NSPoint(x: x, y: targetY))
                 }
             }
+            
+            completion?()
         }
     }
     
@@ -65,13 +67,13 @@ class OverlayPanelManager {
             AudioCapture.shared.warningMessage = message
             AudioCapture.shared.isProcessingFile = false
             SoundEffect.playWarning()
-            self.showOverlay()
-            
-            let workItem = DispatchWorkItem { [weak self] in
-                self?.hideOverlay()
+            self.showOverlay {
+                let workItem = DispatchWorkItem { [weak self] in
+                    self?.hideOverlay()
+                }
+                self.pendingHideWorkItem = workItem
+                DispatchQueue.main.asyncAfter(deadline: .now() + 3.5, execute: workItem)
             }
-            self.pendingHideWorkItem = workItem
-            DispatchQueue.main.asyncAfter(deadline: .now() + 3.5, execute: workItem)
         }
     }
     

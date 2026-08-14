@@ -416,7 +416,7 @@ class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
         
         let durationFormatted: String
         if realAudioSecs >= 60.0 { durationFormatted = String(format: String(localized: "%.0f мин"), realAudioSecs / 60.0) }
-        else { durationFormatted = String(format: String(localized: "%.1f сек"), realAudioSecs) }
+        else { durationFormatted = String(format: String(localized: "%.0f сек"), realAudioSecs.rounded()) }
         
         let chunkSizeInSeconds: Double = 25.0
         let framesPerChunk = AVAudioFrameCount(chunkSizeInSeconds * sampleRate)

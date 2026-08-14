@@ -152,28 +152,17 @@ struct AIProviderSection: View {
                 .font(UIStyleFont.body(size: 11, weight: .medium))
                 .foregroundColor(.uiMidGray)
             HStack(spacing: 8) {
-                if store.installedModels.isEmpty {
-                    TextField("llama3.2", text: $store.model)
-                        .textFieldStyle(PlainTextFieldStyle())
-                        .font(UIStyleFont.body(size: 13, weight: .regular))
-                        .foregroundColor(.uiInk)
-                        .padding(8)
-                        .background(Color.uiCanvas)
-                        .cornerRadius(8)
-                        .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.uiHairline, lineWidth: 1))
-                } else {
-                    Picker("", selection: $store.model) {
-                        if !store.model.isEmpty && !store.installedModels.contains(store.model) {
-                            Text(store.model).tag(store.model)
-                        }
-                        ForEach(store.installedModels, id: \.self) { model in
-                            Text(model).tag(model)
-                        }
+                Picker("", selection: $store.model) {
+                    if !store.model.isEmpty && !store.installedModels.contains(store.model) {
+                        Text(store.model).tag(store.model)
                     }
-                    .labelsHidden()
-                    .pickerStyle(MenuPickerStyle())
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                    ForEach(store.installedModels, id: \.self) { model in
+                        Text(model).tag(model)
+                    }
                 }
+                .labelsHidden()
+                .pickerStyle(MenuPickerStyle())
+                .frame(maxWidth: .infinity, alignment: .leading)
 
                 Button(action: { store.refreshModels() }) {
                     if store.isLoadingModels {
@@ -190,6 +179,19 @@ struct AIProviderSection: View {
                 .background(Color.uiPaper)
                 .clipShape(Circle())
                 .overlay(Circle().stroke(Color.uiHairline, lineWidth: 1))
+                .help(String(localized: "Обновить список моделей"))
+            }
+            if store.installedModels.isEmpty && !store.isLoadingModels {
+                Text("Нет скачанных моделей — запустите Ollama и нажмите ↻")
+                    .font(UIStyleFont.body(size: 11, weight: .regular))
+                    .foregroundColor(.uiMidGray)
+                    .lineSpacing(2)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .onAppear {
+            if store.installedModels.isEmpty && !store.isLoadingModels {
+                store.refreshModels()
             }
         }
     }

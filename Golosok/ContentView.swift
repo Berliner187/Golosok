@@ -187,7 +187,7 @@ struct SyncedTextView: NSViewRepresentable {
             if let index = currentWordIndex, index < cachedRanges.count {
                 let range = cachedRanges[index]
                 if range.location != NSNotFound {
-                    textView.textStorage?.addAttribute(.backgroundColor, value: NSColor.blue.withAlphaComponent(0.18), range: range)
+                    textView.textStorage?.addAttribute(.backgroundColor, value: NSColor.transcriptHighlight, range: range)
                 }
             }
         }
@@ -319,6 +319,11 @@ struct ContentView: View {
     @State private var aiRequest: AIActionRequest?
     @State private var showPromptManager = false
     @State private var showCreatePrompt = false
+
+    @State private var isEditing: Bool = false
+    @State private var editableText: String = ""
+    @State private var editingItemID: UUID?
+    @State private var editSaveWorkItem: DispatchWorkItem?
     
     private var displayedHistory: [TranscriptionItem] {
         searchText.isEmpty ? audioCapture.history : filteredResults
@@ -486,17 +491,31 @@ struct ContentView: View {
     
     private var historySearchAndList: some View {
         VStack(spacing: 0) {
-            HStack {
-                if isSearching {
-                    ProgressView().controlSize(.small)
-                        .transition(.scale(scale: 0.7).combined(with: .opacity))
-                } else {
-                    Image(systemName: "magnifyingglass").foregroundColor(.uiMidGray)
-                        .transition(.scale(scale: 0.7).combined(with: .opacity))
+            HStack(spacing: 8) {
+                HStack {
+                    if isSearching {
+                        ProgressView().controlSize(.small)
+                            .transition(.scale(scale: 0.7).combined(with: .opacity))
+                    } else {
+                        Image(systemName: "magnifyingglass").foregroundColor(.uiMidGray)
+                            .transition(.scale(scale: 0.7).combined(with: .opacity))
+                    }
+                    TextField("Поиск...", text: $searchText).textFieldStyle(PlainTextFieldStyle()).font(UIStyleFont.body(size: 13, weight: .regular)).foregroundColor(.uiInk)
+                    if !searchText.isEmpty { Button(action: { searchText = "" }) { Image(systemName: "xmark.circle.fill").foregroundColor(.uiMidGray) }.buttonStyle(.plain) }
                 }
-                TextField("Поиск...", text: $searchText).textFieldStyle(PlainTextFieldStyle()).font(UIStyleFont.body(size: 13, weight: .regular)).foregroundColor(.uiInk)
-                if !searchText.isEmpty { Button(action: { searchText = "" }) { Image(systemName: "xmark.circle.fill").foregroundColor(.uiMidGray) }.buttonStyle(.plain) }
-            }.padding(8).background(Color.uiPaper).cornerRadius(8).overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.uiHairline, lineWidth: 1)).padding(.horizontal, 12).padding(.bottom, 8)
+                .padding(8).background(Color.uiPaper).cornerRadius(8).overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.uiHairline, lineWidth: 1))
+                Button(action: createNote) {
+                    Image(systemName: "plus")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(.uiInk)
+                        .frame(width: 30, height: 30)
+                        .background(Color.uiPaper)
+                        .cornerRadius(8)
+                        .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.uiHairline, lineWidth: 1))
+                }
+                .buttonStyle(TactileButtonStyle())
+                .help(String(localized: "Новая заметка"))
+            }.padding(.horizontal, 12).padding(.bottom, 8)
             ScrollView {
                 LazyVStack(spacing: 8) {
                     if isSearching {
@@ -545,6 +564,9 @@ struct ContentView: View {
                                 Spacer(minLength: 12)
                                 HStack(spacing: 8) {
                                     CopyFeedbackButton(textToCopy: selected.text)
+                                    EditToggleButton(isEditing: isEditing) {
+                                        if isEditing { commitEditing(for: selected) } else { beginEditing(selected) }
+                                    }
                                     Menu {
                                         ForEach(promptStore.templates) { template in
                                             Button {
@@ -611,7 +633,21 @@ struct ContentView: View {
                             }
                             
                             Divider().background(Color.uiHairline).padding(.vertical, 4)
-                            if let timings = selectedTimings {
+                            if isEditing {
+                                ZStack(alignment: .topLeading) {
+                                    EditableTextView(text: $editableText) { _ in
+                                        if let id = selectedItemId { scheduleEditSave(for: id) }
+                                    }
+                                    if editableText.isEmpty {
+                                        Text("Начните вводить текст…")
+                                            .font(UIStyleFont.body(size: 15, weight: .regular))
+                                            .foregroundColor(.uiMidGray.opacity(0.55))
+                                            .padding(.top, 10)
+                                            .padding(.leading, 5)
+                                            .allowsHitTesting(false)
+                                    }
+                                }
+                            } else if let timings = selectedTimings {
                                 SyncedPlayerView(text: selected.text, words: timings.words, audioDuration: timings.duration, itemID: selected.id)
                             } else {
                                 NativeTextView(text: selected.text)
@@ -700,7 +736,15 @@ struct ContentView: View {
         .onAppear { loadSelectedTimings() }
         .onChange(of: selectedItemId) { newId in
             audioCapture.stopSyncedPlayback()
+            if isEditing, let prev = editingItemID, prev != newId {
+                flushPendingEdits()
+                isEditing = false
+                editingItemID = nil
+            }
             if let id = newId { selectedTimings = audioCapture.timings(for: id) } else { selectedTimings = nil }
+        }
+        .onChange(of: currentTab) { _ in
+            if isEditing { flushPendingEdits(); isEditing = false; editingItemID = nil }
         }
         .sheet(item: $aiRequest) { request in
             AIResultSheet(request: request) { newID in
@@ -735,6 +779,60 @@ struct ContentView: View {
         if let id = selectedItemId { selectedTimings = audioCapture.timings(for: id) }
         else { selectedTimings = nil }
     }
+
+    // MARK: - Редактор заметок
+
+    private func beginEditing(_ item: TranscriptionItem) {
+        audioCapture.stopSyncedPlayback()
+        editSaveWorkItem?.cancel()
+        editSaveWorkItem = nil
+        editableText = item.text
+        editingItemID = item.id
+        isEditing = true
+    }
+
+    private func commitEditing(for item: TranscriptionItem) {
+        editSaveWorkItem?.cancel()
+        editSaveWorkItem = nil
+        if editableText != item.text {
+            audioCapture.replaceNoteText(id: item.id, text: editableText)
+        }
+        editingItemID = nil
+        isEditing = false
+    }
+
+    private func scheduleEditSave(for id: UUID) {
+        editSaveWorkItem?.cancel()
+        let snapshot = editableText
+        let work = DispatchWorkItem { [weak audioCapture] in
+            audioCapture?.replaceNoteText(id: id, text: snapshot)
+        }
+        editSaveWorkItem = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4, execute: work)
+    }
+
+    private func flushPendingEdits() {
+        guard isEditing, let id = editingItemID else { return }
+        editSaveWorkItem?.cancel()
+        editSaveWorkItem = nil
+        audioCapture.replaceNoteText(id: id, text: editableText)
+    }
+
+    private func createNote() {
+        if isEditing { flushPendingEdits(); isEditing = false; editingItemID = nil }
+        let id = audioCapture.addNote(text: "")
+        editSaveWorkItem?.cancel()
+        editSaveWorkItem = nil
+        withAnimation {
+            searchText = ""
+            selectedItemId = id
+            selectedTimings = nil
+        }
+        audioCapture.markAsRead(id: id)
+        editableText = ""
+        editingItemID = id
+        isEditing = true
+    }
 }
 
 // MARK: - ВСПОМОГАТЕЛЬНЫЕ КОМПОНЕНТЫ
@@ -751,16 +849,16 @@ struct CapabilityCard: View {
 
 struct CopyFeedbackButton: View {
     let textToCopy: String
-        @State private var isCopied = false
-        var body: some View {
-            Button(action: {
-                NSPasteboard.general.clearContents()
-                NSPasteboard.general.setString(textToCopy, forType: .string)
-                SoundEffect.playCopy()
-                withAnimation(.spring()) { isCopied = true }
-                DispatchQueue.main.asyncAfter(deadline: .now() + 2) { withAnimation(.spring()) { isCopied = false } }
-            }) {
-                HStack(spacing: 6) {
+    @State private var isCopied = false
+    var body: some View {
+        Button(action: {
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(textToCopy, forType: .string)
+            SoundEffect.playCopy()
+            withAnimation(.spring()) { isCopied = true }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2) { withAnimation(.spring()) { isCopied = false } }
+        }) {
+            HStack(spacing: 6) {
                 Image(systemName: isCopied ? "checkmark" : "doc.on.doc").font(.system(size: 11, weight: .medium))
                 Text(isCopied ? LocalizedStringKey("Готово!") : LocalizedStringKey("Скопировать"))
             }
@@ -770,6 +868,29 @@ struct CopyFeedbackButton: View {
             .padding(.vertical, 8).padding(.horizontal, 14)
             .background(Color.uiPaper).cornerRadius(18)
             .overlay(RoundedRectangle(cornerRadius: 18).stroke(isCopied ? Color(hex: "#10B981").opacity(0.5) : Color.uiHairline, lineWidth: 1))
+        }
+        .buttonStyle(TactileButtonStyle())
+        .fixedSize(horizontal: true, vertical: false)
+    }
+}
+
+struct EditToggleButton: View {
+    let isEditing: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 6) {
+                Image(systemName: isEditing ? "checkmark" : "square.and.pencil")
+                    .font(.system(size: 11, weight: .medium))
+                Text(isEditing ? LocalizedStringKey("Готово") : LocalizedStringKey("Редактировать"))
+            }
+            .lineLimit(1)
+            .font(UIStyleFont.body(size: 13, weight: .medium))
+            .foregroundColor(isEditing ? Color(hex: "#10B981") : .uiInk)
+            .padding(.vertical, 8).padding(.horizontal, 14)
+            .background(Color.uiPaper).cornerRadius(18)
+            .overlay(RoundedRectangle(cornerRadius: 18).stroke(isEditing ? Color(hex: "#10B981").opacity(0.5) : Color.uiHairline, lineWidth: 1))
         }
         .buttonStyle(TactileButtonStyle())
         .fixedSize(horizontal: true, vertical: false)
@@ -848,6 +969,7 @@ struct HistoryCard: View {
         .padding(12).background(isSelected ? Color.uiPaper : Color.clear).cornerRadius(12)
         .overlay(RoundedRectangle(cornerRadius: 12).stroke(isSelected ? Color.uiHairline : Color.clear, lineWidth: 1))
         .shadow(color: isSelected ? Color.black.opacity(0.04) : Color.clear, radius: 4, x: 0, y: 2)
+        .contentShape(Rectangle())
     }
 }
 
