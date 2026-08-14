@@ -1317,7 +1317,20 @@
       }
     },
     "Вставить ниже" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Insert below"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Вставить ниже"
+          }
+        }
+      }
     },
     "Вставить под текст" : {
       "extractionState" : "stale",
@@ -1611,6 +1624,23 @@
         }
       }
     },
+    "Деловой стиль" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Business tone"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Деловой стиль"
+          }
+        }
+      }
+    },
     "День" : {
       "localizations" : {
         "en" : {
@@ -1757,7 +1787,6 @@
       }
     },
     "Заголовок" : {
-      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -2079,6 +2108,38 @@
         }
       }
     },
+    "Иконка" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Icon"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Иконка"
+          }
+        }
+      }
+    },
+    "Инструкция" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Instruction"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Инструкция"
+          }
+        }
+      }
+    },
     "Информация" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -2092,6 +2153,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Информация"
+          }
+        }
+      }
+    },
+    "Исправить ошибки" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fix errors"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Исправить ошибки"
           }
         }
       }
@@ -2402,6 +2480,22 @@
         }
       }
     },
+    "Например: Краткий пересказ" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "e.g. Brief recap"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Например: Краткий пересказ"
+          }
+        }
+      }
+    },
     "Настройки" : {
       "localizations" : {
         "en" : {
@@ -2660,6 +2754,38 @@
         }
       }
     },
+    "Новый промпт" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "New prompt"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Новый промпт"
+          }
+        }
+      }
+    },
+    "Новый промпт…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "New prompt…"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Новый промпт…"
+          }
+        }
+      }
+    },
     "Номер" : {
 
     },
@@ -2740,6 +2866,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Облачные модели на серверах Голоска — по подписке"
+          }
+        }
+      }
+    },
+    "Опишите задачу: что ИИ должен сделать с расшифрованным текстом." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Describe the task: what AI should do with the transcribed text."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Опишите задачу: что ИИ должен сделать с расшифрованным текстом."
           }
         }
       }
@@ -3084,6 +3226,23 @@
         }
       }
     },
+    "Переписать в пост/письмо" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rewrite as post/email"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Переписать в пост/письмо"
+          }
+        }
+      }
+    },
     "Перетащите файл — начнётся расшифровка" : {
       "localizations" : {
         "en" : {
@@ -3390,6 +3549,23 @@
         }
       }
     },
+    "Придумать заголовок" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Suggest a title"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Придумать заголовок"
+          }
+        }
+      }
+    },
     "Приложение перезапустится автоматически" : {
       "localizations" : {
         "en" : {
@@ -3451,6 +3627,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "ПРОГРЕСС К УРОВНЮ"
+          }
+        }
+      }
+    },
+    "Промпты" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Prompts"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Промпты"
           }
         }
       }
@@ -3632,6 +3824,22 @@
         }
       }
     },
+    "Редактировать промпт" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Edit prompt"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Редактировать промпт"
+          }
+        }
+      }
+    },
     "Режим диктовки" : {
       "localizations" : {
         "en" : {
@@ -3745,6 +3953,23 @@
         }
       }
     },
+    "Саммари и тезисы" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Summary & key points"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Саммари и тезисы"
+          }
+        }
+      }
+    },
     "СБ" : {
       "localizations" : {
         "en" : {
@@ -3757,6 +3982,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "СБ"
+          }
+        }
+      }
+    },
+    "Сбросить" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reset"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Сбросить"
           }
         }
       }
@@ -4031,6 +4272,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "СОХРАНЕНО ЧАСОВ"
+          }
+        }
+      }
+    },
+    "Сохранить" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Save"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Сохранить"
           }
         }
       }
@@ -4325,6 +4582,23 @@
         }
       }
     },
+    "Улучшить стиль" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Improve style"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Улучшить стиль"
+          }
+        }
+      }
+    },
     "УПРАВЛЕНИЕ" : {
       "localizations" : {
         "en" : {
@@ -4337,6 +4611,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "УПРАВЛЕНИЕ"
+          }
+        }
+      }
+    },
+    "Управлять промптами…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Manage prompts…"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Управлять промптами…"
           }
         }
       }
@@ -4485,6 +4775,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Это действие нельзя отменить."
+          }
+        }
+      }
+    },
+    "Этот промпт нельзя удалить" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This prompt cannot be deleted"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Этот промпт нельзя удалить"
           }
         }
       }

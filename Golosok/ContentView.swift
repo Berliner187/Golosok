@@ -299,6 +299,7 @@ struct SyncedTextView: NSViewRepresentable {
 struct ContentView: View {
     @ObservedObject var audioCapture = AudioCapture.shared
     @ObservedObject var permissions = PermissionManager.shared
+    @ObservedObject var promptStore = PromptStore.shared
     
     @State private var isSplashFinished = false
     @State private var currentTab: MainTab = .history
@@ -316,6 +317,8 @@ struct ContentView: View {
     @State private var showAboutSheet = false
     @State private var isFileDropTargeted = false
     @State private var aiRequest: AIActionRequest?
+    @State private var showPromptManager = false
+    @State private var showCreatePrompt = false
     
     private var displayedHistory: [TranscriptionItem] {
         searchText.isEmpty ? audioCapture.history : filteredResults
@@ -504,12 +507,13 @@ struct ContentView: View {
                         Text(searchText.isEmpty ? LocalizedStringKey("История пуста") : LocalizedStringKey("Ничего не найдено")).font(UIStyleFont.body(size: 13, weight: .regular)).foregroundColor(.uiMidGray).padding(.vertical, 20)
                     } else {
                         ForEach(displayedHistory) { item in
-                            HistoryCard(item: item, isSelected: selectedItemId == item.id)
-                                .contentShape(Rectangle())
-                                .onTapGesture {
-                                    selectedItemId = item.id
-                                    audioCapture.markAsRead(id: item.id) // Гасим точку при клике руками
-                                }
+                            Button {
+                                selectedItemId = item.id
+                                audioCapture.markAsRead(id: item.id) // Гасим точку при клике руками
+                            } label: {
+                                HistoryCard(item: item, isSelected: selectedItemId == item.id)
+                            }
+                            .buttonStyle(TactileButtonStyle())
                         }
                     }
                 }.padding(.horizontal, 8)
@@ -542,10 +546,31 @@ struct ContentView: View {
                                 HStack(spacing: 8) {
                                     CopyFeedbackButton(textToCopy: selected.text)
                                     Menu {
-                                        ForEach(AIPromptTemplates.all) { template in
-                                            Button(LocalizedStringKey(template.title)) {
+                                        ForEach(promptStore.templates) { template in
+                                            Button {
                                                 aiRequest = AIActionRequest(template: template, noteID: selected.id, noteText: selected.text)
+                                            } label: {
+                                                Label {
+                                                    if template.isCustom {
+                                                        Text(template.title)
+                                                    } else {
+                                                        Text(LocalizedStringKey(template.title))
+                                                    }
+                                                } icon: {
+                                                    Image(systemName: template.icon)
+                                                }
                                             }
+                                        }
+                                        Divider()
+                                        Button {
+                                            showCreatePrompt = true
+                                        } label: {
+                                            Label("Новый промпт…", systemImage: "plus")
+                                        }
+                                        Button {
+                                            showPromptManager = true
+                                        } label: {
+                                            Label("Управлять промптами…", systemImage: "slider.horizontal.3")
                                         }
                                     } label: {
                                         HStack(spacing: 4) {
@@ -658,6 +683,12 @@ struct ContentView: View {
                 }
                 audioCapture.markAsRead(id: newID)
             }
+        }
+        .sheet(isPresented: $showPromptManager) {
+            PromptManagerView()
+        }
+        .sheet(isPresented: $showCreatePrompt) {
+            PromptEditorView(prompt: nil)
         }
         .alert("Удалить запись?", isPresented: $showingDeleteAlert) {
             Button("Отмена", role: .cancel) { }

@@ -65,6 +65,14 @@ final class AICache {
         persist()
     }
 
+    /// Инвалидировать кэш для данного промпта (при изменении/удалении промпта).
+    func invalidate(templateID: String) {
+        let stale = entries.filter { $0.key.templateID == templateID }
+        guard !stale.isEmpty else { return }
+        for key in stale.keys { entries.removeValue(forKey: key) }
+        persist()
+    }
+
     private func persist() {
         let snapshot = entries.map { key, entry in
             StoredEntry(noteID: key.noteID.uuidString, templateID: key.templateID, sourceText: entry.sourceText, result: entry.result, date: entry.date)
