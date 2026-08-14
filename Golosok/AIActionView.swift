@@ -146,8 +146,8 @@ struct AIResultSheet: View {
     private var content: some View {
         switch phase {
         case .loading:
-            VStack(spacing: 14) {
-                ProgressView()
+            VStack(spacing: 16) {
+                AIThinkingOrb(icon: request.template.icon)
                 Text("Генерация…")
                     .font(UIStyleFont.body(size: 12, weight: .regular))
                     .foregroundColor(.uiMidGray)
@@ -365,5 +365,29 @@ struct AIResultSheet: View {
         SoundEffect.playCopy()
         withAnimation(.spring()) { copied = true }
         DispatchQueue.main.asyncAfter(deadline: .now() + 2) { withAnimation(.spring()) { copied = false } }
+    }
+}
+
+struct AIThinkingOrb: View {
+    let icon: String
+    @State private var pulse = false
+
+    var body: some View {
+        ZStack {
+            Circle().fill(Color.uiInk.opacity(0.05)).frame(width: 64, height: 64)
+            Image(systemName: icon)
+                .font(.system(size: 22, weight: .medium))
+                .foregroundColor(.uiInk)
+            Circle()
+                .stroke(Color.uiInk.opacity(0.25), lineWidth: 1.5)
+                .frame(width: 64, height: 64)
+                .scaleEffect(pulse ? 1.4 : 0.9)
+                .opacity(pulse ? 0 : 1)
+        }
+        .onAppear {
+            withAnimation(.easeOut(duration: 1.4).repeatForever(autoreverses: false)) {
+                pulse = true
+            }
+        }
     }
 }

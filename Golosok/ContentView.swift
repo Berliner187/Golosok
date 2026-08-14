@@ -308,6 +308,7 @@ struct ContentView: View {
     @State private var searchText = ""
     @State private var filteredResults: [TranscriptionItem] = []
     @State private var searchDebounce: DispatchWorkItem?
+    @State private var isSearching = false
     @State private var itemToDelete: UUID?
     @State private var showingDeleteAlert = false
     @State private var selectedTimings: (words: [TimedWord], duration: Double)?
@@ -396,8 +397,14 @@ struct ContentView: View {
     private func scheduleSearch(_ query: String) {
         searchDebounce?.cancel()
         if query.isEmpty {
-            filteredResults = []
+            withAnimation(.easeOut(duration: 0.16)) {
+                isSearching = false
+                filteredResults = []
+            }
             return
+        }
+        withAnimation(.easeOut(duration: 0.16)) {
+            isSearching = true
         }
         let item = DispatchWorkItem {
             self.performSearch(query)
@@ -414,7 +421,10 @@ struct ContentView: View {
             }
             DispatchQueue.main.async {
                 guard self.searchText == query else { return }
-                self.filteredResults = results
+                withAnimation(.easeOut(duration: 0.18)) {
+                    self.filteredResults = results
+                    self.isSearching = false
+                }
             }
         }
     }
@@ -474,14 +484,25 @@ struct ContentView: View {
     private var historySearchAndList: some View {
         VStack(spacing: 0) {
             HStack {
-                Image(systemName: "magnifyingglass").foregroundColor(.uiMidGray)
+                if isSearching {
+                    ProgressView().controlSize(.small)
+                        .transition(.scale(scale: 0.7).combined(with: .opacity))
+                } else {
+                    Image(systemName: "magnifyingglass").foregroundColor(.uiMidGray)
+                        .transition(.scale(scale: 0.7).combined(with: .opacity))
+                }
                 TextField("Поиск...", text: $searchText).textFieldStyle(PlainTextFieldStyle()).font(UIStyleFont.body(size: 13, weight: .regular)).foregroundColor(.uiInk)
                 if !searchText.isEmpty { Button(action: { searchText = "" }) { Image(systemName: "xmark.circle.fill").foregroundColor(.uiMidGray) }.buttonStyle(.plain) }
             }.padding(8).background(Color.uiPaper).cornerRadius(8).overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.uiHairline, lineWidth: 1)).padding(.horizontal, 12).padding(.bottom, 8)
             ScrollView {
                 LazyVStack(spacing: 8) {
-                    if displayedHistory.isEmpty { Text(searchText.isEmpty ? LocalizedStringKey("История пуста") : LocalizedStringKey("Ничего не найдено")).font(UIStyleFont.body(size: 13, weight: .regular)).foregroundColor(.uiMidGray).padding(.vertical, 20) }
-                    else {
+                    if isSearching {
+                        ForEach(0..<4, id: \.self) { _ in
+                            HistorySkeletonCard()
+                        }
+                    } else if displayedHistory.isEmpty {
+                        Text(searchText.isEmpty ? LocalizedStringKey("История пуста") : LocalizedStringKey("Ничего не найдено")).font(UIStyleFont.body(size: 13, weight: .regular)).foregroundColor(.uiMidGray).padding(.vertical, 20)
+                    } else {
                         ForEach(displayedHistory) { item in
                             HistoryCard(item: item, isSelected: selectedItemId == item.id)
                                 .contentShape(Rectangle())
@@ -494,6 +515,7 @@ struct ContentView: View {
                 }.padding(.horizontal, 8)
             }
         }
+        .animation(.easeOut(duration: 0.18), value: isSearching)
     }
     
     private var sidebarFooter: some View {
@@ -719,6 +741,29 @@ struct MetadataPill: View {
 }
 
 // СИСТЕМНАЯ КАРТОЧКА С СИНЕЙ ТОЧКОЙ
+// СКЕЛЕТОН КАРТОЧКИ ПРИ ПОИСКЕ
+struct HistorySkeletonCard: View {
+    private var bar: Color { Color.uiMidGray.opacity(0.16) }
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 6) {
+            Circle().fill(Color.blue.opacity(0.4)).frame(width: 6, height: 6).padding(.top, 5)
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 6) {
+                    RoundedRectangle(cornerRadius: 3).fill(bar).frame(width: 56, height: 8)
+                    RoundedRectangle(cornerRadius: 3).fill(bar).frame(width: 30, height: 8)
+                    Spacer()
+                    RoundedRectangle(cornerRadius: 3).fill(bar).frame(width: 40, height: 8)
+                }
+                RoundedRectangle(cornerRadius: 3).fill(bar).frame(height: 9)
+                RoundedRectangle(cornerRadius: 3).fill(bar).frame(width: 180, height: 9)
+            }
+            .shimmer()
+        }
+        .padding(12)
+    }
+}
+
 struct HistoryCard: View {
     let item: TranscriptionItem
     let isSelected: Bool

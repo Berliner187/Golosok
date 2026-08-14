@@ -223,7 +223,7 @@ struct PresetChip: View {
 }
 
 struct AIInputField: View {
-    let title: String
+    let title: LocalizedStringKey
     @Binding var text: String
     var placeholder: String = ""
     var isSecure: Bool = false

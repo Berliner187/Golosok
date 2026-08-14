@@ -153,6 +153,159 @@
         }
       }
     },
+    "✍️ Переписать в пост/письмо" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "✍️ Rewrite as post/email"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "✍️ Переписать в пост/письмо"
+          }
+        }
+      }
+    },
+    "✨ Улучшить стиль" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "✨ Improve style"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "✨ Улучшить стиль"
+          }
+        }
+      }
+    },
+    "🌐 Перевод на английский" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🌐 Translate to English"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🌐 Перевод на английский"
+          }
+        }
+      }
+    },
+    "🏷️ Придумать заголовок" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🏷️ Suggest a title"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🏷️ Придумать заголовок"
+          }
+        }
+      }
+    },
+    "💼 Деловой стиль" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "💼 Business tone"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "💼 Деловой стиль"
+          }
+        }
+      }
+    },
+    "📄 Протокол встречи" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "📄 Meeting minutes"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "📄 Протокол встречи"
+          }
+        }
+      }
+    },
+    "📋 Задачи и действия" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "📋 Tasks & action items"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "📋 Задачи и действия"
+          }
+        }
+      }
+    },
+    "📝 Саммари и тезисы" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "📝 Summary & key points"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "📝 Саммари и тезисы"
+          }
+        }
+      }
+    },
+    "🛠 Исправить ошибки" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🛠 Fix errors"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🛠 Исправить ошибки"
+          }
+        }
+      }
+    },
     "4 ФОРМАТА" : {
       "localizations" : {
         "en" : {
@@ -202,7 +355,6 @@
       }
     },
     "API-ключ" : {
-      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -251,7 +403,6 @@
       }
     },
     "Base URL" : {
-      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
