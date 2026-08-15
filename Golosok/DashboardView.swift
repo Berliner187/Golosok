@@ -374,13 +374,7 @@ struct DashboardChartsSection: View, Equatable {
                     .tracking(1.2)
                     .foregroundColor(.uiMidGray)
                 Spacer()
-                Picker("", selection: $chartRange) {
-                    ForEach(StatsRange.allCases) { r in
-                        Text(r.title).tag(r)
-                    }
-                }
-                .labelsHidden()
-                .pickerStyle(SegmentedPickerStyle())
+                UISegmented(selection: $chartRange, segments: StatsRange.allCases.map { UISegment(text: Text($0.title), value: $0) })
                 .frame(width: 240)
             }
             
@@ -395,11 +389,10 @@ struct DashboardChartsSection: View, Equatable {
                         
                         Spacer()
                         
-                        Picker("", selection: $trendMetric) {
-                            Text("Заметки").tag(TrendMetric.notes)
-                            Text("Символы").tag(TrendMetric.characters)
-                        }
-                        .pickerStyle(SegmentedPickerStyle())
+                        UISegmented(selection: $trendMetric, segments: [
+                            UISegment(text: Text("Заметки"), value: TrendMetric.notes),
+                            UISegment(text: Text("Символы"), value: TrendMetric.characters)
+                        ])
                         .frame(width: 160)
                     }
                     

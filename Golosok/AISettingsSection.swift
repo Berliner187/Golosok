@@ -152,17 +152,14 @@ struct AIProviderSection: View {
                 .font(UIStyleFont.body(size: 11, weight: .medium))
                 .foregroundColor(.uiMidGray)
             HStack(spacing: 8) {
-                Picker("", selection: $store.model) {
+                UIDropdownPicker(selection: $store.model, options: {
+                    var arr: [UIDropdownOption<String>] = []
                     if !store.model.isEmpty && !store.installedModels.contains(store.model) {
-                        Text(store.model).tag(store.model)
+                        arr.append(.init(store.model, value: store.model))
                     }
-                    ForEach(store.installedModels, id: \.self) { model in
-                        Text(model).tag(model)
-                    }
-                }
-                .labelsHidden()
-                .pickerStyle(MenuPickerStyle())
-                .frame(maxWidth: .infinity, alignment: .leading)
+                    arr.append(contentsOf: store.installedModels.map { .init($0, value: $0) })
+                    return arr
+                }(), fullWidth: true)
 
                 Button(action: { store.refreshModels() }) {
                     if store.isLoadingModels {

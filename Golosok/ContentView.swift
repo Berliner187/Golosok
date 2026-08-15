@@ -76,10 +76,10 @@ struct SyncedPlayerView: View {
                     .font(.system(size: 11, weight: .medium, design: .monospaced))
                     .foregroundColor(.uiMidGray)
 
-                Slider(value: Binding(
+                UISeekSlider(value: Binding(
                     get: { playhead },
                     set: { audioCapture.seekSynced(to: $0, for: itemID) }
-                ), in: 0...max(audioDuration, 0.01))
+                ), range: 0...max(audioDuration, 0.01))
 
                 Text(formatTime(audioDuration))
                     .font(.system(size: 11, weight: .medium, design: .monospaced))
@@ -555,67 +555,70 @@ struct ContentView: View {
                 if let selected = audioCapture.history.first(where: { $0.id == selectedItemId }) {
                     UICard {
                         VStack(alignment: .leading, spacing: 16) {
-                            HStack(alignment: .center) {
-                                let formattedDate = DateFormattingHelper.formatRussianDate(selected.date)
-                                HStack(alignment: .firstTextBaseline, spacing: 6) {
-                                    Text(formattedDate.date).font(UIStyleFont.display(size: 16, weight: .bold)).foregroundColor(.uiInk)
-                                    if !formattedDate.time.isEmpty { Text(formattedDate.time).font(UIStyleFont.body(size: 11, weight: .medium)).foregroundColor(.uiMidGray).padding(.horizontal, 6).padding(.vertical, 2).background(Color.uiCanvas).cornerRadius(6) }
-                                }
-                                Spacer(minLength: 12)
-                                HStack(spacing: 8) {
-                                    CopyFeedbackButton(textToCopy: selected.text)
-                                    EditToggleButton(isEditing: isEditing) {
-                                        if isEditing { commitEditing(for: selected) } else { beginEditing(selected) }
+                            let formattedDate = DateFormattingHelper.formatRussianDate(selected.date)
+                            let dateHeader: () -> AnyView = {
+                                AnyView(
+                                    HStack(alignment: .firstTextBaseline, spacing: 6) {
+                                        Text(formattedDate.date).font(UIStyleFont.display(size: 16, weight: .bold)).foregroundColor(.uiInk).lineLimit(1)
+                                        if !formattedDate.time.isEmpty { Text(formattedDate.time).font(UIStyleFont.body(size: 11, weight: .medium)).foregroundColor(.uiMidGray).padding(.horizontal, 6).padding(.vertical, 2).background(Color.uiCanvas).cornerRadius(6) }
                                     }
-                                    Menu {
-                                        ForEach(promptStore.templates) { template in
-                                            Button {
-                                                aiRequest = AIActionRequest(template: template, noteID: selected.id, noteText: selected.text)
-                                            } label: {
-                                                Label {
-                                                    if template.isCustom {
-                                                        Text(template.title)
-                                                    } else {
-                                                        Text(LocalizedStringKey(template.title))
-                                                    }
-                                                } icon: {
-                                                    Image(systemName: template.icon)
+                                )
+                            }
+                            let buttonsRow: () -> AnyView = {
+                                AnyView(
+                                    HStack(spacing: 8) {
+                                        CopyFeedbackButton(textToCopy: selected.text)
+                                        EditToggleButton(isEditing: isEditing) {
+                                            if isEditing { commitEditing(for: selected) } else { beginEditing(selected) }
+                                        }
+                                        UIDropdownMenu(items: {
+                                            var arr: [UIDropdownItem] = promptStore.templates.map { t in
+                                                let label: Text = t.isCustom ? Text(t.title) : Text(LocalizedStringKey(t.title))
+                                                return .action(text: label, icon: t.icon) {
+                                                    aiRequest = AIActionRequest(template: t, noteID: selected.id, noteText: selected.text)
                                                 }
                                             }
-                                        }
-                                        Divider()
-                                        Button {
-                                            showCreatePrompt = true
-                                        } label: {
-                                            Label("Новый промпт…", systemImage: "plus")
-                                        }
-                                        Button {
-                                            showPromptManager = true
-                                        } label: {
-                                            Label("Управлять промптами…", systemImage: "slider.horizontal.3")
-                                        }
-                                    } label: {
-                                        HStack(spacing: 4) {
-                                            Image(systemName: "sparkles").font(.system(size: 11, weight: .medium))
-                                            Text("ИИ").font(UIStyleFont.body(size: 13, weight: .medium))
-                                            Image(systemName: "chevron.down").font(.system(size: 8, weight: .bold)).foregroundColor(.uiMidGray)
-                                        }
-                                        .lineLimit(1).foregroundColor(.uiInk).padding(.vertical, 8).padding(.horizontal, 14).background(Color.uiPaper).cornerRadius(18).overlay(RoundedRectangle(cornerRadius: 18).stroke(Color.uiHairline, lineWidth: 1))
-                                    }.menuStyle(.borderlessButton).fixedSize(horizontal: true, vertical: false)
-                                    Menu {
-                                        Button("Markdown (.md)") { audioCapture.exportTranscription(selected, format: "md") }
-                                        Button("Текст (.txt)") { audioCapture.exportTranscription(selected, format: "txt") }
-                                        Button("Excel (.csv)") { audioCapture.exportTranscription(selected, format: "csv") }
-                                        Button("JSON (.json)") { audioCapture.exportTranscription(selected, format: "json") }
-                                        Divider()
-                                        Button("Субтитры (.srt)") { audioCapture.exportTranscription(selected, format: "srt") }
-                                        Button("Субтитры (.vtt)") { audioCapture.exportTranscription(selected, format: "vtt") }
-                                    } label: {
-                                        HStack(spacing: 4) { Image(systemName: "square.and.arrow.up").font(.system(size: 11, weight: .medium)); Text("Экспорт").font(UIStyleFont.body(size: 13, weight: .medium)); Image(systemName: "chevron.down").font(.system(size: 8, weight: .bold)).foregroundColor(.uiMidGray) }
-                                        .lineLimit(1).foregroundColor(.uiInk).padding(.vertical, 8).padding(.horizontal, 14).background(Color.uiPaper).cornerRadius(18).overlay(RoundedRectangle(cornerRadius: 18).stroke(Color.uiHairline, lineWidth: 1))
-                                    }.menuStyle(.borderlessButton).fixedSize(horizontal: true, vertical: false)
-                                    UIDestructiveButton(title: "Удалить") { itemToDelete = selected.id; showingDeleteAlert = true }
-                                }.fixedSize(horizontal: true, vertical: false).layoutPriority(1)
+                                            arr.append(.divider)
+                                            arr.append(.action("Новый промпт…", icon: "plus") { showCreatePrompt = true })
+                                            arr.append(.action("Управлять промптами…", icon: "slider.horizontal.3") { showPromptManager = true })
+                                            return arr
+                                        }()) {
+                                            HStack(spacing: 4) {
+                                                Image(systemName: "sparkles").font(.system(size: 11, weight: .medium))
+                                                Text("ИИ").font(UIStyleFont.body(size: 13, weight: .medium))
+                                                Image(systemName: "chevron.down").font(.system(size: 8, weight: .bold)).foregroundColor(.uiMidGray)
+                                            }
+                                            .lineLimit(1).foregroundColor(.uiInk).padding(.vertical, 8).padding(.horizontal, 14).background(Color.uiPaper).cornerRadius(18).overlay(RoundedRectangle(cornerRadius: 18).stroke(Color.uiHairline, lineWidth: 1))
+                                        }.fixedSize(horizontal: true, vertical: false)
+                                        UIDropdownMenu(items: [
+                                            .action("Markdown (.md)") { audioCapture.exportTranscription(selected, format: "md") },
+                                            .action("Текст (.txt)") { audioCapture.exportTranscription(selected, format: "txt") },
+                                            .action("Excel (.csv)") { audioCapture.exportTranscription(selected, format: "csv") },
+                                            .action("JSON (.json)") { audioCapture.exportTranscription(selected, format: "json") },
+                                            .divider,
+                                            .action("Субтитры (.srt)") { audioCapture.exportTranscription(selected, format: "srt") },
+                                            .action("Субтитры (.vtt)") { audioCapture.exportTranscription(selected, format: "vtt") }
+                                        ]) {
+                                            HStack(spacing: 4) { Image(systemName: "square.and.arrow.up").font(.system(size: 11, weight: .medium)); Text("Экспорт").font(UIStyleFont.body(size: 13, weight: .medium)); Image(systemName: "chevron.down").font(.system(size: 8, weight: .bold)).foregroundColor(.uiMidGray) }
+                                            .lineLimit(1).foregroundColor(.uiInk).padding(.vertical, 8).padding(.horizontal, 14).background(Color.uiPaper).cornerRadius(18).overlay(RoundedRectangle(cornerRadius: 18).stroke(Color.uiHairline, lineWidth: 1))
+                                        }.fixedSize(horizontal: true, vertical: false)
+                                        UIDestructiveButton(title: "Удалить") { itemToDelete = selected.id; showingDeleteAlert = true }
+                                    }.fixedSize(horizontal: true, vertical: false).layoutPriority(1)
+                                )
+                            }
+                            ViewThatFits(in: .horizontal) {
+                                HStack(alignment: .center) {
+                                    dateHeader()
+                                    Spacer(minLength: 12)
+                                    buttonsRow()
+                                }
+                                VStack(alignment: .leading, spacing: 10) {
+                                    dateHeader()
+                                    HStack {
+                                        Spacer(minLength: 0)
+                                        buttonsRow()
+                                    }
+                                }
                             }
                             
                             HStack(spacing: 8) {

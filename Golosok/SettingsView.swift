@@ -26,17 +26,14 @@ struct SettingsView: View {
                                 .foregroundColor(.uiMidGray)
                         }
                         Spacer()
-                        Picker("", selection: Binding(
+                        UIDropdownPicker(selection: Binding(
                             get: { language.current },
                             set: { language.select($0) }
-                        )) {
-                            Text("Система").tag(AppLanguage.system)
-                            Text("Русский").tag(AppLanguage.ru)
-                            Text("English").tag(AppLanguage.en)
-                        }
-                        .labelsHidden()
-                        .pickerStyle(MenuPickerStyle())
-                        .frame(width: 140)
+                        ), options: [
+                            .init("Система", value: AppLanguage.system),
+                            .init("Русский", value: AppLanguage.ru),
+                            .init("English", value: AppLanguage.en)
+                        ], width: 140)
                     }
                 }
                 
@@ -195,13 +192,10 @@ struct SettingsView: View {
                                 .font(UIStyleFont.body(size: 13, weight: .medium))
                                 .foregroundColor(.uiInk)
                             Spacer()
-                            Picker("", selection: $hotKey.mode) {
-                                Text(LocalizedStringKey("HotKey.ModeToggle")).tag(HotKeyMode.toggle)
-                                Text(LocalizedStringKey("HotKey.ModePushToTalk")).tag(HotKeyMode.pushToTalk)
-                            }
-                            .labelsHidden()
-                            .pickerStyle(MenuPickerStyle())
-                            .frame(width: 160)
+                            UIDropdownPicker(selection: $hotKey.mode, options: [
+                                .init(LocalizedStringKey("HotKey.ModeToggle"), value: HotKeyMode.toggle),
+                                .init(LocalizedStringKey("HotKey.ModePushToTalk"), value: HotKeyMode.pushToTalk)
+                            ], width: 160)
                         }
                         
                         Divider().overlay(Color.uiHairline)
@@ -229,17 +223,12 @@ HStack {
                                 .font(UIStyleFont.body(size: 13, weight: .medium))
                                 .foregroundColor(.uiInk)
                             Spacer()
-                            Picker("", selection: Binding(
+                            UIDropdownPicker(selection: Binding(
                                 get: { models.activeModelID },
                                 set: { models.activeModelID = $0 }
-                            )) {
-                                ForEach(ModelStore.catalog) { m in
-                                    Text(LocalizedStringKey(m.name)).tag(m.id)
-                                }
-                            }
-                            .labelsHidden()
-                            .pickerStyle(MenuPickerStyle())
-                            .frame(width: 200)
+                            ), options: ModelStore.catalog.map { m in
+                                .init(LocalizedStringKey(m.name), value: m.id)
+                            }, width: 200)
                         }
 
                         ActiveModelStatusRow()

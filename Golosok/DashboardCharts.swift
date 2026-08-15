@@ -228,14 +228,9 @@ struct TempoChart: View {
         UICard {
             VStack(alignment: .leading, spacing: 14) {
                 ChartCardHeader(title: "ВАШ ТЕМП") {
-                    Picker("", selection: $metric) {
-                        ForEach(TempoMetric.allCases, id: \.self) { m in
-                            Text(LocalizedStringKey(m.rawValue)).tag(m)
-                        }
-                    }
-                    .labelsHidden()
-                    .pickerStyle(MenuPickerStyle())
-                    .frame(width: 100)
+UIDropdownPicker(selection: $metric, options: TempoMetric.allCases.map { m in
+                            .init(LocalizedStringKey(m.rawValue), value: m)
+                        }, minWidth: 120)
                 }
 
                 if points.count < 2 {
