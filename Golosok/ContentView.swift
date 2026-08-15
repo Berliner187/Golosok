@@ -673,63 +673,60 @@ struct ContentView: View {
                                 Text("Локальное приложение для надиктовки, расшифровки созвонов и работы с медиафайлами")
                                     .font(UIStyleFont.body(size: 13, weight: .regular))
                                     .foregroundColor(.uiMidGray)
+                                    .multilineTextAlignment(.center)
                             }
-                            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
-                                CapabilityCard(
-                                    icon: "keyboard",
+                            VStack(spacing: 10) {
+                                HeroActionRow(
+                                    icon: "mic.fill",
                                     badge: NativeHotKeyManager.shared.displayName(),
-                                    title: "Быстрый ввод",
-                                    description: "Надиктуйте мысль – текст сразу появится под курсором в любом приложении"
-                                )
+                                    title: "Надиктовать",
+                                    subtitle: "Текст сразу появится под курсором в любом приложении"
+                                ) {
+                                    audioCapture.toggleRecording()
+                                }
 
-                                CapabilityCard(
+                                HeroActionRow(
                                     icon: "video.fill",
-                                    badge: String(localized: "⌘ + O / МЕНЮ"),
-                                    title: "Созвоны и файлы",
-                                    description: "Расшифровка встреч Zoom, Телемоста и любых медиафайлов: MP3, MP4, WebM"
-                                )
+                                    badge: String(localized: "⌘ + O"),
+                                    title: "Расшифровать файл",
+                                    subtitle: "Созвоны Zoom, Телемост и медиафайлы: MP3, MP4, WebM"
+                                ) {
+                                    audioCapture.importAndTranscribeFile()
+                                }
+                            }
+                            VStack(alignment: .leading, spacing: 10) {
+                                Text("Что ещё умеет")
+                                    .font(UIStyleFont.body(size: 11, weight: .medium))
+                                    .foregroundColor(.uiMidGray)
 
-                                CapabilityCard(
-                                    icon: "play.circle.fill",
-                                    badge: String(localized: "ОРИГИНАЛ"),
-                                    title: "Сверка аудио",
-                                    description: "Слушайте исходный звук прямо в заметке, чтобы проверить соответствие с текстом"
-                                )
+                                Button(action: openAccountSettings) {
+                                    HStack(spacing: 12) {
+                                        ZStack {
+                                            RoundedRectangle(cornerRadius: 8, style: .continuous).fill(Color.uiCanvas)
+                                                .frame(width: 34, height: 34)
+                                            Image(systemName: "icloud.fill").font(.system(size: 15, weight: .semibold)).foregroundColor(.uiInk)
+                                        }
+                                        VStack(alignment: .leading, spacing: 1) {
+                                            Text("Голосок+").font(UIStyleFont.display(size: 13, weight: .semibold)).foregroundColor(.uiInk)
+                                            Text("Облачный ИИ помогает редактировать заметки. Расшифровка — всегда локально").font(UIStyleFont.body(size: 11, weight: .regular)).foregroundColor(.uiMidGray)
+                                        }
+                                        Spacer(minLength: 8)
+                                        Image(systemName: "chevron.right").font(.system(size: 10, weight: .bold)).foregroundColor(.uiMidGray)
+                                    }
+                                    .padding(12)
+                                    .background(Color.uiSidebar)
+                                    .cornerRadius(14)
+                                    .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color.uiHairline, lineWidth: 1))
+                                    .contentShape(Rectangle())
+                                }
+                                .buttonStyle(TactileButtonStyle())
 
-                                CapabilityCard(
-                                    icon: "doc.badge.gearshape.fill",
-                                    badge: String(localized: "4 ФОРМАТА"),
-                                    title: "Экспорт",
-                                    description: "Авто-деление на абзацы и сохранение в Markdown, CSV, TXT или JSON"
-                                )
-
-                                CapabilityCard(
-                                    icon: "arrow.down.doc.fill",
-                                    badge: String(localized: "ЛЮБОЙ ФОРМАТ"),
-                                    title: "Drag & drop",
-                                    description: "Перетащите медиафайл в окно — расшифровка начнётся автоматически"
-                                )
-
-                                CapabilityCard(
-                                    icon: "wand.and.stars",
-                                    badge: String(localized: "СВОИ ШАБЛОНЫ"),
-                                    title: "Кастомные промпты",
-                                    description: "Создавайте, редактируйте и удаляйте ИИ-промпты под свои задачи"
-                                )
-
-                                CapabilityCard(
-                                    icon: "icloud.fill",
-                                    badge: String(localized: "ОБЛАКО"),
-                                    title: "Голосок+",
-                                    description: "Облачные модели и расшифровка на сервере — по подписке"
-                                )
-
-                                CapabilityCard(
-                                    icon: "chart.bar.fill",
-                                    badge: String(localized: "СТАТИСТИКА"),
-                                    title: "Дашборд",
-                                    description: "Сводка по расшифровкам, активности и темпу работы за период"
-                                )
+                                HStack(spacing: 6) {
+                                    Image(systemName: "arrow.down.doc").font(.system(size: 11, weight: .medium)).foregroundColor(.uiMidGray)
+                                    Text("Перетащите файл в окно программы — расшифровка начнётся автоматически")
+                                        .font(UIStyleFont.body(size: 11, weight: .regular))
+                                        .foregroundColor(.uiMidGray)
+                                }
                             }
                         }.padding(12).frame(maxWidth: .infinity, maxHeight: .infinity)
                     }
@@ -821,6 +818,14 @@ struct ContentView: View {
         audioCapture.replaceNoteText(id: id, text: editableText)
     }
 
+    private func openAccountSettings() {
+        currentTab = .settings
+        searchText = ""
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+            NotificationCenter.default.post(name: NSNotification.Name("ScrollToAccount"), object: nil)
+        }
+    }
+
     private func createNote() {
         if isEditing { flushPendingEdits(); isEditing = false; editingItemID = nil }
         let id = audioCapture.addNote(text: "")
@@ -840,13 +845,36 @@ struct ContentView: View {
 
 // MARK: - ВСПОМОГАТЕЛЬНЫЕ КОМПОНЕНТЫ
 
-struct CapabilityCard: View {
-    let icon: String; let badge: String; let title: LocalizedStringKey; let description: LocalizedStringKey
+struct HeroActionRow: View {
+    let icon: String
+    let badge: String
+    let title: LocalizedStringKey
+    let subtitle: LocalizedStringKey
+    let action: () -> Void
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack { Image(systemName: icon).font(.system(size: 16, weight: .semibold)).foregroundColor(.uiInk); Spacer(); UIBadge(text: badge) }
-            VStack(alignment: .leading, spacing: 4) { Text(title).font(UIStyleFont.display(size: 14, weight: .semibold)).foregroundColor(.uiInk); Text(description).font(UIStyleFont.body(size: 12, weight: .regular)).foregroundColor(.uiMidGray).lineSpacing(2) }
-        }.padding(16).background(Color.uiSidebar).cornerRadius(16).overlay(RoundedRectangle(cornerRadius: 16).stroke(Color.uiHairline, lineWidth: 1))
+        Button(action: action) {
+            HStack(spacing: 14) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Color.uiCanvas)
+                        .frame(width: 40, height: 40)
+                    Image(systemName: icon).font(.system(size: 17, weight: .semibold)).foregroundColor(.uiInk)
+                }
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title).font(UIStyleFont.display(size: 14, weight: .semibold)).foregroundColor(.uiInk)
+                    Text(subtitle).font(UIStyleFont.body(size: 12, weight: .regular)).foregroundColor(.uiMidGray).lineLimit(1)
+                }
+                Spacer(minLength: 8)
+                Text(badge).font(UIStyleFont.body(size: 10, weight: .semibold)).tracking(0.5).foregroundColor(.uiMidGray)
+                Image(systemName: "chevron.right").font(.system(size: 10, weight: .bold)).foregroundColor(.uiMidGray)
+            }
+            .padding(14)
+            .background(Color.uiSidebar)
+            .cornerRadius(16)
+            .overlay(RoundedRectangle(cornerRadius: 16).stroke(Color.uiHairline, lineWidth: 1))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(TactileButtonStyle())
     }
 }
 

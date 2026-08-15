@@ -137,7 +137,24 @@
         }
       }
     },
+    "⌘ + O" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "⌘ + O"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "⌘ + O"
+          }
+        }
+      }
+    },
     "⌘ + O / МЕНЮ" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -324,6 +341,7 @@
       }
     },
     "4 ФОРМАТА" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -571,6 +589,7 @@
       }
     },
     "Drag & drop" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -930,6 +949,7 @@
       }
     },
     "Авто-деление на абзацы и сохранение в Markdown, CSV, TXT или JSON" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -1171,6 +1191,7 @@
       }
     },
     "Быстрый ввод" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -1639,6 +1660,7 @@
 
     },
     "Дашборд" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -2269,6 +2291,7 @@
       }
     },
     "Кастомные промпты" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -2381,6 +2404,7 @@
       }
     },
     "ЛЮБОЙ ФОРМАТ" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -2558,7 +2582,24 @@
         }
       }
     },
+    "Надиктовать" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dictate"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Надиктовать"
+          }
+        }
+      }
+    },
     "Надиктуйте мысль – текст сразу появится под курсором в любом приложении" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -2981,6 +3022,7 @@
       }
     },
     "ОБЛАКО" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -2997,6 +3039,7 @@
       }
     },
     "Облачные модели и расшифровка на сервере — по подписке" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -3024,6 +3067,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Облачные модели на серверах Голоска — по подписке"
+          }
+        }
+      }
+    },
+    "Облачный ИИ помогает редактировать заметки. Расшифровка — всегда локально" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cloud AI helps edit your notes. Transcription stays on-device"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Облачный ИИ помогает редактировать заметки. Расшифровка — всегда локально"
           }
         }
       }
@@ -3093,6 +3152,7 @@
       }
     },
     "ОРИГИНАЛ" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -3418,6 +3478,7 @@
       }
     },
     "Перетащите медиафайл в окно — расшифровка начнётся автоматически" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -3445,6 +3506,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Перетащите файл — начнётся расшифровка"
+          }
+        }
+      }
+    },
+    "Перетащите файл в окно программы — расшифровка начнётся автоматически" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Drag a file anywhere into the app — transcription starts automatically"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Перетащите файл в окно программы — расшифровка начнётся автоматически"
           }
         }
       }
@@ -3982,7 +4059,24 @@
         }
       }
     },
+    "Расшифровать файл" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Transcribe a file"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Расшифровать файл"
+          }
+        }
+      }
+    },
     "Расшифровка встреч Zoom, Телемоста и любых медиафайлов: MP3, MP4, WebM" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -4210,6 +4304,7 @@
       }
     },
     "Сверка аудио" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -4226,6 +4321,7 @@
       }
     },
     "Сводка по расшифровкам, активности и темпу работы за период" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -4242,6 +4338,7 @@
       }
     },
     "СВОИ ШАБЛОНЫ" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -4452,6 +4549,7 @@
       }
     },
     "Слушайте исходный звук прямо в заметке, чтобы проверить соответствие с текстом" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -4483,7 +4581,24 @@
         }
       }
     },
+    "Созвоны Zoom, Телемост и медиафайлы: MP3, MP4, WebM" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zoom, Yandex Telemost and media: MP3, MP4, WebM"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Созвоны Zoom, Телемост и медиафайлы: MP3, MP4, WebM"
+          }
+        }
+      }
+    },
     "Созвоны и файлы" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -4500,6 +4615,7 @@
       }
     },
     "Создавайте, редактируйте и удаляйте ИИ-промпты под свои задачи" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -4614,6 +4730,7 @@
       }
     },
     "СТАТИСТИКА" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -4740,6 +4857,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Текст (.txt)"
+          }
+        }
+      }
+    },
+    "Текст сразу появится под курсором в любом приложении" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Text appears right under your cursor in any app"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Текст сразу появится под курсором в любом приложении"
           }
         }
       }
@@ -5003,6 +5136,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "ЧТ"
+          }
+        }
+      }
+    },
+    "Что ещё умеет" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "What else you can do"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Что ещё умеет"
           }
         }
       }

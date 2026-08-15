@@ -11,6 +11,7 @@ struct SettingsView: View {
     @State private var showingLogsSheet = false
     
     var body: some View {
+        ScrollViewReader { proxy in
         ScrollView {
             VStack(spacing: 20) {
                 
@@ -283,6 +284,7 @@ HStack {
 
                 // РАЗДЕЛ 3.6: АККАУНТ
                 AccountSection()
+                    .id("account")
 
                 // РАЗДЕЛ 4: ДАННЫЕ
                 UICard {
@@ -305,6 +307,9 @@ HStack {
             .padding(20)
         }
         .background(Color.uiCanvas)
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("ScrollToAccount"))) { _ in
+            withAnimation(.easeOut(duration: 0.25)) { proxy.scrollTo("account", anchor: .top) }
+        }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             permissions.refreshPermissions()
         }
@@ -314,6 +319,7 @@ HStack {
                 audioCapture.clearAllHistory()
             }
         } message: { Text("Все сохраненные транскрипции будут удалены безвозвратно. Это действие нельзя отменить.") }
+        }
     }
 }
 
