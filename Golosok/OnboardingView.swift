@@ -132,10 +132,22 @@ struct OnboardingView: View {
                 .disabled(!canContinue)
                 .opacity(canContinue ? 1.0 : 0.4)
                 
-                Text("Design & Development by Kozak • 2026")
+                Text(LocalizedStringKey("Нажимая «Начать использовать», вы принимаете [Условия лицензии](https://golosok.space/docs/public-offer/) и [Политику конфиденциальности](https://golosok.space/docs/privacy-policy/)."))
                     .font(UIStyleFont.body(size: 11, weight: .regular))
                     .foregroundColor(.uiMidGray)
-                    .padding(.top, 4)
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: 440)
+                    .tint(Color(hex: "#6366F1"))
+                
+                HStack(spacing: 0) {
+                    Text("Design & Development by ")
+                    Link("Kozak", destination: URL(string: "https://dprofile.ru/kozak_developer")!)
+                        .foregroundColor(Color(hex: "#6366F1"))
+                    Text(" • 2026")
+                }
+                .font(UIStyleFont.body(size: 11, weight: .regular))
+                .foregroundColor(.uiMidGray)
+                .padding(.top, 4)
             }
             .padding(40)
         }
