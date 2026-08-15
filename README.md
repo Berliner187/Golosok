@@ -2,12 +2,30 @@
 
 > **Read this in another language: [Русский](README_RU.md)**
 
+<p align="left">
+  <a href="https://github.com/jaywcjlove/awesome-swift-macos-apps">
+    <img src="https://img.shields.io/badge/Featured_in-Awesome_Swift_macOS_Apps-black?style=for-the-badge&logo=swift&logoColor=F05138" alt="Awesome Swift macOS Apps">
+  </a>
+  <a href="https://github.com/Berliner187/Golosok/releases">
+    <img src="https://img.shields.io/github/v/release/Berliner187/Golosok?style=for-the-badge&color=black&logo=apple" alt="Latest Release">
+  </a>
+  <a href="https://github.com/Berliner187/Golosok/blob/main/LICENSE">
+    <img src="https://img.shields.io/badge/License-Open_Source-black?style=for-the-badge" alt="License">
+  </a>
+</p>
+
 **Native voice dictation powered by Sber GigaAM v3. Inference on Apple Silicon.**  
 Instant text input via `⌥ + Space` and offline media file transcription.
 
 ![Golosok Demo 1](https://raw.githubusercontent.com/Berliner187/Golosok/main/.github/assets/promo.gif)
 
 ![Golosok Demo 2](https://raw.githubusercontent.com/Berliner187/Golosok/main/.github/assets/promo-2.gif)
+
+## 🌟 Recognition
+
+* **Featured in [Awesome Swift macOS Apps](https://github.com/jaywcjlove/awesome-swift-macos-apps)** — Official curated directory of elite native Swift applications for macOS by [@jaywcjlove](https://github.com/jaywcjlove).
+
+---
 
 ## Features & Architecture
 
