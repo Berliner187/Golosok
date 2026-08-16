@@ -6,6 +6,32 @@ struct AIActionRequest: Identifiable {
     let template: AIPromptTemplate
     let noteID: UUID
     let noteText: String
+    let scope: AIScope
+
+    init(template: AIPromptTemplate, noteID: UUID, noteText: String, scope: AIScope = .wholeNote) {
+        self.template = template
+        self.noteID = noteID
+        self.noteText = noteText
+        self.scope = scope
+    }
+}
+
+enum AIScope: Equatable {
+    case wholeNote
+    case selection(range: NSRange, fullText: String)
+}
+
+extension AIScope {
+    var cacheKey: String {
+        switch self {
+        case .wholeNote: return ""
+        case .selection(let range, _): return "sel_\(range.location)_\(range.length)"
+        }
+    }
+    var isSelection: Bool {
+        if case .selection = self { return true }
+        return false
+    }
 }
 
 final class AICache {
@@ -14,6 +40,7 @@ final class AICache {
     private struct Key: Hashable {
         let noteID: UUID
         let templateID: String
+        let scopeID: String
     }
     private struct Entry {
         let sourceText: String
@@ -23,6 +50,7 @@ final class AICache {
     private struct StoredEntry: Codable {
         let noteID: String
         let templateID: String
+        let scopeID: String?
         let sourceText: String
         let result: String
         let date: Date
@@ -43,14 +71,14 @@ final class AICache {
         return dir.appendingPathComponent("ai_cache.json")
     }
 
-    func result(noteID: UUID, templateID: String, for text: String) -> String? {
-        guard let entry = entries[Key(noteID: noteID, templateID: templateID)],
+    func result(noteID: UUID, templateID: String, scopeID: String = "", for text: String) -> String? {
+        guard let entry = entries[Key(noteID: noteID, templateID: templateID, scopeID: scopeID)],
               entry.sourceText == text else { return nil }
         return entry.result
     }
 
-    func store(noteID: UUID, templateID: String, text: String, result: String) {
-        let key = Key(noteID: noteID, templateID: templateID)
+    func store(noteID: UUID, templateID: String, scopeID: String = "", text: String, result: String) {
+        let key = Key(noteID: noteID, templateID: templateID, scopeID: scopeID)
         entries[key] = Entry(sourceText: text, result: result, date: Date())
         if entries.count > limit {
             if let oldest = entries.min(by: { $0.value.date < $1.value.date })?.key {
@@ -75,7 +103,7 @@ final class AICache {
 
     private func persist() {
         let snapshot = entries.map { key, entry in
-            StoredEntry(noteID: key.noteID.uuidString, templateID: key.templateID, sourceText: entry.sourceText, result: entry.result, date: entry.date)
+            StoredEntry(noteID: key.noteID.uuidString, templateID: key.templateID, scopeID: key.scopeID, sourceText: entry.sourceText, result: entry.result, date: entry.date)
         }
         ioQueue.async { [weak self] in
             guard let self, let url = self.fileURL else { return }
@@ -91,7 +119,7 @@ final class AICache {
               let payload = try? JSONDecoder().decode([StoredEntry].self, from: data) else { return }
         for item in payload.prefix(limit) {
             guard let noteID = UUID(uuidString: item.noteID) else { continue }
-            entries[Key(noteID: noteID, templateID: item.templateID)] = Entry(sourceText: item.sourceText, result: item.result, date: item.date)
+            entries[Key(noteID: noteID, templateID: item.templateID, scopeID: item.scopeID ?? "")] = Entry(sourceText: item.sourceText, result: item.result, date: item.date)
         }
     }
 }
@@ -118,6 +146,17 @@ struct AIResultSheet: View {
                 Text(LocalizedStringKey(request.template.title))
                     .font(UIStyleFont.display(size: 15, weight: .bold))
                     .foregroundColor(.uiInk)
+                if request.scope.isSelection {
+                    Text("ВЫДЕЛЕННЫЙ ФРАГМЕНТ")
+                        .font(UIStyleFont.body(size: 10, weight: .semibold))
+                        .tracking(0.6)
+                        .foregroundColor(.uiMidGray)
+                        .padding(.vertical, 4)
+                        .padding(.horizontal, 8)
+                        .background(Color.uiCanvas)
+                        .cornerRadius(10)
+                        .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.uiHairline, lineWidth: 1))
+                }
                 Spacer()
                 Button(action: { dismiss() }) {
                     Image(systemName: "xmark")
@@ -145,7 +184,8 @@ struct AIResultSheet: View {
             }
         }
         .padding(24)
-        .frame(minWidth: 560, minHeight: 400)
+        .frame(minWidth: request.scope.isSelection ? 760 : 560,
+               minHeight: request.scope.isSelection ? 480 : 400)
         .background(Color.uiPaper)
         .onAppear(perform: run)
     }
@@ -176,8 +216,55 @@ struct AIResultSheet: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
 
         case .done:
+            if request.scope.isSelection {
+                splitView
+            } else {
+                ScrollView {
+                    markdownText
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(14)
+                }
+                .background(Color.uiSidebar)
+                .cornerRadius(16)
+                .overlay(RoundedRectangle(cornerRadius: 16).stroke(Color.uiHairline, lineWidth: 1))
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var splitView: some View {
+        HStack(spacing: 12) {
+            splitColumn(
+                titleKey: "Было",
+                attributedString: renderedMarkdown(from: request.noteText)
+            )
+            splitColumn(
+                titleKey: "Стало",
+                attributedString: renderedMarkdown(from: resultText),
+                accent: true
+            )
+        }
+    }
+
+    private func splitColumn(titleKey: LocalizedStringKey, attributedString: AttributedString, accent: Bool = false) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 6) {
+                Text(titleKey)
+                    .font(UIStyleFont.body(size: 11, weight: .bold))
+                    .tracking(0.7)
+                    .foregroundColor(accent ? Color.dynamic(light: "#ffffff", dark: "#000000") : .uiInk)
+                    .padding(.vertical, 3)
+                    .padding(.horizontal, 8)
+                    .background(accent ? Color.uiInk : Color.uiCanvas)
+                    .cornerRadius(8)
+                    .overlay(RoundedRectangle(cornerRadius: 8).stroke(accent ? Color.uiInk : Color.uiHairline, lineWidth: 1))
+                Spacer()
+            }
             ScrollView {
-                markdownText
+                Text(attributedString)
+                    .font(UIStyleFont.body(size: 14, weight: .regular))
+                    .foregroundColor(.uiInk)
+                    .textSelection(.enabled)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(14)
             }
@@ -185,18 +272,19 @@ struct AIResultSheet: View {
             .cornerRadius(16)
             .overlay(RoundedRectangle(cornerRadius: 16).stroke(Color.uiHairline, lineWidth: 1))
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     @ViewBuilder
     private var markdownText: some View {
-        Text(renderedMarkdown())
+        Text(renderedMarkdown(from: resultText))
             .font(UIStyleFont.body(size: 14, weight: .regular))
             .foregroundColor(.uiInk)
             .textSelection(.enabled)
     }
 
-    private func renderedMarkdown() -> AttributedString {
-        let lines = resultText
+    private func renderedMarkdown(from source: String) -> AttributedString {
+        let lines = source
             .replacingOccurrences(of: "\r\n", with: "\n")
             .replacingOccurrences(of: "\r", with: "\n")
             .components(separatedBy: "\n")
@@ -268,21 +356,40 @@ struct AIResultSheet: View {
 
     private var footer: some View {
         HStack(spacing: 8) {
-            UIPrimaryButton(title: "Вставить ниже") {
-                AudioCapture.shared.appendTextToNote(id: request.noteID, text: resultText)
-                SoundEffect.playSuccess()
-                dismiss()
-            }
-            UIOutlineButton(title: "Заменить") {
-                AudioCapture.shared.replaceNoteText(id: request.noteID, text: resultText)
-                SoundEffect.playSuccess()
-                dismiss()
-            }
-            UIOutlineButton(title: "Новая заметка") {
-                let newID = AudioCapture.shared.addNote(text: resultText)
-                SoundEffect.playSuccess()
-                dismiss()
-                onOpenNewNote(newID)
+            if case .selection(let range, _) = request.scope {
+                UIPrimaryButton(title: "Заменить выделение") {
+                    AudioCapture.shared.replaceRangeInNote(id: request.noteID, range: range, newText: resultText)
+                    SoundEffect.playSuccess()
+                    dismiss()
+                }
+                UIOutlineButton(title: "Вставить ниже") {
+                    AudioCapture.shared.appendTextToNote(id: request.noteID, text: resultText)
+                    SoundEffect.playSuccess()
+                    dismiss()
+                }
+                UIOutlineButton(title: "Новая заметка") {
+                    let newID = AudioCapture.shared.addNote(text: resultText)
+                    SoundEffect.playSuccess()
+                    dismiss()
+                    onOpenNewNote(newID)
+                }
+            } else {
+                UIPrimaryButton(title: "Вставить ниже") {
+                    AudioCapture.shared.appendTextToNote(id: request.noteID, text: resultText)
+                    SoundEffect.playSuccess()
+                    dismiss()
+                }
+                UIOutlineButton(title: "Заменить") {
+                    AudioCapture.shared.replaceNoteText(id: request.noteID, text: resultText)
+                    SoundEffect.playSuccess()
+                    dismiss()
+                }
+                UIOutlineButton(title: "Новая заметка") {
+                    let newID = AudioCapture.shared.addNote(text: resultText)
+                    SoundEffect.playSuccess()
+                    dismiss()
+                    onOpenNewNote(newID)
+                }
             }
             Spacer()
             Button(action: copy) {
@@ -304,7 +411,8 @@ struct AIResultSheet: View {
     }
 
     private func run() {
-        if let cached = AICache.shared.result(noteID: request.noteID, templateID: request.template.id, for: request.noteText) {
+        let scopeID = request.scope.cacheKey
+        if let cached = AICache.shared.result(noteID: request.noteID, templateID: request.template.id, scopeID: scopeID, for: request.noteText) {
             resultText = cached
             fromCache = true
             phase = .done
@@ -335,7 +443,7 @@ struct AIResultSheet: View {
                 case .success(let text):
                     resultText = text.trimmingCharacters(in: .whitespacesAndNewlines)
                     phase = .done
-                    AICache.shared.store(noteID: request.noteID, templateID: request.template.id, text: request.noteText, result: resultText)
+                    AICache.shared.store(noteID: request.noteID, templateID: request.template.id, scopeID: request.scope.cacheKey, text: request.noteText, result: resultText)
                 case .failure(let error):
                     errorText = error.localizedDescription
                     phase = .error

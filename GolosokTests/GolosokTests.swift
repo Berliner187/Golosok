@@ -315,3 +315,75 @@ struct GolosokTests {
         #expect(AudioCapture.compareVersions("1.0", "1.0.1") == .orderedAscending)
     }
 }
+
+// MARK: - AI-обработка выделенного фрагмента
+
+@Suite(.serialized)
+struct AISelectionStatefulTests {
+
+    @Test func aiRequestSelectionFlagsAreCorrect() {
+        let noteID = UUID()
+        let range = NSRange(location: 4, length: 6)
+        let fullText = "Это полный текст заметки."
+        let selectionReq = AIActionRequest(
+            template: AIPromptDefaults.template(id: "polish")!,
+            noteID: noteID,
+            noteText: "фрагмент",
+            scope: .selection(range: range, fullText: fullText)
+        )
+        let wholeReq = AIActionRequest(
+            template: AIPromptDefaults.template(id: "polish")!,
+            noteID: noteID,
+            noteText: fullText
+        )
+        #expect(selectionReq.scope.isSelection == true)
+        #expect(wholeReq.scope.isSelection == false)
+        #expect(selectionReq.scope.cacheKey == "sel_4_6")
+        #expect(wholeReq.scope.cacheKey == "")
+    }
+
+    @Test func aiCacheDistinguishesScopeForSameNoteTemplate() {
+        let cache = AICache.shared
+        cache.clear()
+        defer { cache.clear() }
+
+        let noteID = UUID()
+        let templateID = "polish"
+        let noteText = "Вся заметка целиком."
+        let fragText = "Только фрагмент."
+
+        cache.store(noteID: noteID, templateID: templateID, scopeID: "", text: noteText, result: "Whole result")
+        cache.store(noteID: noteID, templateID: templateID, scopeID: "sel_3_5", text: fragText, result: "Selection result")
+
+        #expect(cache.result(noteID: noteID, templateID: templateID, scopeID: "",         for: noteText) == "Whole result")
+        #expect(cache.result(noteID: noteID, templateID: templateID, scopeID: "sel_3_5", for: fragText) == "Selection result")
+        #expect(cache.result(noteID: noteID, templateID: templateID, scopeID: "",         for: fragText) == nil)
+        #expect(cache.result(noteID: noteID, templateID: templateID, scopeID: "sel_3_5", for: noteText) == nil)
+    }
+
+    @Test func replaceRangeSwapsOnlyFragment() {
+        let store = AudioCapture.shared
+        let snapshot = store.history
+        defer { store.history = snapshot }
+        let initial = "Первоначальный текст-фрагмент. Соседний абзац остаётся как есть."
+        let id = store.addNote(text: initial)
+        let ns = initial as NSString
+        let range = ns.range(of: "фрагмент")
+        #expect(range.location != NSNotFound)
+        store.replaceRangeInNote(id: id, range: range, newText: "кусок")
+        #expect(store.history.first(where: { $0.id == id })?.text == "Первоначальный текст-кусок. Соседний абзац остаётся как есть.")
+    }
+
+    @Test func replaceRangeWithInvalidRangeIsNoOp() {
+        let store = AudioCapture.shared
+        let snapshot = store.history
+        defer { store.history = snapshot }
+        let initial = "Тестовый текст остаётся нетронутым."
+        let id = store.addNote(text: initial)
+        store.replaceRangeInNote(id: id, range: NSRange(location: 9999, length: 5), newText: "Вторжение")
+        #expect(store.history.first(where: { $0.id == id })?.text == initial)
+
+        store.replaceRangeInNote(id: id, range: NSRange(location: NSNotFound, length: 5), newText: "Вторжение")
+        #expect(store.history.first(where: { $0.id == id })?.text == initial)
+    }
+}

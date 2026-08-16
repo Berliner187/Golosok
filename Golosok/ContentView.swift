@@ -4,6 +4,22 @@ import UniformTypeIdentifiers
 
 enum MainTab { case history, dashboard, settings }
 
+struct NoteSelection: Equatable {
+    let noteID: UUID
+    let range: NSRange
+    let screenRect: CGRect
+    let fullText: String
+    let selectedText: String
+
+    static func == (lhs: NoteSelection, rhs: NoteSelection) -> Bool {
+        lhs.noteID == rhs.noteID
+            && NSEqualRanges(lhs.range, rhs.range)
+            && lhs.screenRect == rhs.screenRect
+            && lhs.selectedText == rhs.selectedText
+            && lhs.fullText == rhs.fullText
+    }
+}
+
 struct DateFormattingHelper {
     private static let inputFormatter: DateFormatter = { let df = DateFormatter(); df.dateFormat = "dd.MM.yyyy"; return df }()
     private static let outputFormatter: DateFormatter = { let df = DateFormatter(); df.locale = Locale.current; df.dateFormat = "d MMMM yyyy"; return df }()
@@ -17,6 +33,7 @@ struct DateFormattingHelper {
 
 struct NativeTextView: NSViewRepresentable {
     let text: String
+    var onSelectionChange: ((NSRange, CGRect?) -> Void)? = nil
     func makeNSView(context: Context) -> NSScrollView {
         let scrollView = NSTextView.scrollableTextView()
         guard let textView = scrollView.documentView as? NSTextView else { return scrollView }
@@ -24,11 +41,47 @@ struct NativeTextView: NSViewRepresentable {
         textView.font = NSFont.systemFont(ofSize: 15, weight: .regular); textView.textColor = NSColor(Color.uiInk)
         textView.textContainerInset = NSSize(width: 0, height: 10)
         textView.unregisterDraggedTypes()
+        textView.delegate = context.coordinator
+        context.coordinator.onSelectionChange = onSelectionChange
         return scrollView
     }
     func updateNSView(_ nsView: NSScrollView, context: Context) {
         guard let textView = nsView.documentView as? NSTextView else { return }
         if textView.string != text { textView.string = text; textView.textColor = NSColor(Color.uiInk) }
+        context.coordinator.onSelectionChange = onSelectionChange
+    }
+    func makeCoordinator() -> Coordinator { Coordinator() }
+
+    final class Coordinator: NSObject, NSTextViewDelegate {
+        var onSelectionChange: ((NSRange, CGRect?) -> Void)?
+
+        func textViewDidChangeSelection(_ notification: Notification) {
+            guard let tv = notification.object as? NSTextView else { return }
+            let range = tv.selectedRange()
+            guard let cb = onSelectionChange else { return }
+            if range.location == NSNotFound || range.length == 0 {
+                cb(NSRange(location: NSNotFound, length: 0), nil)
+                return
+            }
+            cb(range, Self.selectionScreenRect(in: tv, range: range))
+        }
+
+        static func selectionScreenRect(in tv: NSTextView, range: NSRange) -> CGRect? {
+            let layoutManager = tv.layoutManager
+            let textContainer = tv.textContainer
+            guard let lm = layoutManager, let tc = textContainer else { return nil }
+            let glyphRange = lm.glyphRange(forCharacterRange: range, actualCharacterRange: nil)
+            if glyphRange.length == 0 { return nil }
+            let rect = lm.boundingRect(forGlyphRange: glyphRange, in: tc)
+            let origin = tv.textContainerOrigin
+            let rectInView = NSRect(x: rect.origin.x + origin.x,
+                                    y: rect.origin.y + origin.y,
+                                    width: rect.size.width,
+                                    height: rect.size.height)
+            let rectInWindow = tv.convert(rectInView, to: nil)
+            guard let window = tv.window else { return rectInWindow }
+            return window.convertToScreen(rectInWindow)
+        }
     }
 }
 
@@ -38,6 +91,7 @@ struct SyncedPlayerView: View {
     let audioDuration: Double
     let itemID: UUID
     @ObservedObject var audioCapture = AudioCapture.shared
+    var onSelectionChange: ((NSRange, CGRect?) -> Void)? = nil
 
     private var isPlaying: Bool {
         audioCapture.playingItemId == itemID && audioCapture.isPlayerPlaying
@@ -86,7 +140,7 @@ struct SyncedPlayerView: View {
                     .foregroundColor(.uiMidGray)
             }
 
-            SyncedTextView(text: text, words: words, currentWordIndex: currentWordIndex) { time in
+            SyncedTextView(text: text, words: words, currentWordIndex: currentWordIndex, onSelectionChange: onSelectionChange) { time in
                 audioCapture.seekSynced(to: time, for: itemID)
             }
         }
@@ -102,6 +156,7 @@ struct SyncedTextView: NSViewRepresentable {
     let text: String
     let words: [TimedWord]
     let currentWordIndex: Int?
+    var onSelectionChange: ((NSRange, CGRect?) -> Void)? = nil
     let onSeek: (Double) -> Void
 
     func makeCoordinator() -> Coordinator { Coordinator(onSeek: onSeek) }
@@ -130,6 +185,7 @@ struct SyncedTextView: NSViewRepresentable {
         guard let textView = nsView.documentView as? NSTextView else { return }
         let coordinator = context.coordinator
         coordinator.onSeek = onSeek
+        coordinator.onSelectionChange = onSelectionChange
 
         if coordinator.cachedText != text || coordinator.cachedWords != words {
             coordinator.cachedText = text
@@ -161,6 +217,7 @@ struct SyncedTextView: NSViewRepresentable {
 
     final class Coordinator: NSObject, NSTextViewDelegate {
         var onSeek: (Double) -> Void
+        var onSelectionChange: ((NSRange, CGRect?) -> Void)?
         var cachedText: String?
         var cachedWords: [TimedWord]?
         var cachedRanges: [NSRange] = []
@@ -168,6 +225,16 @@ struct SyncedTextView: NSViewRepresentable {
         var lastScrolledIndex: Int?
 
         init(onSeek: @escaping (Double) -> Void) { self.onSeek = onSeek }
+
+        func textViewDidChangeSelection(_ notification: Notification) {
+            guard let tv = notification.object as? NSTextView, let cb = onSelectionChange else { return }
+            let range = tv.selectedRange()
+            if range.location == NSNotFound || range.length == 0 {
+                cb(NSRange(location: NSNotFound, length: 0), nil)
+                return
+            }
+            cb(range, NativeTextView.Coordinator.selectionScreenRect(in: tv, range: range))
+        }
 
         func textView(_ textView: NSTextView, clickedOnLink link: Any, at charIndex: Int) -> Bool {
             guard let url = link as? URL, url.scheme == "golosok",
@@ -324,6 +391,7 @@ struct ContentView: View {
     @State private var editableText: String = ""
     @State private var editingItemID: UUID?
     @State private var editSaveWorkItem: DispatchWorkItem?
+    @State private var currentSelection: NoteSelection?
     
     private var displayedHistory: [TranscriptionItem] {
         searchText.isEmpty ? audioCapture.history : filteredResults
@@ -651,9 +719,13 @@ struct ContentView: View {
                                     }
                                 }
                             } else if let timings = selectedTimings {
-                                SyncedPlayerView(text: selected.text, words: timings.words, audioDuration: timings.duration, itemID: selected.id)
+                                SyncedPlayerView(text: selected.text, words: timings.words, audioDuration: timings.duration, itemID: selected.id, onSelectionChange: { range, rect in
+                                    handleNoteSelectionChange(range: range, screenRect: rect)
+                                })
                             } else {
-                                NativeTextView(text: selected.text)
+                                NativeTextView(text: selected.text, onSelectionChange: { range, rect in
+                                    handleNoteSelectionChange(range: range, screenRect: rect)
+                                })
                             }
                         }
                     }
@@ -741,10 +813,20 @@ struct ContentView: View {
                 isEditing = false
                 editingItemID = nil
             }
+            if currentSelection != nil { currentSelection = nil }
+            AISelectionToolbarPresenter.shared.close()
             if let id = newId { selectedTimings = audioCapture.timings(for: id) } else { selectedTimings = nil }
         }
         .onChange(of: currentTab) { _ in
             if isEditing { flushPendingEdits(); isEditing = false; editingItemID = nil }
+            if currentSelection != nil { currentSelection = nil }
+            AISelectionToolbarPresenter.shared.close()
+        }
+        .onChange(of: isEditing) { editing in
+            if editing {
+                if currentSelection != nil { currentSelection = nil }
+                AISelectionToolbarPresenter.shared.close()
+            }
         }
         .sheet(item: $aiRequest) { request in
             AIResultSheet(request: request) { newID in
@@ -816,6 +898,50 @@ struct ContentView: View {
         editSaveWorkItem?.cancel()
         editSaveWorkItem = nil
         audioCapture.replaceNoteText(id: id, text: editableText)
+    }
+
+    // MARK: - AI-обработка выделенного фрагмента
+
+    private func handleNoteSelectionChange(range: NSRange, screenRect: CGRect?) {
+        guard let selected = audioCapture.history.first(where: { $0.id == selectedItemId }) else {
+            if currentSelection != nil { currentSelection = nil }
+            AISelectionToolbarPresenter.shared.close()
+            return
+        }
+        if range.location == NSNotFound || range.length == 0 {
+            if currentSelection != nil { currentSelection = nil }
+            AISelectionToolbarPresenter.shared.close()
+            return
+        }
+        let fullText = selected.text
+        let ns = fullText as NSString
+        guard range.location + range.length <= ns.length else {
+            if currentSelection != nil { currentSelection = nil }
+            AISelectionToolbarPresenter.shared.close()
+            return
+        }
+        let selectedText = ns.substring(with: range)
+        guard let rect = screenRect else { return }
+
+        let sel = NoteSelection(noteID: selected.id, range: range, screenRect: rect, fullText: fullText, selectedText: selectedText)
+        currentSelection = sel
+
+        AISelectionToolbarPresenter.shared.update(
+            anchorScreenRect: rect,
+            templates: promptStore.templates,
+            onPick: { tpl in openSelectionAI(with: tpl) },
+            onClose: { currentSelection = nil }
+        )
+    }
+
+    private func openSelectionAI(with template: AIPromptTemplate) {
+        guard let sel = currentSelection else { return }
+        aiRequest = AIActionRequest(
+            template: template,
+            noteID: sel.noteID,
+            noteText: sel.selectedText,
+            scope: .selection(range: sel.range, fullText: sel.fullText)
+        )
     }
 
     private func openAccountSettings() {

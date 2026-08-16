@@ -1,10 +1,10 @@
 import SwiftUI
 import AppKit
 
-// MARK: - Акцент
+// MARK: - Акцент (монохромный ЧБ)
 
-private extension Color {
-    static let uiAccent = dynamic(light: "#6366F1", dark: "#818CF8")
+extension Color {
+    static let uiAccent = dynamic(light: "#0a0a0a", dark: "#fafafa")
 }
 
 // MARK: - Слайдер (seek-bar плеера)

@@ -392,6 +392,22 @@
         }
       }
     },
+    "AI-действия с выделением" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "AI actions for selection"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "AI-действия с выделением"
+          }
+        }
+      }
+    },
     "API-ключ" : {
       "localizations" : {
         "en" : {
@@ -1200,6 +1216,22 @@
         }
       }
     },
+    "Было" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Before"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Было"
+          }
+        }
+      }
+    },
     "Быстрый ввод" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -1345,22 +1377,6 @@
         }
       }
     },
-    "Всё время" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "All time"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Всё время"
-          }
-        }
-      }
-    },
     "Все сохраненные транскрипции будут удалены безвозвратно. Это действие нельзя отменить." : {
       "localizations" : {
         "en" : {
@@ -1389,6 +1405,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "ВСЕГО ЗАМЕТОК"
+          }
+        }
+      }
+    },
+    "Всё время" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "All time"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Всё время"
           }
         }
       }
@@ -1486,6 +1518,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Выдайте доступ в Универсальном доступе macOS"
+          }
+        }
+      }
+    },
+    "ВЫДЕЛЕННЫЙ ФРАГМЕНТ" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "SELECTED FRAGMENT"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ВЫДЕЛЕННЫЙ ФРАГМЕНТ"
           }
         }
       }
@@ -1941,6 +1989,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Заменить"
+          }
+        }
+      }
+    },
+    "Заменить выделение" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Replace selection"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Заменить выделение"
           }
         }
       }
@@ -4755,6 +4819,22 @@
         }
       }
     },
+    "Стало" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "After"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Стало"
+          }
+        }
+      }
+    },
     "СТАТИСТИКА" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -4932,6 +5012,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Токен отклонён сервером"
+          }
+        }
+      }
+    },
+    "Только выделенный фрагмент" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Selected fragment only"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Только выделенный фрагмент"
           }
         }
       }
