@@ -33,6 +33,22 @@ extension NSColor {
             return NSColor.blue.withAlphaComponent(0.18)
         }
     }
+
+    static let searchMatch: NSColor = NSColor(name: nil) { appearance in
+        if appearance.name == .darkAqua {
+            return NSColor.systemYellow.withAlphaComponent(0.30)
+        } else {
+            return NSColor.systemYellow.withAlphaComponent(0.40)
+        }
+    }
+
+    static let searchCurrentMatch: NSColor = NSColor(name: nil) { appearance in
+        if appearance.name == .darkAqua {
+            return NSColor.systemYellow.withAlphaComponent(0.55)
+        } else {
+            return NSColor.systemYellow.withAlphaComponent(0.70)
+        }
+    }
 }
 
 // MARK: - Hex & Dynamic Initializers for SwiftUI Color

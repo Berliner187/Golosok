@@ -31,8 +31,34 @@ struct DateFormattingHelper {
     }
 }
 
+enum TranscriptSearch {
+    static func matchedWordIndices(in words: [TimedWord], query: String) -> [Int] {
+        guard !query.isEmpty else { return [] }
+        let normalizedQuery = query.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: Locale(identifier: "ru_RU"))
+        return words.enumerated().compactMap { (i, w) in
+            w.text.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: Locale(identifier: "ru_RU")).contains(normalizedQuery) ? i : nil
+        }
+    }
+
+    static func matchedRanges(in text: String, query: String) -> [NSRange] {
+        guard !query.isEmpty else { return [] }
+        let nsText = text as NSString
+        var ranges: [NSRange] = []
+        var start = 0
+        while start < nsText.length {
+            let r = nsText.range(of: query, options: [.caseInsensitive, .diacriticInsensitive], range: NSRange(location: start, length: nsText.length - start))
+            if r.location == NSNotFound { break }
+            ranges.append(r)
+            start = r.location + max(r.length, 1)
+        }
+        return ranges
+    }
+}
+
 struct NativeTextView: NSViewRepresentable {
     let text: String
+    var searchRanges: [NSRange] = []
+    var currentMatchPosition: Int = -1
     var onSelectionChange: ((NSRange, CGRect?) -> Void)? = nil
     func makeNSView(context: Context) -> NSScrollView {
         let scrollView = NSTextView.scrollableTextView()
@@ -47,13 +73,51 @@ struct NativeTextView: NSViewRepresentable {
     }
     func updateNSView(_ nsView: NSScrollView, context: Context) {
         guard let textView = nsView.documentView as? NSTextView else { return }
-        if textView.string != text { textView.string = text; textView.textColor = NSColor(Color.uiInk) }
-        context.coordinator.onSelectionChange = onSelectionChange
+        let coordinator = context.coordinator
+        let storage = textView.textStorage
+
+        let textChanged = textView.string != text
+        if textChanged {
+            textView.string = text
+            textView.textColor = NSColor(Color.uiInk)
+            coordinator.appliedSearchRanges.removeAll()
+            coordinator.lastSearchRanges = []
+            coordinator.lastMatchPosition = -1
+        }
+        coordinator.onSelectionChange = onSelectionChange
+
+        let needsReapply = textChanged
+            || coordinator.lastSearchRanges != searchRanges
+            || coordinator.lastMatchPosition != currentMatchPosition
+        guard needsReapply else { return }
+
+        for range in coordinator.appliedSearchRanges where range.location != NSNotFound {
+            storage?.removeAttribute(.backgroundColor, range: range)
+        }
+        coordinator.appliedSearchRanges.removeAll()
+
+        for (pos, range) in searchRanges.enumerated() where range.location != NSNotFound {
+            let color: NSColor = (pos == currentMatchPosition) ? .searchCurrentMatch : .searchMatch
+            storage?.addAttribute(.backgroundColor, value: color, range: range)
+            coordinator.appliedSearchRanges.append(range)
+        }
+        coordinator.lastSearchRanges = searchRanges
+        coordinator.lastMatchPosition = currentMatchPosition
+
+        if !searchRanges.isEmpty, currentMatchPosition >= 0, currentMatchPosition < searchRanges.count {
+            let range = searchRanges[currentMatchPosition]
+            if range.location != NSNotFound {
+                textView.scrollRangeToVisible(range)
+            }
+        }
     }
     func makeCoordinator() -> Coordinator { Coordinator() }
 
     final class Coordinator: NSObject, NSTextViewDelegate {
         var onSelectionChange: ((NSRange, CGRect?) -> Void)?
+        var appliedSearchRanges: [NSRange] = []
+        var lastSearchRanges: [NSRange] = []
+        var lastMatchPosition: Int = -1
 
         func textViewDidChangeSelection(_ notification: Notification) {
             guard let tv = notification.object as? NSTextView else { return }
@@ -91,6 +155,8 @@ struct SyncedPlayerView: View {
     let audioDuration: Double
     let itemID: UUID
     @ObservedObject var audioCapture = AudioCapture.shared
+    var searchMatchWordIndices: [Int] = []
+    var currentMatchPosition: Int = -1
     var onSelectionChange: ((NSRange, CGRect?) -> Void)? = nil
 
     private var isPlaying: Bool {
@@ -140,7 +206,10 @@ struct SyncedPlayerView: View {
                     .foregroundColor(.uiMidGray)
             }
 
-            SyncedTextView(text: text, words: words, currentWordIndex: currentWordIndex, onSelectionChange: onSelectionChange) { time in
+            SyncedTextView(text: text, words: words, currentWordIndex: currentWordIndex,
+                           searchMatchWordIndices: searchMatchWordIndices,
+                           currentMatchPosition: currentMatchPosition,
+                           onSelectionChange: onSelectionChange) { time in
                 audioCapture.seekSynced(to: time, for: itemID)
             }
         }
@@ -156,6 +225,8 @@ struct SyncedTextView: NSViewRepresentable {
     let text: String
     let words: [TimedWord]
     let currentWordIndex: Int?
+    var searchMatchWordIndices: [Int] = []
+    var currentMatchPosition: Int = -1
     var onSelectionChange: ((NSRange, CGRect?) -> Void)? = nil
     let onSeek: (Double) -> Void
 
@@ -187,11 +258,14 @@ struct SyncedTextView: NSViewRepresentable {
         coordinator.onSeek = onSeek
         coordinator.onSelectionChange = onSelectionChange
 
-        if coordinator.cachedText != text || coordinator.cachedWords != words {
+        let textChanged = coordinator.cachedText != text || coordinator.cachedWords != words
+        if textChanged {
             coordinator.cachedText = text
             coordinator.cachedWords = words
             coordinator.cachedRanges = coordinator.wordRanges(text: text, words: words)
             coordinator.highlightedIndex = nil
+            coordinator.lastScrolledIndex = nil
+            coordinator.yellowedWordIndices.removeAll()
 
             let attributed = NSMutableAttributedString(string: text, attributes: [
                 .font: NSFont.systemFont(ofSize: 15, weight: .regular),
@@ -204,13 +278,45 @@ struct SyncedTextView: NSViewRepresentable {
             }
             textView.textStorage?.setAttributedString(attributed)
         }
+
+        let searchChanged = textChanged || coordinator.searchMatchWordIndices != searchMatchWordIndices
+        let matchPosChanged = coordinator.currentMatchPosition != currentMatchPosition
+
+        if searchChanged {
+            coordinator.searchMatchWordIndices = searchMatchWordIndices
+            coordinator.searchMatchSet = Set(searchMatchWordIndices)
+            coordinator.searchMatchPositionMap = Dictionary(searchMatchWordIndices.enumerated().map { ($1, $0) }, uniquingKeysWith: { a, _ in a })
+        }
+        coordinator.currentMatchPosition = currentMatchPosition
+
+        let needsSearchRefresh = searchChanged || (matchPosChanged && !searchMatchWordIndices.isEmpty)
+        if needsSearchRefresh {
+            coordinator.applySearchHighlights(in: textView)
+            if searchChanged && searchMatchWordIndices.isEmpty {
+                coordinator.lastScrolledIndex = nil
+            }
+        }
+
         coordinator.applyHighlight(in: textView, currentWordIndex: currentWordIndex)
 
-        if let index = currentWordIndex, index != coordinator.lastScrolledIndex, index < coordinator.cachedRanges.count {
+        let isSearchActive = !searchMatchWordIndices.isEmpty
+        if !isSearchActive, let index = currentWordIndex, index != coordinator.lastScrolledIndex, index < coordinator.cachedRanges.count {
             let range = coordinator.cachedRanges[index]
             if range.location != NSNotFound {
                 textView.scrollRangeToVisible(range)
                 coordinator.lastScrolledIndex = index
+            }
+        }
+
+        if isSearchActive, !searchMatchWordIndices.isEmpty, currentMatchPosition >= 0, currentMatchPosition < searchMatchWordIndices.count,
+           (searchChanged || matchPosChanged) {
+            let wordIdx = searchMatchWordIndices[currentMatchPosition]
+            if wordIdx < coordinator.cachedRanges.count {
+                let range = coordinator.cachedRanges[wordIdx]
+                if range.location != NSNotFound {
+                    textView.scrollRangeToVisible(range)
+                    coordinator.lastScrolledIndex = wordIdx
+                }
             }
         }
     }
@@ -223,6 +329,11 @@ struct SyncedTextView: NSViewRepresentable {
         var cachedRanges: [NSRange] = []
         var highlightedIndex: Int?
         var lastScrolledIndex: Int?
+        var searchMatchWordIndices: [Int] = []
+        var searchMatchSet: Set<Int> = []
+        var searchMatchPositionMap: [Int: Int] = [:]
+        var currentMatchPosition: Int = -1
+        var yellowedWordIndices: Set<Int> = []
 
         init(onSeek: @escaping (Double) -> Void) { self.onSeek = onSeek }
 
@@ -244,18 +355,46 @@ struct SyncedTextView: NSViewRepresentable {
         }
 
         func applyHighlight(in textView: NSTextView, currentWordIndex: Int?) {
+            let storage = textView.textStorage
             if let prev = highlightedIndex, prev != currentWordIndex, prev < cachedRanges.count {
                 let range = cachedRanges[prev]
                 if range.location != NSNotFound {
-                    textView.textStorage?.removeAttribute(.backgroundColor, range: range)
+                    storage?.removeAttribute(.backgroundColor, range: range)
+                    if searchMatchSet.contains(prev) {
+                        let color: NSColor = (searchMatchPositionMap[prev] == currentMatchPosition) ? .searchCurrentMatch : .searchMatch
+                        storage?.addAttribute(.backgroundColor, value: color, range: range)
+                        yellowedWordIndices.insert(prev)
+                    }
                 }
             }
             highlightedIndex = currentWordIndex
             if let index = currentWordIndex, index < cachedRanges.count {
                 let range = cachedRanges[index]
                 if range.location != NSNotFound {
-                    textView.textStorage?.addAttribute(.backgroundColor, value: NSColor.transcriptHighlight, range: range)
+                    storage?.addAttribute(.backgroundColor, value: NSColor.transcriptHighlight, range: range)
+                    yellowedWordIndices.remove(index)
                 }
+            }
+        }
+
+        func applySearchHighlights(in textView: NSTextView) {
+            let storage = textView.textStorage
+            for wordIdx in yellowedWordIndices {
+                guard wordIdx < cachedRanges.count else { continue }
+                let range = cachedRanges[wordIdx]
+                if range.location != NSNotFound {
+                    storage?.removeAttribute(.backgroundColor, range: range)
+                }
+            }
+            yellowedWordIndices.removeAll()
+            for (pos, wordIdx) in searchMatchWordIndices.enumerated() {
+                guard wordIdx < cachedRanges.count else { continue }
+                let range = cachedRanges[wordIdx]
+                guard range.location != NSNotFound else { continue }
+                if wordIdx == highlightedIndex { continue }
+                let color: NSColor = (pos == currentMatchPosition) ? .searchCurrentMatch : .searchMatch
+                storage?.addAttribute(.backgroundColor, value: color, range: range)
+                yellowedWordIndices.insert(wordIdx)
             }
         }
 
@@ -392,6 +531,13 @@ struct ContentView: View {
     @State private var editingItemID: UUID?
     @State private var editSaveWorkItem: DispatchWorkItem?
     @State private var currentSelection: NoteSelection?
+
+    @State private var isSearchBarVisible: Bool = false
+    @State private var transcriptSearchText: String = ""
+    @State private var currentMatchPosition: Int = 0
+    @State private var cachedSyncedMatchIndices: [Int] = []
+    @State private var cachedNativeMatchRanges: [NSRange] = []
+    @FocusState private var isSearchFieldFocused: Bool
     
     private var displayedHistory: [TranscriptionItem] {
         searchText.isEmpty ? audioCapture.history : filteredResults
@@ -429,6 +575,24 @@ struct ContentView: View {
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             audioCapture.checkUpdates()
         }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("ToggleTranscriptSearch"))) { _ in
+            toggleSearchBar()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("FindNextInTranscript"))) { _ in
+            goToMatch(offset: 1)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("FindPreviousInTranscript"))) { _ in
+            goToMatch(offset: -1)
+        }
+        .onChange(of: transcriptSearchText) { _ in
+            recomputeSearchMatches()
+        }
+        .background(
+            Button("CloseSearch") { if isSearchBarVisible { closeSearchBar() } }
+                .keyboardShortcut(.escape)
+                .opacity(0)
+                .frame(width: 0, height: 0)
+        )
         .onDrop(of: [UTType.fileURL], isTargeted: $isFileDropTargeted) { providers in
             handleDroppedProviders(providers)
         }
@@ -701,9 +865,35 @@ struct ContentView: View {
                                         .foregroundColor(.blue).padding(.horizontal, 8).padding(.vertical, 4).background(Color.blue.opacity(0.12)).cornerRadius(6)
                                     }.buttonStyle(.plain)
                                 }
+                                Spacer(minLength: 8)
+                                if !isEditing && !isSearchBarVisible {
+                                    Button(action: toggleSearchBar) {
+                                        HStack(spacing: 5) {
+                                            Image(systemName: "magnifyingglass")
+                                                .font(.system(size: 9, weight: .semibold))
+                                            Text(LocalizedStringKey("Поиск"))
+                                                .font(.system(size: 10, weight: .medium, design: .rounded))
+                                            Text("⌘F")
+                                                .font(.system(size: 9, weight: .semibold, design: .rounded))
+                                                .foregroundColor(.uiMidGray)
+                                                .padding(.horizontal, 5).padding(.vertical, 1)
+                                                .background(Color.uiCanvas)
+                                                .cornerRadius(4)
+                                                .overlay(RoundedRectangle(cornerRadius: 4).stroke(Color.uiHairline, lineWidth: 0.5))
+                                        }
+                                        .foregroundColor(.uiMidGray)
+                                        .contentShape(Rectangle())
+                                    }
+                                    .buttonStyle(.plain)
+                                    .help(String(localized: "Поиск по стенограмме (⌘F)"))
+                                }
                             }
                             
                             Divider().background(Color.uiHairline).padding(.vertical, 4)
+                            if isSearchBarVisible && !isEditing {
+                                transcriptSearchBar
+                                    .transition(.move(edge: .top).combined(with: .opacity))
+                            }
                             if isEditing {
                                 ZStack(alignment: .topLeading) {
                                     EditableTextView(text: $editableText) { _ in
@@ -719,11 +909,17 @@ struct ContentView: View {
                                     }
                                 }
                             } else if let timings = selectedTimings {
-                                SyncedPlayerView(text: selected.text, words: timings.words, audioDuration: timings.duration, itemID: selected.id, onSelectionChange: { range, rect in
+                                SyncedPlayerView(text: selected.text, words: timings.words, audioDuration: timings.duration, itemID: selected.id,
+                                                 searchMatchWordIndices: cachedSyncedMatchIndices,
+                                                 currentMatchPosition: cachedSyncedMatchIndices.isEmpty ? -1 : currentMatchPosition,
+                                                 onSelectionChange: { range, rect in
                                     handleNoteSelectionChange(range: range, screenRect: rect)
                                 })
                             } else {
-                                NativeTextView(text: selected.text, onSelectionChange: { range, rect in
+                                NativeTextView(text: selected.text,
+                                               searchRanges: cachedNativeMatchRanges,
+                                               currentMatchPosition: cachedNativeMatchRanges.isEmpty ? -1 : currentMatchPosition,
+                                               onSelectionChange: { range, rect in
                                     handleNoteSelectionChange(range: range, screenRect: rect)
                                 })
                             }
@@ -816,16 +1012,31 @@ struct ContentView: View {
             if currentSelection != nil { currentSelection = nil }
             AISelectionToolbarPresenter.shared.close()
             if let id = newId { selectedTimings = audioCapture.timings(for: id) } else { selectedTimings = nil }
+            isSearchBarVisible = false
+            transcriptSearchText = ""
+            cachedSyncedMatchIndices = []
+            cachedNativeMatchRanges = []
+            currentMatchPosition = 0
         }
         .onChange(of: currentTab) { _ in
             if isEditing { flushPendingEdits(); isEditing = false; editingItemID = nil }
             if currentSelection != nil { currentSelection = nil }
             AISelectionToolbarPresenter.shared.close()
+            isSearchBarVisible = false
+            transcriptSearchText = ""
+            cachedSyncedMatchIndices = []
+            cachedNativeMatchRanges = []
+            currentMatchPosition = 0
         }
         .onChange(of: isEditing) { editing in
             if editing {
                 if currentSelection != nil { currentSelection = nil }
                 AISelectionToolbarPresenter.shared.close()
+                isSearchBarVisible = false
+                transcriptSearchText = ""
+                cachedSyncedMatchIndices = []
+                cachedNativeMatchRanges = []
+                currentMatchPosition = 0
             }
         }
         .sheet(item: $aiRequest) { request in
@@ -860,6 +1071,125 @@ struct ContentView: View {
     private func loadSelectedTimings() {
         if let id = selectedItemId { selectedTimings = audioCapture.timings(for: id) }
         else { selectedTimings = nil }
+    }
+
+    // MARK: - Поиск по стенограмме (⌘ + F)
+
+    private var transcriptSearchBar: some View {
+        let count = currentMatchCount
+        let hasQuery = !transcriptSearchText.isEmpty
+        return HStack(spacing: 8) {
+            Image(systemName: "magnifyingglass")
+                .font(.system(size: 12, weight: .medium))
+                .foregroundColor(.uiMidGray)
+            TextField("Поиск в стенограмме", text: $transcriptSearchText)
+                .textFieldStyle(PlainTextFieldStyle())
+                .font(UIStyleFont.body(size: 13, weight: .regular))
+                .foregroundColor(.uiInk)
+                .focused($isSearchFieldFocused)
+            if hasQuery {
+                Text(count > 0 ? "\(currentMatchPosition + 1)/\(count)" : "0/0")
+                    .font(.system(size: 11, weight: .medium, design: .monospaced))
+                    .foregroundColor(.uiMidGray)
+                    .monospacedDigit()
+                Button(action: { goToMatch(offset: -1) }) {
+                    Image(systemName: "chevron.up")
+                        .font(.system(size: 10, weight: .bold))
+                        .foregroundColor(count > 0 ? .uiInk : .uiMidGray)
+                        .frame(width: 20, height: 20)
+                }
+                .buttonStyle(.plain)
+                .disabled(count == 0)
+                .help(String(localized: "Предыдущее совпадение (⇧⌘G)"))
+                Button(action: { goToMatch(offset: 1) }) {
+                    Image(systemName: "chevron.down")
+                        .font(.system(size: 10, weight: .bold))
+                        .foregroundColor(count > 0 ? .uiInk : .uiMidGray)
+                        .frame(width: 20, height: 20)
+                }
+                .buttonStyle(.plain)
+                .disabled(count == 0)
+                .help(String(localized: "Следующее совпадение (⌘G)"))
+            }
+            Button(action: closeSearchBar) {
+                Image(systemName: "xmark.circle.fill")
+                    .font(.system(size: 14))
+                    .foregroundColor(.uiMidGray)
+                    .frame(width: 20, height: 20)
+            }
+            .buttonStyle(.plain)
+            .help(String(localized: "Закрыть поиск (Esc)"))
+        }
+        .padding(8)
+        .background(Color.uiCanvas)
+        .cornerRadius(8)
+        .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.uiHairline, lineWidth: 1))
+    }
+
+    private var currentMatchCount: Int {
+        selectedTimings != nil ? cachedSyncedMatchIndices.count : cachedNativeMatchRanges.count
+    }
+
+    private func recomputeSearchMatches() {
+        guard !transcriptSearchText.isEmpty else {
+            cachedSyncedMatchIndices = []
+            cachedNativeMatchRanges = []
+            currentMatchPosition = 0
+            return
+        }
+        if let timings = selectedTimings {
+            cachedSyncedMatchIndices = TranscriptSearch.matchedWordIndices(in: timings.words, query: transcriptSearchText)
+            cachedNativeMatchRanges = []
+        } else if let selected = audioCapture.history.first(where: { $0.id == selectedItemId }) {
+            cachedNativeMatchRanges = TranscriptSearch.matchedRanges(in: selected.text, query: transcriptSearchText)
+            cachedSyncedMatchIndices = []
+        } else {
+            cachedSyncedMatchIndices = []
+            cachedNativeMatchRanges = []
+        }
+        currentMatchPosition = 0
+    }
+
+    private func goToMatch(offset: Int) {
+        guard isSearchBarVisible else { return }
+        let count = currentMatchCount
+        guard count > 0 else { return }
+        currentMatchPosition = (currentMatchPosition + offset + count) % count
+        seekToCurrentMatch()
+    }
+
+    private func seekToCurrentMatch() {
+        guard let id = selectedItemId, let timings = selectedTimings else { return }
+        guard currentMatchPosition < cachedSyncedMatchIndices.count else { return }
+        let wordIdx = cachedSyncedMatchIndices[currentMatchPosition]
+        guard wordIdx < timings.words.count else { return }
+        audioCapture.seekSynced(to: timings.words[wordIdx].start, for: id)
+    }
+
+    private func toggleSearchBar() {
+        guard selectedItemId != nil, !isEditing else { return }
+        withAnimation(.easeOut(duration: 0.18)) {
+            isSearchBarVisible.toggle()
+        }
+        if isSearchBarVisible {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.06) { isSearchFieldFocused = true }
+        } else {
+            transcriptSearchText = ""
+            cachedSyncedMatchIndices = []
+            cachedNativeMatchRanges = []
+            currentMatchPosition = 0
+        }
+    }
+
+    private func closeSearchBar() {
+        withAnimation(.easeOut(duration: 0.18)) {
+            isSearchBarVisible = false
+        }
+        transcriptSearchText = ""
+        cachedSyncedMatchIndices = []
+        cachedNativeMatchRanges = []
+        currentMatchPosition = 0
+        isSearchFieldFocused = false
     }
 
     // MARK: - Редактор заметок

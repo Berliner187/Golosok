@@ -314,6 +314,64 @@ struct GolosokTests {
         #expect(AudioCapture.compareVersions("2.0", "1.99.9") == .orderedDescending)
         #expect(AudioCapture.compareVersions("1.0", "1.0.1") == .orderedAscending)
     }
+
+    // MARK: - Transcript search (⌘ + F)
+
+    private func tw(_ texts: [String]) -> [TimedWord] {
+        texts.enumerated().map { TimedWord(text: $0.element, start: Double($0.offset), end: Double($0.offset) + 1) }
+    }
+
+    @Test func transcriptSearchMatchesWordsCaseInsensitive() {
+        let words = tw(["Привет", "мир", "ПРИВЕТ", "дом"])
+        let indices = TranscriptSearch.matchedWordIndices(in: words, query: "привет")
+        #expect(indices == [0, 2])
+    }
+
+    @Test func transcriptSearchMatchesBySubstringWithinWord() {
+        let words = tw(["прилетел", "привет", "ушёл"])
+        let indices = TranscriptSearch.matchedWordIndices(in: words, query: "при")
+        #expect(indices == [0, 1])
+    }
+
+    @Test func transcriptSearchIsDiacriticInsensitive() {
+        let words = tw(["еле", "ёлка", "ёж"])
+        let indices = TranscriptSearch.matchedWordIndices(in: words, query: "е")
+        #expect(indices == [0, 1, 2])
+    }
+
+    @Test func transcriptSearchEmptyQueryReturnsNoMatches() {
+        let words = tw(["слово", "текст"])
+        #expect(TranscriptSearch.matchedWordIndices(in: words, query: "").isEmpty)
+    }
+
+    @Test func transcriptSearchNoMatchReturnsEmpty() {
+        let words = tw(["кот", "пёс"])
+        #expect(TranscriptSearch.matchedWordIndices(in: words, query: "слон").isEmpty)
+    }
+
+    @Test func transcriptSearchRangesFindAllOccurrences() {
+        let text = "кот пошёл к коту за котёнком"
+        let ranges = TranscriptSearch.matchedRanges(in: text, query: "кот")
+        #expect(ranges.count == 3)
+        let ns = text as NSString
+        for r in ranges {
+            #expect(ns.substring(with: r).lowercased().contains("кот"))
+        }
+    }
+
+    @Test func transcriptSearchRangesAreCaseInsensitive() {
+        let text = "Тест тест ТЕСТ"
+        let ranges = TranscriptSearch.matchedRanges(in: text, query: "тест")
+        #expect(ranges.count == 3)
+    }
+
+    @Test func transcriptSearchRangesEmptyQueryReturnsNothing() {
+        #expect(TranscriptSearch.matchedRanges(in: "текст", query: "").isEmpty)
+    }
+
+    @Test func transcriptSearchRangesNoMatchReturnsEmpty() {
+        #expect(TranscriptSearch.matchedRanges(in: "привет мир", query: "слон").isEmpty)
+    }
 }
 
 // MARK: - AI-обработка выделенного фрагмента

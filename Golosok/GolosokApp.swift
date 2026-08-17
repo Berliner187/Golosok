@@ -55,6 +55,24 @@ struct GolosokApp: App {
                 }
                 .keyboardShortcut("o", modifiers: .command)
             }
+
+            CommandGroup(after: .textEditing) {
+                Button("Найти в стенограмме…") {
+                    NSApp.activate(ignoringOtherApps: true)
+                    NotificationCenter.default.post(name: NSNotification.Name("ToggleTranscriptSearch"), object: nil)
+                }
+                .keyboardShortcut("f", modifiers: .command)
+
+                Button("Найти далее") {
+                    NotificationCenter.default.post(name: NSNotification.Name("FindNextInTranscript"), object: nil)
+                }
+                .keyboardShortcut("g", modifiers: .command)
+
+                Button("Найти ранее") {
+                    NotificationCenter.default.post(name: NSNotification.Name("FindPreviousInTranscript"), object: nil)
+                }
+                .keyboardShortcut("g", modifiers: [.command, .shift])
+            }
         }
 
         .defaultSize(width: 990, height: 710)

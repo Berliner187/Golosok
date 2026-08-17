@@ -124,6 +124,16 @@
     "%lld МБ — Apple Metal" : {
 
     },
+    "%lld/%lld" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$lld/%2$lld"
+          }
+        }
+      }
+    },
     "%lld%%" : {
       "localizations" : {
         "en" : {
@@ -172,6 +182,9 @@
           }
         }
       }
+    },
+    "⌘F" : {
+
     },
     "⌥ + ПРОБЕЛ" : {
       "extractionState" : "stale",
@@ -343,6 +356,9 @@
         }
       }
     },
+    "0/0" : {
+
+    },
     "4 ФОРМАТА" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -487,6 +503,9 @@
           }
         }
       }
+    },
+    "CloseSearch" : {
+
     },
     "DeepSeek" : {
       "extractionState" : "stale",
@@ -1377,6 +1396,22 @@
         }
       }
     },
+    "Всё время" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "All time"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Всё время"
+          }
+        }
+      }
+    },
     "Все сохраненные транскрипции будут удалены безвозвратно. Это действие нельзя отменить." : {
       "localizations" : {
         "en" : {
@@ -1405,22 +1440,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "ВСЕГО ЗАМЕТОК"
-          }
-        }
-      }
-    },
-    "Всё время" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "All time"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Всё время"
           }
         }
       }
@@ -1976,6 +1995,9 @@
           }
         }
       }
+    },
+    "Закрыть поиск (Esc)" : {
+
     },
     "Заменить" : {
       "localizations" : {
@@ -2704,6 +2726,15 @@
           }
         }
       }
+    },
+    "Найти в стенограмме…" : {
+
+    },
+    "Найти далее" : {
+
+    },
+    "Найти ранее" : {
+
     },
     "Например: Краткий пересказ" : {
       "localizations" : {
@@ -3809,6 +3840,54 @@
         }
       }
     },
+    "Поиск" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Search"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Поиск"
+          }
+        }
+      }
+    },
+    "Поиск в стенограмме" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Search transcript"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Поиск в стенограмме"
+          }
+        }
+      }
+    },
+    "Поиск по стенограмме (⌘F)" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Search transcript (⌘F)"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Поиск по стенограмме (⌘F)"
+          }
+        }
+      }
+    },
     "Поиск..." : {
       "localizations" : {
         "en" : {
@@ -3905,6 +3984,9 @@
           }
         }
       }
+    },
+    "Предыдущее совпадение (⇧⌘G)" : {
+
     },
     "Придумать заголовок" : {
       "extractionState" : "stale",
@@ -4637,6 +4719,9 @@
           }
         }
       }
+    },
+    "Следующее совпадение (⌘G)" : {
+
     },
     "Слушайте исходный звук прямо в заметке, чтобы проверить соответствие с текстом" : {
       "extractionState" : "stale",
