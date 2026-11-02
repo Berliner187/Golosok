@@ -7,6 +7,17 @@ class PermissionManager: ObservableObject {
     
     @Published var isMicGranted: Bool = false
     @Published var isAccessibilityGranted: Bool = false
+    @Published var didRequestAccessibility: Bool = UserDefaults.standard.bool(forKey: "didRequestAccessibility") {
+        didSet {
+            UserDefaults.standard.set(didRequestAccessibility, forKey: "didRequestAccessibility")
+        }
+    }
+    
+    // Показывает, что доступ запрашивался (или онбординг был пройден), но система не доверяет процессу
+    // (типично при смене подписи/обновлении: тумблер в macOS включен, но привязан к старой версии)
+    var isAccessibilityMismatch: Bool {
+        return (didRequestAccessibility || onboardingCompleted) && !isAccessibilityGranted
+    }
     
     @Published var onboardingCompleted: Bool = UserDefaults.standard.bool(forKey: "onboardingCompleted") {
         didSet {
@@ -22,6 +33,14 @@ class PermissionManager: ObservableObject {
         checkPermissions()
         if !isMicGranted {
             onboardingCompleted = false
+        }
+        
+        NotificationCenter.default.addObserver(
+            forName: NSApplication.didBecomeActiveNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.refreshPermissions()
         }
     }
     
@@ -54,6 +73,7 @@ class PermissionManager: ObservableObject {
     }
     
     func requestAccessibilityPermission() {
+        didRequestAccessibility = true
         let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true]
         _ = AXIsProcessTrustedWithOptions(options as CFDictionary)
         

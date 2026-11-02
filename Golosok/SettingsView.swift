@@ -72,7 +72,15 @@ struct SettingsView: View {
                                         .font(UIStyleFont.body(size: 13, weight: .medium))
                                         .foregroundColor(.uiInk)
                                     
-                                    if !permissions.isAccessibilityGranted {
+                                    if permissions.isAccessibilityMismatch {
+                                        HStack(spacing: 4) {
+                                            Image(systemName: "exclamationmark.triangle.fill")
+                                                .font(.system(size: 10))
+                                            Text("Несовпадение сигнатуры")
+                                                .font(UIStyleFont.body(size: 10, weight: .bold))
+                                        }
+                                        .foregroundColor(.uiWarn)
+                                    } else if !permissions.isAccessibilityGranted {
                                         Text("Разрешите доступ")
                                             .font(UIStyleFont.body(size: 10, weight: .bold))
                                             .foregroundColor(.uiWarn)
@@ -81,9 +89,11 @@ struct SettingsView: View {
                                 
                                 Text(permissions.isAccessibilityGranted ?
                                      LocalizedStringKey("Печатать расшифровку прямо в место курсора") :
-                                     LocalizedStringKey("Выдайте доступ в Универсальном доступе macOS"))
+                                     (permissions.isAccessibilityMismatch ?
+                                      LocalizedStringKey("macOS привязала доступ к старой подписи. Удалите Голосок кнопкой «–» в Настройках и добавьте снова.") :
+                                      LocalizedStringKey("Выдайте доступ в Универсальном доступе macOS")))
                                     .font(UIStyleFont.body(size: 11, weight: .regular))
-                                    .foregroundColor(.uiMidGray)
+                                    .foregroundColor(permissions.isAccessibilityMismatch ? .uiWarn : .uiMidGray)
                             }
                             Spacer()
                             
@@ -92,7 +102,7 @@ struct SettingsView: View {
                                     .labelsHidden()
                                     .toggleStyle(SwitchToggleStyle(tint: Color(hex: "#10B981")))
                             } else {
-                                UIOutlineButton(title: "Настройки") {
+                                UIOutlineButton(title: permissions.isAccessibilityMismatch ? "Передобавить" : "Настройки") {
                                     permissions.requestAccessibilityPermission()
                                 }
                             }
