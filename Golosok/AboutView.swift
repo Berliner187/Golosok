@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct AboutView: View {
+    @ObservedObject var audioCapture = AudioCapture.shared
     @Environment(\.dismiss) private var dismiss
     @Environment(\.openURL) private var openURL
     
@@ -22,7 +23,53 @@ struct AboutView: View {
                     .font(UIStyleFont.display(size: 20, weight: .bold))
                     .foregroundColor(.uiInk)
                 
-                UIBadge(text: currentVersionStr)
+                HStack(spacing: 8) {
+                    UIBadge(text: currentVersionStr)
+                    
+                    if let update = audioCapture.updateInfo {
+                        HStack(spacing: 6) {
+                            if audioCapture.isDownloadingUpdate {
+                                ProgressView().scaleEffect(0.6)
+                                Text(audioCapture.updateProgressText.isEmpty ? LocalizedStringKey("Скачивание...") : LocalizedStringKey(audioCapture.updateProgressText))
+                                    .font(UIStyleFont.body(size: 10, weight: .bold))
+                                    .foregroundColor(.white)
+                                Button(action: { audioCapture.cancelUpdateDownload() }) {
+                                    Image(systemName: "xmark.circle.fill").foregroundColor(.white.opacity(0.8))
+                                }.buttonStyle(.plain)
+                            } else {
+                                Button(action: { audioCapture.downloadAndInstallUpdate() }) {
+                                    HStack(spacing: 4) {
+                                        Image(systemName: "arrow.down.circle.fill")
+                                        Text(String(format: String(localized: "Доступна %@"), update.codename))
+                                    }
+                                    .font(UIStyleFont.body(size: 10, weight: .bold))
+                                    .foregroundColor(.white)
+                                }.buttonStyle(.plain)
+                            }
+                        }
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 5)
+                        .background(Color.uiWarn)
+                        .cornerRadius(14)
+                    } else {
+                        HStack(spacing: 5) {
+                            Circle()
+                                .fill(Color(hex: "#10B981"))
+                                .frame(width: 6, height: 6)
+                            Text(LocalizedStringKey("Актуальная версия"))
+                                .font(UIStyleFont.body(size: 10, weight: .semibold))
+                                .foregroundColor(Color(hex: "#10B981"))
+                        }
+                        .padding(.horizontal, 9)
+                        .padding(.vertical, 4)
+                        .background(Color(hex: "#10B981").opacity(0.12))
+                        .cornerRadius(14)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 14)
+                                .stroke(Color(hex: "#10B981").opacity(0.25), lineWidth: 1)
+                        )
+                    }
+                }
             }
             
             // 2. ОПИСАНИЕ

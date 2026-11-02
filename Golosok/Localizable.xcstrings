@@ -977,6 +977,22 @@
         }
       }
     },
+    "Актуальная версия" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Up to date"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Актуальная версия"
+          }
+        }
+      }
+    },
     "Авто-вставка текста" : {
       "localizations" : {
         "en" : {
