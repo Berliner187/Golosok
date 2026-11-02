@@ -68,7 +68,7 @@ struct OnboardingView: View {
                         // ШАГ 2: Авто-вставка (По желанию)
                         HStack(spacing: 16) {
                             Circle()
-                                .fill(permissions.isAccessibilityGranted ? Color(hex: "#10B981") : Color.uiMidGray.opacity(0.4))
+                                .fill(permissions.isAccessibilityGranted ? Color(hex: "#10B981") : (permissions.isAccessibilityMismatch ? Color.uiWarn : Color.uiMidGray.opacity(0.4)))
                                 .frame(width: 10, height: 10)
                             
                             VStack(alignment: .leading, spacing: 2) {
@@ -79,16 +79,27 @@ struct OnboardingView: View {
                                     Text("Опционально")
                                         .font(UIStyleFont.body(size: 10, weight: .regular))
                                         .foregroundColor(.uiMidGray)
+                                    if permissions.isAccessibilityMismatch {
+                                        Image(systemName: "exclamationmark.triangle.fill")
+                                            .foregroundColor(.uiWarn)
+                                            .font(.system(size: 12))
+                                    }
                                 }
-                                Text("Мгновенная вставка распознанного текста в активное окно")
+                                Text(permissions.isAccessibilityMismatch ?
+                                     LocalizedStringKey("macOS привязала доступ к старой подписи. Удалите Голосок кнопкой «–» в Настройках и добавьте снова.") :
+                                     LocalizedStringKey("Мгновенная вставка распознанного текста в активное окно"))
                                     .font(UIStyleFont.body(size: 12, weight: .regular))
-                                    .foregroundColor(.uiMidGray)
+                                    .foregroundColor(permissions.isAccessibilityMismatch ? .uiWarn : .uiMidGray)
                             }
                             
                             Spacer()
                             
                             if permissions.isAccessibilityGranted {
                                 UIBadge(text: String(localized: "Готово"))
+                            } else if permissions.isAccessibilityMismatch {
+                                UIOutlineButton(title: "Передобавить") {
+                                    permissions.requestAccessibilityPermission()
+                                }
                             } else {
                                 UIOutlineButton(title: "Включить") {
                                     permissions.requestAccessibilityPermission()

@@ -5458,6 +5458,54 @@
           }
         }
       }
+    },
+    "Несовпадение сигнатуры" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Signature mismatch"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Несовпадение сигнатуры"
+          }
+        }
+      }
+    },
+    "macOS привязала доступ к старой подписи. Удалите Голосок кнопкой «–» в Настройках и добавьте снова." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "macOS bound permission to an older signature. Remove Golosok using the \"-\" button in Settings and add it again."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "macOS привязала доступ к старой подписи. Удалите Голосок кнопкой «–» в Настройках и добавьте снова."
+          }
+        }
+      }
+    },
+    "Передобавить" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Re-add"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Передобавить"
+          }
+        }
+      }
     }
   },
   "version" : "1.0"
