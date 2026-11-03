@@ -210,8 +210,8 @@ struct AIResultSheet: View {
             }
         }
         .padding(24)
-        .frame(minWidth: request.scope.isSelection ? 760 : 560,
-               minHeight: request.scope.isSelection ? 480 : 400)
+        .frame(minWidth: request.scope.isSelection ? 820 : 680,
+               minHeight: request.scope.isSelection ? 500 : 420)
         .background(Color.uiPaper)
         .onAppear(perform: run)
         .onDisappear(perform: cancelGeneration)
@@ -566,24 +566,29 @@ struct AIResultSheet: View {
                 }
             }
             Spacer()
-            UIOutlineButton(title: "Перегенерировать") {
-                regenerate()
-            }
-            Button(action: copy) {
-                HStack(spacing: 5) {
-                    Image(systemName: copied ? "checkmark" : "doc.on.doc")
-                        .font(.system(size: 11, weight: .medium))
-                    Text(copied ? "Готово!" : "Копировать")
-                        .font(UIStyleFont.body(size: 13, weight: .medium))
-                }
-                .foregroundColor(copied ? Color(hex: "#10B981") : .uiInk)
-                .padding(.vertical, 8)
-                .padding(.horizontal, 14)
-                .background(Color.uiPaper)
-                .cornerRadius(18)
-                .overlay(RoundedRectangle(cornerRadius: 18).stroke(copied ? Color(hex: "#10B981").opacity(0.5) : Color.uiHairline, lineWidth: 1))
+            Button(action: regenerate) {
+                Image(systemName: "arrow.clockwise")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundColor(.uiInk)
+                    .frame(width: 36, height: 36)
+                    .background(Color.uiPaper)
+                    .clipShape(Circle())
+                    .overlay(Circle().stroke(Color.uiHairline, lineWidth: 1))
             }
             .buttonStyle(TactileButtonStyle())
+            .help(String(localized: "Перегенерировать"))
+
+            Button(action: copy) {
+                Image(systemName: copied ? "checkmark" : "doc.on.doc")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundColor(copied ? Color(hex: "#10B981") : .uiInk)
+                    .frame(width: 36, height: 36)
+                    .background(Color.uiPaper)
+                    .clipShape(Circle())
+                    .overlay(Circle().stroke(copied ? Color(hex: "#10B981").opacity(0.5) : Color.uiHairline, lineWidth: 1))
+            }
+            .buttonStyle(TactileButtonStyle())
+            .help(String(localized: copied ? "Готово!" : "Копировать"))
         }
     }
 
