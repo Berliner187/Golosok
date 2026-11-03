@@ -134,8 +134,14 @@ struct AIResultSheet: View {
     @State private var errorText: String?
     @State private var copied = false
     @State private var fromCache = false
+    @State private var currentTask: URLSessionDataTask?
 
     enum Phase { case loading, done, error }
+
+    private func cancelGeneration() {
+        currentTask?.cancel()
+        currentTask = nil
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -158,7 +164,10 @@ struct AIResultSheet: View {
                         .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.uiHairline, lineWidth: 1))
                 }
                 Spacer()
-                Button(action: { dismiss() }) {
+                Button(action: {
+                    cancelGeneration()
+                    dismiss()
+                }) {
                     Image(systemName: "xmark")
                         .font(.system(size: 11, weight: .bold))
                         .foregroundColor(.uiMidGray)
@@ -188,6 +197,7 @@ struct AIResultSheet: View {
                minHeight: request.scope.isSelection ? 480 : 400)
         .background(Color.uiPaper)
         .onAppear(perform: run)
+        .onDisappear(perform: cancelGeneration)
     }
 
     @ViewBuilder
@@ -195,10 +205,18 @@ struct AIResultSheet: View {
         switch phase {
         case .loading:
             VStack(spacing: 16) {
+                Spacer()
                 AIThinkingOrb(icon: request.template.icon)
                 Text("Генерация…")
-                    .font(UIStyleFont.body(size: 12, weight: .regular))
+                    .font(UIStyleFont.body(size: 13, weight: .medium))
                     .foregroundColor(.uiMidGray)
+
+                UIOutlineButton(title: "Отмена") {
+                    cancelGeneration()
+                    dismiss()
+                }
+                .padding(.top, 4)
+                Spacer()
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
 
@@ -429,6 +447,7 @@ struct AIResultSheet: View {
         fromCache = false
         phase = .loading
         errorText = nil
+        cancelGeneration()
 
         guard AIProviderStore.shared.isConfigured else {
             phase = .error
@@ -437,8 +456,9 @@ struct AIResultSheet: View {
         }
 
         let messages = request.template.messages(for: request.noteText)
-        AIService.shared.chat(messages: messages, using: AIProviderStore.shared.config) { result in
+        currentTask = AIService.shared.chat(messages: messages, using: AIProviderStore.shared.config, promptLength: request.noteText.count) { result in
             DispatchQueue.main.async {
+                currentTask = nil
                 switch result {
                 case .success(let text):
                     resultText = text.trimmingCharacters(in: .whitespacesAndNewlines)

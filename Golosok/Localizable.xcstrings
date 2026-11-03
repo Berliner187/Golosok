@@ -5458,6 +5458,230 @@
           }
         }
       }
+    },
+    "Разрешить HTTP (без шифрования)" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Allow HTTP (unencrypted)"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Разрешить HTTP (без шифрования)"
+          }
+        }
+      }
+    },
+    "Для локального инференса, домашней сети и Tailscale" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "For local inference, home LAN, and Tailscale"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Для локального инференса, домашней сети и Tailscale"
+          }
+        }
+      }
+    },
+    "HTTP запрещён. Включите разрешение HTTP или используйте HTTPS." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "HTTP is not allowed. Enable HTTP or use HTTPS."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "HTTP запрещён. Включите разрешение HTTP или используйте HTTPS."
+          }
+        }
+      }
+    },
+    "Уровень ризонинга" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reasoning effort"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Уровень ризонинга"
+          }
+        }
+      }
+    },
+    "Выкл (не передавать)" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Off (do not send)"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Выкл (не передавать)"
+          }
+        }
+      }
+    },
+    "Low (минимальный)" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Low (minimal)"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Low (минимальный)"
+          }
+        }
+      }
+    },
+    "Medium (средний)" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Medium (moderate)"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Medium (средний)"
+          }
+        }
+      }
+    },
+    "High (глубокий)" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "High (deep)"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "High (глубокий)"
+          }
+        }
+      }
+    },
+    "Бюджет ризонинга" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reasoning budget"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Бюджет ризонинга"
+          }
+        }
+      }
+    },
+    "Выкл (как сейчас)" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Off (as is)"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Выкл (как сейчас)"
+          }
+        }
+      }
+    },
+    "Фиксированный (1024 токена)" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fixed (1024 tokens)"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Фиксированный (1024 токена)"
+          }
+        }
+      }
+    },
+    "Текст × 2 токена" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Text × 2 tokens"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Текст × 2 токена"
+          }
+        }
+      }
+    },
+    "Ограничивает токены на размышления для reasoning-моделей" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Limits thinking tokens for reasoning models"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ограничивает токены на размышления для reasoning-моделей"
+          }
+        }
+      }
+    },
+    "Максимум токенов" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Max tokens"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Максимум токенов"
+          }
+        }
+      }
     }
   },
   "version" : "1.0"

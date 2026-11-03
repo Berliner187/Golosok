@@ -66,11 +66,48 @@ enum AIProviderPresets {
     }
 }
 
+enum AIReasoningEffort: String, CaseIterable, Identifiable {
+    case off = "off"
+    case low = "low"
+    case medium = "medium"
+    case high = "high"
+
+    var id: String { rawValue }
+
+    var titleKey: LocalizedStringKey {
+        switch self {
+        case .off: return "Выкл (не передавать)"
+        case .low: return "Low (минимальный)"
+        case .medium: return "Medium (средний)"
+        case .high: return "High (глубокий)"
+        }
+    }
+}
+
+enum AIThinkingBudgetMode: String, CaseIterable, Identifiable {
+    case off = "off"
+    case fixed1024 = "fixed1024"
+    case proportional = "proportional"
+
+    var id: String { rawValue }
+
+    var titleKey: LocalizedStringKey {
+        switch self {
+        case .off: return "Выкл (как сейчас)"
+        case .fixed1024: return "Фиксированный (1024 токена)"
+        case .proportional: return "Текст × 2 токена"
+        }
+    }
+}
+
 struct AIProviderConfig {
     let baseURL: String
     let apiKey: String
     let model: String
     let isProxy: Bool
+    let reasoningEffort: AIReasoningEffort
+    let thinkingBudgetMode: AIThinkingBudgetMode
+    let maxTokens: Int
 }
 
 enum AIError: LocalizedError {
@@ -106,6 +143,17 @@ final class AIProviderStore: ObservableObject {
     @Published var baseURL: String { didSet { Self.defaults.set(baseURL, forKey: "ai.baseURL") } }
     @Published var model: String { didSet { Self.defaults.set(model, forKey: "ai.model") } }
     @Published var apiKey: String { didSet { if apiKey != oldValue { KeyStore.set(apiKey, for: "ai.apiKey") } } }
+    @Published var allowInsecureHTTP: Bool { didSet { Self.defaults.set(allowInsecureHTTP, forKey: "ai.allowInsecureHTTP") } }
+    @Published var reasoningEffort: AIReasoningEffort { didSet { Self.defaults.set(reasoningEffort.rawValue, forKey: "ai.reasoningEffort") } }
+    @Published var thinkingBudgetMode: AIThinkingBudgetMode { didSet { Self.defaults.set(thinkingBudgetMode.rawValue, forKey: "ai.thinkingBudgetMode") } }
+    @Published var maxTokensString: String { didSet { Self.defaults.set(maxTokensString, forKey: "ai.maxTokens") } }
+
+    var maxTokens: Int {
+        if let val = Int(maxTokensString.trimmingCharacters(in: .whitespaces)), val > 0 {
+            return val
+        }
+        return 4096
+    }
 
     @Published var isTesting = false
     @Published var testResult: String?
@@ -121,6 +169,23 @@ final class AIProviderStore: ObservableObject {
         baseURL = Self.defaults.string(forKey: "ai.baseURL") ?? initialPreset.baseURL
         model = Self.defaults.string(forKey: "ai.model") ?? initialPreset.defaultModel
         apiKey = KeyStore.get("ai.apiKey") ?? ""
+        allowInsecureHTTP = Self.defaults.object(forKey: "ai.allowInsecureHTTP") as? Bool ?? true
+
+        if let rawEffort = Self.defaults.string(forKey: "ai.reasoningEffort"),
+           let effort = AIReasoningEffort(rawValue: rawEffort) {
+            reasoningEffort = effort
+        } else {
+            reasoningEffort = .low
+        }
+
+        if let rawBudget = Self.defaults.string(forKey: "ai.thinkingBudgetMode"),
+           let budget = AIThinkingBudgetMode(rawValue: rawBudget) {
+            thinkingBudgetMode = budget
+        } else {
+            thinkingBudgetMode = .fixed1024
+        }
+
+        maxTokensString = Self.defaults.string(forKey: "ai.maxTokens") ?? "4096"
     }
 
     var currentPreset: AIProviderPreset? {
@@ -133,7 +198,10 @@ final class AIProviderStore: ObservableObject {
             baseURL: baseURL,
             apiKey: isProxy ? AccountStore.shared.token : apiKey,
             model: model,
-            isProxy: isProxy
+            isProxy: isProxy,
+            reasoningEffort: reasoningEffort,
+            thinkingBudgetMode: thinkingBudgetMode,
+            maxTokens: maxTokens
         )
     }
 
@@ -183,6 +251,12 @@ final class AIProviderStore: ObservableObject {
             testResult = currentPreset?.isProxy == true ? String(localized: "Подключите аккаунт") : String(localized: "Заполните baseURL и модель")
             return
         }
+        let trimmedURL = baseURL.trimmingCharacters(in: .whitespaces).lowercased()
+        if trimmedURL.hasPrefix("http://") && !allowInsecureHTTP {
+            testOK = false
+            testResult = String(localized: "HTTP запрещён. Включите разрешение HTTP или используйте HTTPS.")
+            return
+        }
         if currentPreset?.isProxy == true {
             testOK = true
             testResult = String(localized: "Сервер доступен через аккаунт")
@@ -223,16 +297,27 @@ final class AIService {
         session = URLSession(configuration: cfg)
     }
 
+    private struct ChatThinking: Codable {
+        let type: String?
+        let budget_tokens: Int?
+    }
+
     private struct ChatRequest: Codable {
         let model: String?
         let messages: [AIChatMessage]
         let temperature: Double
+        let max_tokens: Int?
+        let max_completion_tokens: Int?
+        let reasoning_effort: String?
+        let thinking: ChatThinking?
+        let max_thinking_tokens: Int?
     }
 
-    func chat(messages: [AIChatMessage], using config: AIProviderConfig, completion: @escaping (Result<String, AIError>) -> Void) {
+    @discardableResult
+    func chat(messages: [AIChatMessage], using config: AIProviderConfig, promptLength: Int? = nil, completion: @escaping (Result<String, AIError>) -> Void) -> URLSessionDataTask? {
         guard let url = url(config.baseURL, path: "chat/completions") else {
             completion(.failure(.invalidURL))
-            return
+            return nil
         }
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
@@ -242,17 +327,60 @@ final class AIService {
             request.setValue("Bearer \(config.apiKey)", forHTTPHeaderField: "Authorization")
         }
         addProxyHeaders(&request, config: config)
-        let body = ChatRequest(model: config.isProxy ? nil : config.model, messages: messages, temperature: 0.3)
+
+        let userMaxTokens = config.maxTokens > 0 ? config.maxTokens : 4096
+        let chars = promptLength ?? messages.reduce(0) { $0 + $1.content.count }
+        let approxPromptTokens = max(64, chars / 4)
+        let minTokensForOutput = approxPromptTokens + 512
+
+        let reasoningEffortParam: String? = config.reasoningEffort == .off ? nil : config.reasoningEffort.rawValue
+        var thinkingParam: ChatThinking? = nil
+        var maxThinkingTokensParam: Int? = nil
+        var maxTokensParam: Int = userMaxTokens
+
+        switch config.thinkingBudgetMode {
+        case .off:
+            thinkingParam = nil
+            maxThinkingTokensParam = nil
+            maxTokensParam = max(userMaxTokens, minTokensForOutput)
+        case .fixed1024:
+            let budget = 1024
+            thinkingParam = ChatThinking(type: "enabled", budget_tokens: budget)
+            maxThinkingTokensParam = budget
+            maxTokensParam = max(userMaxTokens, budget + minTokensForOutput)
+        case .proportional:
+            let budget = max(256, approxPromptTokens * 2)
+            thinkingParam = ChatThinking(type: "enabled", budget_tokens: budget)
+            maxThinkingTokensParam = budget
+            maxTokensParam = max(userMaxTokens, budget + minTokensForOutput)
+        }
+
+        let body = ChatRequest(
+            model: config.isProxy ? nil : config.model,
+            messages: messages,
+            temperature: 0.3,
+            max_tokens: maxTokensParam,
+            max_completion_tokens: maxTokensParam,
+            reasoning_effort: reasoningEffortParam,
+            thinking: thinkingParam,
+            max_thinking_tokens: maxThinkingTokensParam
+        )
         guard let data = try? JSONEncoder().encode(body) else {
             completion(.failure(.parse("кодирование запроса")))
-            return
+            return nil
         }
         request.httpBody = data
 
-        AppLogger.shared.info("AI", "Запрос к модели", details: "\(config.baseURL) / \(config.model), токенов в промпте ~\(messages.reduce(0) { $0 + $1.content.count } / 4)")
+        let budgetDesc = maxThinkingTokensParam != nil ? ", thinking_budget=\(maxThinkingTokensParam!)" : ""
+        let effortDesc = reasoningEffortParam != nil ? ", effort=\(reasoningEffortParam!)" : ""
+        AppLogger.shared.info("AI", "Запрос к модели", details: "\(config.baseURL) / \(config.model), max_tokens=\(maxTokensParam)\(effortDesc)\(budgetDesc), токенов в промпте ~\(messages.reduce(0) { $0 + $1.content.count } / 4)")
 
-        session.dataTask(with: request) { data, response, error in
+        let task = session.dataTask(with: request) { data, response, error in
             if let error {
+                if (error as NSError).code == NSURLErrorCancelled {
+                    AppLogger.shared.info("AI", "Запрос к модели отменён пользователем")
+                    return
+                }
                 completion(.failure(.network(error.localizedDescription)))
                 return
             }
@@ -281,7 +409,9 @@ final class AIService {
                 return
             }
             completion(.success(content))
-        }.resume()
+        }
+        task.resume()
+        return task
     }
 
     func test(using config: AIProviderConfig, completion: @escaping (Result<Void, AIError>) -> Void) {
