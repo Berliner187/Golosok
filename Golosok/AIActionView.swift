@@ -131,16 +131,25 @@ struct AIResultSheet: View {
 
     @State private var phase: Phase = .loading
     @State private var resultText = ""
+    @State private var reasoningText = ""
     @State private var errorText: String?
     @State private var copied = false
     @State private var fromCache = false
     @State private var currentTask: URLSessionDataTask?
 
-    enum Phase { case loading, done, error }
+    enum Phase { case loading, streaming, done, error }
 
     private func cancelGeneration() {
         currentTask?.cancel()
         currentTask = nil
+    }
+
+    private func stopStreaming() {
+        currentTask?.cancel()
+        currentTask = nil
+        if !resultText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            phase = .done
+        }
     }
 
     var body: some View {
@@ -190,6 +199,9 @@ struct AIResultSheet: View {
             if phase == .done {
                 Divider().background(Color.uiHairline)
                 footer
+            } else if phase == .streaming && !resultText.isEmpty {
+                Divider().background(Color.uiHairline)
+                streamingBar
             }
         }
         .padding(24)
@@ -198,6 +210,19 @@ struct AIResultSheet: View {
         .background(Color.uiPaper)
         .onAppear(perform: run)
         .onDisappear(perform: cancelGeneration)
+    }
+
+    private var streamingBar: some View {
+        HStack(spacing: 10) {
+            ProgressView().controlSize(.small)
+            Text("Печатает ответ…")
+                .font(UIStyleFont.body(size: 12, weight: .medium))
+                .foregroundColor(.uiMidGray)
+            Spacer()
+            UIOutlineButton(title: "Остановить") {
+                stopStreaming()
+            }
+        }
     }
 
     @ViewBuilder
@@ -219,6 +244,44 @@ struct AIResultSheet: View {
                 Spacer()
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+        case .streaming:
+            if resultText.isEmpty {
+                VStack(spacing: 16) {
+                    Spacer()
+                    AIThinkingOrb(icon: request.template.icon)
+                    Text(!reasoningText.isEmpty ? "Размышления…" : "Генерация…")
+                        .font(UIStyleFont.body(size: 13, weight: .medium))
+                        .foregroundColor(.uiMidGray)
+
+                    if !reasoningText.isEmpty {
+                        Text("\(reasoningText.count) симв.")
+                            .font(UIStyleFont.body(size: 11, weight: .regular))
+                            .foregroundColor(.uiMidGray.opacity(0.8))
+                    }
+
+                    UIOutlineButton(title: "Отмена") {
+                        cancelGeneration()
+                        dismiss()
+                    }
+                    .padding(.top, 4)
+                    Spacer()
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                if request.scope.isSelection {
+                    splitView
+                } else {
+                    ScrollView {
+                        markdownText
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(14)
+                    }
+                    .background(Color.uiSidebar)
+                    .cornerRadius(16)
+                    .overlay(RoundedRectangle(cornerRadius: 16).stroke(Color.uiHairline, lineWidth: 1))
+                }
+            }
 
         case .error:
             VStack(spacing: 14) {
@@ -447,6 +510,8 @@ struct AIResultSheet: View {
         fromCache = false
         phase = .loading
         errorText = nil
+        resultText = ""
+        reasoningText = ""
         cancelGeneration()
 
         guard AIProviderStore.shared.isConfigured else {
@@ -456,20 +521,44 @@ struct AIResultSheet: View {
         }
 
         let messages = request.template.messages(for: request.noteText)
-        currentTask = AIService.shared.chat(messages: messages, using: AIProviderStore.shared.config, promptLength: request.noteText.count) { result in
-            DispatchQueue.main.async {
-                currentTask = nil
-                switch result {
-                case .success(let text):
-                    resultText = text.trimmingCharacters(in: .whitespacesAndNewlines)
-                    phase = .done
-                    AICache.shared.store(noteID: request.noteID, templateID: request.template.id, scopeID: request.scope.cacheKey, text: request.noteText, result: resultText)
-                case .failure(let error):
-                    errorText = error.localizedDescription
-                    phase = .error
+        currentTask = AIService.shared.chatStream(
+            messages: messages,
+            using: AIProviderStore.shared.config,
+            promptLength: request.noteText.count,
+            onChunk: { [self] contentChunk, reasoningChunk in
+                if let reasoningChunk, !reasoningChunk.isEmpty {
+                    reasoningText.append(reasoningChunk)
+                }
+                if !contentChunk.isEmpty {
+                    resultText.append(contentChunk)
+                }
+                if phase != .streaming {
+                    phase = .streaming
+                }
+            },
+            completion: { [self] result in
+                DispatchQueue.main.async {
+                    currentTask = nil
+                    switch result {
+                    case .success(let text):
+                        let final = text.trimmingCharacters(in: .whitespacesAndNewlines)
+                        resultText = final.isEmpty ? resultText.trimmingCharacters(in: .whitespacesAndNewlines) : final
+                        phase = .done
+                        if !resultText.isEmpty {
+                            AICache.shared.store(noteID: request.noteID, templateID: request.template.id, scopeID: request.scope.cacheKey, text: request.noteText, result: resultText)
+                        }
+                    case .failure(let error):
+                        if !resultText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                            resultText = resultText.trimmingCharacters(in: .whitespacesAndNewlines)
+                            phase = .done
+                        } else {
+                            errorText = error.localizedDescription
+                            phase = .error
+                        }
+                    }
                 }
             }
-        }
+        )
     }
 
     private var cacheBar: some View {

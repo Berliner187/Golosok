@@ -311,6 +311,79 @@ final class AIService {
         let reasoning_effort: String?
         let thinking: ChatThinking?
         let max_thinking_tokens: Int?
+        let stream: Bool?
+    }
+
+    @discardableResult
+    func chatStream(
+        messages: [AIChatMessage],
+        using config: AIProviderConfig,
+        promptLength: Int? = nil,
+        onChunk: @escaping (String, String?) -> Void,
+        completion: @escaping (Result<String, AIError>) -> Void
+    ) -> URLSessionDataTask? {
+        guard let url = url(config.baseURL, path: "chat/completions") else {
+            completion(.failure(.invalidURL))
+            return nil
+        }
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.timeoutInterval = 180
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        if !config.apiKey.isEmpty {
+            request.setValue("Bearer \(config.apiKey)", forHTTPHeaderField: "Authorization")
+        }
+        addProxyHeaders(&request, config: config)
+
+        let userMaxTokens = config.maxTokens > 0 ? config.maxTokens : 4096
+        let chars = promptLength ?? messages.reduce(0) { $0 + $1.content.count }
+        let approxPromptTokens = max(64, chars / 4)
+        let minTokensForOutput = approxPromptTokens + 512
+
+        let reasoningEffortParam: String? = config.reasoningEffort == .off ? nil : config.reasoningEffort.rawValue
+        var thinkingParam: ChatThinking? = nil
+        var maxThinkingTokensParam: Int? = nil
+        var maxTokensParam: Int = userMaxTokens
+
+        switch config.thinkingBudgetMode {
+        case .off:
+            thinkingParam = nil
+            maxThinkingTokensParam = nil
+            maxTokensParam = max(userMaxTokens, minTokensForOutput)
+        case .fixed1024:
+            let budget = 1024
+            thinkingParam = ChatThinking(type: "enabled", budget_tokens: budget)
+            maxThinkingTokensParam = budget
+            maxTokensParam = max(userMaxTokens, budget + minTokensForOutput)
+        case .proportional:
+            let budget = max(256, approxPromptTokens * 2)
+            thinkingParam = ChatThinking(type: "enabled", budget_tokens: budget)
+            maxThinkingTokensParam = budget
+            maxTokensParam = max(userMaxTokens, budget + minTokensForOutput)
+        }
+
+        let body = ChatRequest(
+            model: config.isProxy ? nil : config.model,
+            messages: messages,
+            temperature: 0.3,
+            max_tokens: maxTokensParam,
+            max_completion_tokens: maxTokensParam,
+            reasoning_effort: reasoningEffortParam,
+            thinking: thinkingParam,
+            max_thinking_tokens: maxThinkingTokensParam,
+            stream: true
+        )
+        guard let data = try? JSONEncoder().encode(body) else {
+            completion(.failure(.parse("кодирование запроса")))
+            return nil
+        }
+        request.httpBody = data
+
+        let budgetDesc = maxThinkingTokensParam != nil ? ", thinking_budget=\(maxThinkingTokensParam!)" : ""
+        let effortDesc = reasoningEffortParam != nil ? ", effort=\(reasoningEffortParam!)" : ""
+        AppLogger.shared.info("AI", "Стриминг-запрос к модели", details: "\(config.baseURL) / \(config.model), max_tokens=\(maxTokensParam)\(effortDesc)\(budgetDesc), токенов в промпте ~\(messages.reduce(0) { $0 + $1.content.count } / 4)")
+
+        return SSEStreamManager.shared.startStream(with: request, onChunk: onChunk, completion: completion)
     }
 
     @discardableResult
@@ -363,7 +436,8 @@ final class AIService {
             max_completion_tokens: maxTokensParam,
             reasoning_effort: reasoningEffortParam,
             thinking: thinkingParam,
-            max_thinking_tokens: maxThinkingTokensParam
+            max_thinking_tokens: maxThinkingTokensParam,
+            stream: false
         )
         guard let data = try? JSONEncoder().encode(body) else {
             completion(.failure(.parse("кодирование запроса")))
@@ -493,7 +567,7 @@ final class AIService {
         request.setValue(ProcessInfo.processInfo.operatingSystemVersionString, forHTTPHeaderField: "X-OS-Version")
     }
 
-    private static func extractError(from data: Data) -> String? {
+    static func extractError(from data: Data) -> String? {
         guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return nil }
         if let error = json["error"] as? [String: Any], let message = error["message"] as? String {
             return message
@@ -502,5 +576,180 @@ final class AIService {
             return error
         }
         return nil
+    }
+}
+
+final class SSEStreamManager: NSObject, URLSessionDataDelegate {
+    static let shared = SSEStreamManager()
+
+    private class TaskContext {
+        var buffer = ""
+        var fullContent = ""
+        var fullReasoning = ""
+        var hasCompleted = false
+        var httpStatusCode: Int?
+        var errorData: Data?
+        let onChunk: (String, String?) -> Void
+        let completion: (Result<String, AIError>) -> Void
+
+        init(onChunk: @escaping (String, String?) -> Void, completion: @escaping (Result<String, AIError>) -> Void) {
+            self.onChunk = onChunk
+            self.completion = completion
+        }
+    }
+
+    private lazy var session: URLSession = {
+        let cfg = URLSessionConfiguration.default
+        cfg.timeoutIntervalForRequest = 60
+        cfg.timeoutIntervalForResource = 600
+        cfg.waitsForConnectivity = false
+        return URLSession(configuration: cfg, delegate: self, delegateQueue: nil)
+    }()
+
+    private var contexts: [Int: TaskContext] = [:]
+    private let lock = NSLock()
+
+    func startStream(
+        with request: URLRequest,
+        onChunk: @escaping (String, String?) -> Void,
+        completion: @escaping (Result<String, AIError>) -> Void
+    ) -> URLSessionDataTask {
+        let task = session.dataTask(with: request)
+        let context = TaskContext(onChunk: onChunk, completion: completion)
+        lock.lock()
+        contexts[task.taskIdentifier] = context
+        lock.unlock()
+        task.resume()
+        return task
+    }
+
+    func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive response: URLResponse, completionHandler: @escaping (URLSession.ResponseDisposition) -> Void) {
+        lock.lock()
+        let ctx = contexts[dataTask.taskIdentifier]
+        lock.unlock()
+
+        if let http = response as? HTTPURLResponse {
+            ctx?.httpStatusCode = http.statusCode
+            if !(200..<300).contains(http.statusCode) {
+                ctx?.errorData = Data()
+            }
+        }
+        completionHandler(.allow)
+    }
+
+    func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive data: Data) {
+        lock.lock()
+        guard let ctx = contexts[dataTask.taskIdentifier] else {
+            lock.unlock()
+            return
+        }
+        lock.unlock()
+
+        if let status = ctx.httpStatusCode, !(200..<300).contains(status) {
+            ctx.errorData?.append(data)
+            return
+        }
+
+        guard let text = String(data: data, encoding: .utf8) else { return }
+        ctx.buffer.append(text)
+
+        var lines: [String] = []
+        while let range = ctx.buffer.range(of: "\n") {
+            let line = String(ctx.buffer[..<range.lowerBound]).trimmingCharacters(in: .whitespacesAndNewlines)
+            ctx.buffer.removeSubrange(..<range.upperBound)
+            if !line.isEmpty {
+                lines.append(line)
+            }
+        }
+
+        for line in lines {
+            if line.hasPrefix("data:") {
+                let payload = line.dropFirst(5).trimmingCharacters(in: .whitespaces)
+                if payload == "[DONE]" {
+                    completeTask(dataTask.taskIdentifier, with: .success(ctx.fullContent))
+                    return
+                }
+                guard let jsonData = payload.data(using: .utf8),
+                      let json = try? JSONSerialization.jsonObject(with: jsonData) as? [String: Any],
+                      let choices = json["choices"] as? [[String: Any]],
+                      let firstChoice = choices.first,
+                      let delta = firstChoice["delta"] as? [String: Any] else {
+                    continue
+                }
+
+                let contentChunk = delta["content"] as? String
+                let reasoningChunk = (delta["reasoning_content"] as? String) ?? (delta["thinking"] as? String)
+
+                if let contentChunk, !contentChunk.isEmpty {
+                    ctx.fullContent.append(contentChunk)
+                }
+                if let reasoningChunk, !reasoningChunk.isEmpty {
+                    ctx.fullReasoning.append(reasoningChunk)
+                }
+
+                if contentChunk != nil || reasoningChunk != nil {
+                    DispatchQueue.main.async {
+                        ctx.onChunk(contentChunk ?? "", reasoningChunk)
+                    }
+                }
+            }
+        }
+    }
+
+    func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
+        let taskID = task.taskIdentifier
+        lock.lock()
+        guard let ctx = contexts[taskID] else {
+            lock.unlock()
+            return
+        }
+        lock.unlock()
+
+        if let error = error as NSError? {
+            if error.code == NSURLErrorCancelled {
+                AppLogger.shared.info("AI", "Стриминг остановлен пользователем", details: "длина текста: \(ctx.fullContent.count)")
+                if !ctx.fullContent.isEmpty {
+                    completeTask(taskID, with: .success(ctx.fullContent))
+                } else {
+                    removeTask(taskID)
+                }
+                return
+            }
+            completeTask(taskID, with: .failure(.network(error.localizedDescription)))
+            return
+        }
+
+        if let status = ctx.httpStatusCode, !(200..<300).contains(status) {
+            let errorMsg = ctx.errorData.flatMap { AIService.extractError(from: $0) } ?? "HTTP \(status)"
+            completeTask(taskID, with: .failure(.http(status, errorMsg)))
+            return
+        }
+
+        if !ctx.fullContent.isEmpty {
+            completeTask(taskID, with: .success(ctx.fullContent))
+        } else {
+            completeTask(taskID, with: .failure(.emptyResponse))
+        }
+    }
+
+    private func completeTask(_ id: Int, with result: Result<String, AIError>) {
+        lock.lock()
+        guard let ctx = contexts[id], !ctx.hasCompleted else {
+            lock.unlock()
+            return
+        }
+        ctx.hasCompleted = true
+        contexts.removeValue(forKey: id)
+        lock.unlock()
+
+        DispatchQueue.main.async {
+            ctx.completion(result)
+        }
+    }
+
+    private func removeTask(_ id: Int) {
+        lock.lock()
+        contexts.removeValue(forKey: id)
+        lock.unlock()
     }
 }
