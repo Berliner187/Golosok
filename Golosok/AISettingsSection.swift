@@ -60,12 +60,62 @@ struct AIProviderSection: View {
                     }
                 } else {
                     AIInputField(title: "Base URL", text: $store.baseURL, placeholder: "https://api.openai.com/v1")
+                    
+                    if store.baseURL.trimmingCharacters(in: .whitespaces).lowercased().hasPrefix("http://") || store.providerID == "ollama" {
+                        HStack {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Разрешить HTTP (без шифрования)")
+                                    .font(UIStyleFont.body(size: 13, weight: .medium))
+                                    .foregroundColor(.uiInk)
+                                Text("Для локального инференса, домашней сети и Tailscale")
+                                    .font(UIStyleFont.body(size: 11, weight: .regular))
+                                    .foregroundColor(.uiMidGray)
+                            }
+                            Spacer()
+                            Toggle("", isOn: $store.allowInsecureHTTP)
+                                .labelsHidden()
+                                .toggleStyle(SwitchToggleStyle(tint: Color(hex: "#10B981")))
+                        }
+                        .padding(.vertical, 2)
+                    }
+
                     AIInputField(title: "API-ключ", text: $store.apiKey, placeholder: "sk-…", isSecure: true)
 
                     if store.providerID == "ollama" {
                         ollamaModelField
                     } else {
                         AIInputField(title: "Модель", text: $store.model, placeholder: "gpt-4o-mini")
+                    }
+
+                    AIInputField(title: "Максимум токенов", text: $store.maxTokensString, placeholder: "4096")
+
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Уровень ризонинга")
+                            .font(UIStyleFont.body(size: 11, weight: .medium))
+                            .foregroundColor(.uiMidGray)
+                        UIDropdownPicker(
+                            selection: $store.reasoningEffort,
+                            options: AIReasoningEffort.allCases.map {
+                                UIDropdownOption($0.titleKey, value: $0)
+                            },
+                            fullWidth: true
+                        )
+                    }
+
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Бюджет ризонинга")
+                            .font(UIStyleFont.body(size: 11, weight: .medium))
+                            .foregroundColor(.uiMidGray)
+                        UIDropdownPicker(
+                            selection: $store.thinkingBudgetMode,
+                            options: AIThinkingBudgetMode.allCases.map {
+                                UIDropdownOption($0.titleKey, value: $0)
+                            },
+                            fullWidth: true
+                        )
+                        Text("Ограничивает токены на размышления для reasoning-моделей")
+                            .font(UIStyleFont.body(size: 11, weight: .regular))
+                            .foregroundColor(.uiMidGray)
                     }
 
                     HStack(spacing: 10) {

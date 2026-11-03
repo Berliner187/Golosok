@@ -22,7 +22,7 @@ struct AIPromptTemplate: Identifiable, Codable, Equatable {
 
     func messages(for text: String) -> [AIChatMessage] {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        let userPrompt = "Текст расшифровки:\n\n\"\"\"\n\(trimmed)\n\"\"\"\n\nВыполни задание."
+        let userPrompt = "Текст расшифровки:\n\n\"\"\"\n\(trimmed)\n\"\"\"\n\nВыполни задание. Сразу выведи готовый результат без вводных слов и без избыточных рассуждений."
         return [
             AIChatMessage(role: "system", content: system),
             AIChatMessage(role: "user", content: userPrompt)
@@ -31,7 +31,7 @@ struct AIPromptTemplate: Identifiable, Codable, Equatable {
 }
 
 enum AIPromptDefaults {
-    private static let commonRules = "Расшифровка сделана голосовой моделью и может содержать ошибки распознавания — исправляй очевидные опечатки по контексту. Отвечай без вводных фраз и без воды, только результат."
+    private static let commonRules = "Расшифровка сделана голосовой моделью и может содержать ошибки распознавания — исправляй очевидные опечатки по контексту. Отвечай сразу готовым результатом без вводных фраз, без избыточных рассуждений и без воды."
 
     /// Встроенные промпты при первом запуске. Один (polish) защищён от удаления.
     static let defaults: [AIPromptTemplate] = [
@@ -40,7 +40,7 @@ enum AIPromptDefaults {
               system: "Ты — профессиональный редактор. \(commonRules) Перепиши текст, сохранив его смысл, но сделав его более связным, выразительным и лаконичным. Убери заикания, слова-паразиты и повторы. Пиши на русском.",
               isProtected: true),
         .init(id: "fixGrammar", title: "Исправить ошибки", icon: "wrench.and.screwdriver",
-              system: "Ты — корректор. \(commonRules) Исправь все орфографические, пунктуационные и грамматические ошибки в тексте. Не меняй структуру и стиль автора без необходимости. Пиши на русском."),
+              system: "Ты — корректор. \(commonRules) Исправь все орфографические, пунктуационные и грамматические ошибки в тексте. Не меняй структуру и стиль автора без необходимости. Сразу выведи исправленный текст. Пиши на русском."),
         .init(id: "businessTone", title: "Деловой стиль", icon: "briefcase",
               system: "Ты — бизнес-копирайтер. \(commonRules) Перепиши данный текст в строгом деловом и корпоративном стиле. Подходит для рабочей переписки, отчетов и писем клиентам. Пиши на русском."),
         .init(id: "rewrite", title: "Переписать в пост/письмо", icon: "pencil.and.outline",
