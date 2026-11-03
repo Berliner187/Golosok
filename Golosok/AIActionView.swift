@@ -566,6 +566,9 @@ struct AIResultSheet: View {
                 }
             }
             Spacer()
+            UIOutlineButton(title: "Перегенерировать") {
+                regenerate()
+            }
             Button(action: copy) {
                 HStack(spacing: 5) {
                     Image(systemName: copied ? "checkmark" : "doc.on.doc")
