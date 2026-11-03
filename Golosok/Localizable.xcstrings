@@ -5676,7 +5676,7 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Thinking…"
+            "value": "Reasoning…"
           }
         },
         "ru": {
@@ -5699,6 +5699,38 @@
           "stringUnit": {
             "state": "translated",
             "value": "симв."
+          }
+        }
+      }
+    },
+    "Размышления": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reasoning"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Размышления"
+          }
+        }
+      }
+    },
+    "Размышления модели…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Model is reasoning…"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Размышления модели…"
           }
         }
       }

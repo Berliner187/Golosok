@@ -132,6 +132,7 @@ struct AIResultSheet: View {
     @State private var phase: Phase = .loading
     @State private var resultText = ""
     @State private var reasoningText = ""
+    @State private var isReasoningExpanded = false
     @State private var errorText: String?
     @State private var copied = false
     @State private var fromCache = false
@@ -147,8 +148,12 @@ struct AIResultSheet: View {
     private func stopStreaming() {
         currentTask?.cancel()
         currentTask = nil
-        if !resultText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+        let trimmed = resultText.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !trimmed.isEmpty {
+            resultText = trimmed
             phase = .done
+        } else {
+            dismiss()
         }
     }
 
@@ -199,7 +204,7 @@ struct AIResultSheet: View {
             if phase == .done {
                 Divider().background(Color.uiHairline)
                 footer
-            } else if phase == .streaming && !resultText.isEmpty {
+            } else if phase == .streaming {
                 Divider().background(Color.uiHairline)
                 streamingBar
             }
@@ -215,7 +220,7 @@ struct AIResultSheet: View {
     private var streamingBar: some View {
         HStack(spacing: 10) {
             ProgressView().controlSize(.small)
-            Text("Печатает ответ…")
+            Text(resultText.isEmpty ? String(localized: "Размышления модели…") : String(localized: "Печатает ответ…"))
                 .font(UIStyleFont.body(size: 12, weight: .medium))
                 .foregroundColor(.uiMidGray)
             Spacer()
@@ -247,40 +252,27 @@ struct AIResultSheet: View {
 
         case .streaming:
             if resultText.isEmpty {
-                VStack(spacing: 16) {
-                    Spacer()
-                    AIThinkingOrb(icon: request.template.icon)
-                    Text(!reasoningText.isEmpty ? "Размышления…" : "Генерация…")
-                        .font(UIStyleFont.body(size: 13, weight: .medium))
-                        .foregroundColor(.uiMidGray)
-
-                    if !reasoningText.isEmpty {
-                        Text("\(reasoningText.count) симв.")
-                            .font(UIStyleFont.body(size: 11, weight: .regular))
-                            .foregroundColor(.uiMidGray.opacity(0.8))
-                    }
-
-                    UIOutlineButton(title: "Отмена") {
-                        cancelGeneration()
-                        dismiss()
-                    }
-                    .padding(.top, 4)
-                    Spacer()
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else {
-                if request.scope.isSelection {
-                    splitView
+                if !reasoningText.isEmpty {
+                    liveReasoningView
                 } else {
-                    ScrollView {
-                        markdownText
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(14)
+                    VStack(spacing: 16) {
+                        Spacer()
+                        AIThinkingOrb(icon: request.template.icon)
+                        Text("Генерация…")
+                            .font(UIStyleFont.body(size: 13, weight: .medium))
+                            .foregroundColor(.uiMidGray)
+
+                        UIOutlineButton(title: "Отмена") {
+                            cancelGeneration()
+                            dismiss()
+                        }
+                        .padding(.top, 4)
+                        Spacer()
                     }
-                    .background(Color.uiSidebar)
-                    .cornerRadius(16)
-                    .overlay(RoundedRectangle(cornerRadius: 16).stroke(Color.uiHairline, lineWidth: 1))
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
+            } else {
+                outputView
             }
 
         case .error:
@@ -297,17 +289,118 @@ struct AIResultSheet: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
 
         case .done:
-            if request.scope.isSelection {
-                splitView
-            } else {
+            outputView
+        }
+    }
+
+    private var liveReasoningView: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 6) {
+                Image(systemName: "brain")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundColor(.uiMidGray)
+                Text("Размышления…")
+                    .font(UIStyleFont.body(size: 11, weight: .semibold))
+                    .foregroundColor(.uiMidGray)
+                Spacer()
+            }
+
+            ScrollViewReader { proxy in
                 ScrollView {
-                    markdownText
+                    Text(reasoningText)
+                        .font(UIStyleFont.body(size: 12.5, weight: .regular))
+                        .italic()
+                        .foregroundColor(.uiMidGray)
+                        .lineSpacing(3)
+                        .textSelection(.enabled)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(14)
+                        .id("liveReasoningBottom")
                 }
                 .background(Color.uiSidebar)
                 .cornerRadius(16)
                 .overlay(RoundedRectangle(cornerRadius: 16).stroke(Color.uiHairline, lineWidth: 1))
+                .onChange(of: reasoningText) { _ in
+                    proxy.scrollTo("liveReasoningBottom", anchor: .bottom)
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private var reasoningCollapsibleBar: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Button(action: {
+                withAnimation(.easeInOut(duration: 0.18)) {
+                    isReasoningExpanded.toggle()
+                }
+            }) {
+                HStack(spacing: 6) {
+                    Image(systemName: isReasoningExpanded ? "chevron.down" : "chevron.right")
+                        .font(.system(size: 9, weight: .bold))
+                        .foregroundColor(.uiMidGray)
+                    Image(systemName: "brain")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(.uiMidGray)
+                    Text("Размышления")
+                        .font(UIStyleFont.body(size: 11, weight: .semibold))
+                        .foregroundColor(.uiMidGray)
+                    Spacer()
+                }
+                .padding(.vertical, 5)
+                .padding(.horizontal, 10)
+                .background(Color.uiCanvas)
+                .cornerRadius(8)
+                .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.uiHairline, lineWidth: 1))
+            }
+            .buttonStyle(TactileButtonStyle())
+
+            if isReasoningExpanded {
+                ScrollView {
+                    Text(reasoningText)
+                        .font(UIStyleFont.body(size: 12, weight: .regular))
+                        .italic()
+                        .foregroundColor(.uiMidGray)
+                        .lineSpacing(2)
+                        .textSelection(.enabled)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(10)
+                }
+                .frame(maxHeight: 160)
+                .background(Color.uiSidebar)
+                .cornerRadius(10)
+                .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.uiHairline, lineWidth: 1))
+                .transition(.opacity.combined(with: .move(edge: .top)))
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var outputView: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            if !reasoningText.isEmpty {
+                reasoningCollapsibleBar
+            }
+
+            if request.scope.isSelection {
+                splitView
+            } else {
+                ScrollViewReader { proxy in
+                    ScrollView {
+                        markdownText
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(14)
+                            .id("streamResultBottom")
+                    }
+                    .background(Color.uiSidebar)
+                    .cornerRadius(16)
+                    .overlay(RoundedRectangle(cornerRadius: 16).stroke(Color.uiHairline, lineWidth: 1))
+                    .onChange(of: resultText) { _ in
+                        if phase == .streaming {
+                            proxy.scrollTo("streamResultBottom", anchor: .bottom)
+                        }
+                    }
+                }
             }
         }
     }

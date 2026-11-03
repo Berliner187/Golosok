@@ -586,6 +586,7 @@ final class SSEStreamManager: NSObject, URLSessionDataDelegate {
         var buffer = ""
         var fullContent = ""
         var fullReasoning = ""
+        var isInThinkTag = false
         var hasCompleted = false
         var httpStatusCode: Int?
         var errorData: Data?
@@ -677,8 +678,40 @@ final class SSEStreamManager: NSObject, URLSessionDataDelegate {
                     continue
                 }
 
-                let contentChunk = delta["content"] as? String
-                let reasoningChunk = (delta["reasoning_content"] as? String) ?? (delta["thinking"] as? String)
+                let rawContent = delta["content"] as? String
+                let rawReasoning = (delta["reasoning_content"] as? String) ?? (delta["thinking"] as? String)
+
+                var contentChunk: String? = nil
+                var reasoningChunk: String? = nil
+
+                if let rawReasoning, !rawReasoning.isEmpty {
+                    reasoningChunk = rawReasoning
+                }
+
+                if var text = rawContent, !text.isEmpty {
+                    if text.contains("<think>") {
+                        ctx.isInThinkTag = true
+                        text = text.replacingOccurrences(of: "<think>", with: "")
+                    }
+                    if ctx.isInThinkTag {
+                        if text.contains("</think>") {
+                            ctx.isInThinkTag = false
+                            let parts = text.components(separatedBy: "</think>")
+                            let thinkPart = parts.first ?? ""
+                            let cleanPart = parts.dropFirst().joined(separator: "</think>")
+                            if !thinkPart.isEmpty {
+                                reasoningChunk = (reasoningChunk ?? "") + thinkPart
+                            }
+                            if !cleanPart.isEmpty {
+                                contentChunk = cleanPart
+                            }
+                        } else {
+                            reasoningChunk = (reasoningChunk ?? "") + text
+                        }
+                    } else {
+                        contentChunk = text
+                    }
+                }
 
                 if let contentChunk, !contentChunk.isEmpty {
                     ctx.fullContent.append(contentChunk)
@@ -687,7 +720,7 @@ final class SSEStreamManager: NSObject, URLSessionDataDelegate {
                     ctx.fullReasoning.append(reasoningChunk)
                 }
 
-                if contentChunk != nil || reasoningChunk != nil {
+                if (contentChunk != nil && !contentChunk!.isEmpty) || (reasoningChunk != nil && !reasoningChunk!.isEmpty) {
                     DispatchQueue.main.async {
                         ctx.onChunk(contentChunk ?? "", reasoningChunk)
                     }
