@@ -208,6 +208,38 @@ struct SettingsView: View {
                             Spacer()
                             UIBadge(text: "ESC")
                         }
+
+                        Divider().overlay(Color.uiHairline)
+
+                        HStack {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(LocalizedStringKey("ИИ-обработка выделения"))
+                                    .font(UIStyleFont.body(size: 13, weight: .medium))
+                                    .foregroundColor(.uiInk)
+                                if hotKey.isCapturingSelection {
+                                    Text(LocalizedStringKey("HotKey.Capture"))
+                                        .font(UIStyleFont.body(size: 11, weight: .regular))
+                                        .foregroundColor(.uiMidGray)
+                                } else if hotKey.isSelectionTaken {
+                                    Text(LocalizedStringKey("HotKey.Taken"))
+                                        .font(UIStyleFont.body(size: 11, weight: .regular))
+                                        .foregroundColor(.uiWarn)
+                                } else {
+                                    Text(LocalizedStringKey("Замена выделенного текста по промпту ИИ"))
+                                        .font(UIStyleFont.body(size: 11, weight: .regular))
+                                        .foregroundColor(.uiMidGray)
+                                }
+                            }
+                            Spacer()
+                            if hotKey.isCapturingSelection {
+                                UIBadge(text: "…")
+                            } else {
+                                UIBadge(text: hotKey.selectionHotKeyName)
+                            }
+                            UIOutlineButton(title: hotKey.isCapturingSelection ? LocalizedStringKey("Отмена") : LocalizedStringKey("Изменить")) {
+                                if hotKey.isCapturingSelection { hotKey.endCaptureSelection() } else { hotKey.beginCaptureSelection() }
+                            }
+                        }
                     }
                 }
                 

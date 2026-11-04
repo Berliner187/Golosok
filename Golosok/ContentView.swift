@@ -805,19 +805,20 @@ struct ContentView: View {
                                         }
                                         UIDropdownMenu(items: {
                                             var arr: [UIDropdownItem] = promptStore.templates.map { t in
-                                                let label: Text = t.isCustom ? Text(t.title) : Text(LocalizedStringKey(t.title))
+                                                let isBuiltin = AIPromptDefaults.builtinIDs.contains(t.id)
+                                                let label: Text = (!t.isCustom || isBuiltin) ? Text(LocalizedStringKey(t.title)) : Text(t.title)
                                                 return .action(text: label, icon: t.icon) {
                                                     aiRequest = AIActionRequest(template: t, noteID: selected.id, noteText: selected.text)
                                                 }
                                             }
                                             arr.append(.divider)
-                                            arr.append(.action("Новый промпт…", icon: "plus") { showCreatePrompt = true })
-                                            arr.append(.action("Управлять промптами…", icon: "slider.horizontal.3") { showPromptManager = true })
+                                            arr.append(.action(LocalizedStringKey("Новый промпт…"), icon: "plus") { showCreatePrompt = true })
+                                            arr.append(.action(LocalizedStringKey("Управлять промптами…"), icon: "slider.horizontal.3") { showPromptManager = true })
                                             return arr
                                         }()) {
                                             HStack(spacing: 4) {
                                                 Image(systemName: "sparkles").font(.system(size: 11, weight: .medium))
-                                                Text("ИИ").font(UIStyleFont.body(size: 13, weight: .medium))
+                                                Text(LocalizedStringKey("ИИ")).font(UIStyleFont.body(size: 13, weight: .medium))
                                                 Image(systemName: "chevron.down").font(.system(size: 8, weight: .bold)).foregroundColor(.uiMidGray)
                                             }
                                             .lineLimit(1).foregroundColor(.uiInk).padding(.vertical, 8).padding(.horizontal, 14).background(Color.uiPaper).cornerRadius(18).overlay(RoundedRectangle(cornerRadius: 18).stroke(Color.uiHairline, lineWidth: 1))
@@ -831,7 +832,7 @@ struct ContentView: View {
                                             .action("Субтитры (.srt)") { audioCapture.exportTranscription(selected, format: "srt") },
                                             .action("Субтитры (.vtt)") { audioCapture.exportTranscription(selected, format: "vtt") }
                                         ]) {
-                                            HStack(spacing: 4) { Image(systemName: "square.and.arrow.up").font(.system(size: 11, weight: .medium)); Text("Экспорт").font(UIStyleFont.body(size: 13, weight: .medium)); Image(systemName: "chevron.down").font(.system(size: 8, weight: .bold)).foregroundColor(.uiMidGray) }
+                                            HStack(spacing: 4) { Image(systemName: "square.and.arrow.up").font(.system(size: 11, weight: .medium)); Text(LocalizedStringKey("Экспорт")).font(UIStyleFont.body(size: 13, weight: .medium)); Image(systemName: "chevron.down").font(.system(size: 8, weight: .bold)).foregroundColor(.uiMidGray) }
                                             .lineLimit(1).foregroundColor(.uiInk).padding(.vertical, 8).padding(.horizontal, 14).background(Color.uiPaper).cornerRadius(18).overlay(RoundedRectangle(cornerRadius: 18).stroke(Color.uiHairline, lineWidth: 1))
                                         }.fixedSize(horizontal: true, vertical: false)
                                         UIDestructiveButton(title: "Удалить") { itemToDelete = selected.id; showingDeleteAlert = true }
@@ -854,8 +855,12 @@ struct ContentView: View {
                             }
                             
                             HStack(spacing: 8) {
-                                MetadataPill(icon: "waveform", text: selected.duration, color: Color.blue)
-                                MetadataPill(icon: "bolt.fill", text: selected.formattedSpeedup, color: Color.orange)
+                                if selected.isAITransform == true || selected.duration == "AI" {
+                                    MetadataPill(icon: "sparkles", text: String(localized: "History.AI"), color: Color(hex: "#A855F7"))
+                                } else {
+                                    MetadataPill(icon: "waveform", text: selected.duration, color: Color.blue)
+                                    MetadataPill(icon: "bolt.fill", text: selected.formattedSpeedup, color: Color.orange)
+                                }
                                 MetadataPill(icon: "text.alignleft", text: "\(selected.text.count) " + String(localized: "зн"), color: Color(hex: "#10B981"))
                                 let readMin = max(1, selected.text.count / 900)
                                 MetadataPill(icon: "book.fill", text: "~\(readMin) " + String(localized: "мин чтения"), color: Color.purple)
@@ -1448,8 +1453,25 @@ struct HistoryCard: View {
                 let formatted = DateFormattingHelper.formatRussianDate(item.date)
                 Text(formatted.date).font(UIStyleFont.body(size: 12, weight: .semibold)).foregroundColor(isSelected ? .uiInk : .uiInkSoft)
                 if !formatted.time.isEmpty { Text(formatted.time).font(UIStyleFont.body(size: 10, weight: .regular)).foregroundColor(isSelected ? .uiMidGray : .uiMidGray.opacity(0.8)) }
+
                 Spacer()
-                Text(item.duration).font(UIStyleFont.body(size: 10, weight: .regular)).foregroundColor(.uiMidGray)
+
+                if item.isAITransform == true || item.duration == "AI" {
+                    HStack(spacing: 3) {
+                        Image(systemName: "sparkles")
+                            .font(.system(size: 8, weight: .bold))
+                        Text(LocalizedStringKey("History.AI"))
+                            .font(UIStyleFont.body(size: 9, weight: .bold))
+                            .lineLimit(1)
+                    }
+                    .foregroundColor(Color(hex: "#A855F7"))
+                    .padding(.horizontal, 5)
+                    .padding(.vertical, 1.5)
+                    .background(Color(hex: "#A855F7").opacity(0.12))
+                    .cornerRadius(5)
+                } else {
+                    Text(item.duration).font(UIStyleFont.body(size: 10, weight: .regular)).foregroundColor(.uiMidGray)
+                }
             }
             Text(item.text).font(UIStyleFont.body(size: 13, weight: .regular)).foregroundColor(isSelected ? .uiInk : .uiInkSoft).lineLimit(2)
         }
