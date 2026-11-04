@@ -140,9 +140,26 @@ final class AIProviderStore: ObservableObject {
     static let shared = AIProviderStore()
 
     @Published var providerID: String { didSet { Self.defaults.set(providerID, forKey: "ai.providerID") } }
-    @Published var baseURL: String { didSet { Self.defaults.set(baseURL, forKey: "ai.baseURL") } }
-    @Published var model: String { didSet { Self.defaults.set(model, forKey: "ai.model") } }
-    @Published var apiKey: String { didSet { if apiKey != oldValue { KeyStore.set(apiKey, for: "ai.apiKey") } } }
+    @Published var baseURL: String {
+        didSet {
+            Self.defaults.set(baseURL, forKey: "ai.baseURL")
+            Self.defaults.set(baseURL, forKey: "ai.provider.\(providerID).baseURL")
+        }
+    }
+    @Published var model: String {
+        didSet {
+            Self.defaults.set(model, forKey: "ai.model")
+            Self.defaults.set(model, forKey: "ai.provider.\(providerID).model")
+        }
+    }
+    @Published var apiKey: String {
+        didSet {
+            if apiKey != oldValue {
+                KeyStore.set(apiKey, for: "ai.apiKey")
+                KeyStore.set(apiKey, for: "ai.provider.\(providerID).apiKey")
+            }
+        }
+    }
     @Published var allowInsecureHTTP: Bool { didSet { Self.defaults.set(allowInsecureHTTP, forKey: "ai.allowInsecureHTTP") } }
     @Published var reasoningEffort: AIReasoningEffort { didSet { Self.defaults.set(reasoningEffort.rawValue, forKey: "ai.reasoningEffort") } }
     @Published var thinkingBudgetMode: AIThinkingBudgetMode { didSet { Self.defaults.set(thinkingBudgetMode.rawValue, forKey: "ai.thinkingBudgetMode") } }
@@ -165,10 +182,17 @@ final class AIProviderStore: ObservableObject {
 
     private init() {
         let initialPreset = AIProviderPresets.preset(id: Self.defaults.string(forKey: "ai.providerID") ?? "") ?? AIProviderPresets.all[0]
-        providerID = Self.defaults.string(forKey: "ai.providerID") ?? initialPreset.id
-        baseURL = Self.defaults.string(forKey: "ai.baseURL") ?? initialPreset.baseURL
-        model = Self.defaults.string(forKey: "ai.model") ?? initialPreset.defaultModel
-        apiKey = KeyStore.get("ai.apiKey") ?? ""
+        let currentID = Self.defaults.string(forKey: "ai.providerID") ?? initialPreset.id
+        providerID = currentID
+        baseURL = Self.defaults.string(forKey: "ai.provider.\(currentID).baseURL")
+            ?? Self.defaults.string(forKey: "ai.baseURL")
+            ?? initialPreset.baseURL
+        model = Self.defaults.string(forKey: "ai.provider.\(currentID).model")
+            ?? Self.defaults.string(forKey: "ai.model")
+            ?? initialPreset.defaultModel
+        apiKey = KeyStore.get("ai.provider.\(currentID).apiKey")
+            ?? KeyStore.get("ai.apiKey")
+            ?? ""
         allowInsecureHTTP = Self.defaults.object(forKey: "ai.allowInsecureHTTP") as? Bool ?? true
 
         if let rawEffort = Self.defaults.string(forKey: "ai.reasoningEffort"),
@@ -185,7 +209,7 @@ final class AIProviderStore: ObservableObject {
             thinkingBudgetMode = .fixed1024
         }
 
-        maxTokensString = Self.defaults.string(forKey: "ai.maxTokens") ?? "4096"
+        maxTokensString = Self.defaults.string(forKey: "ai.maxTokens") ?? "4096" 
     }
 
     var currentPreset: AIProviderPreset? {
@@ -215,16 +239,26 @@ final class AIProviderStore: ObservableObject {
     }
 
     func apply(_ preset: AIProviderPreset) {
+        guard providerID != preset.id else {
+            // Если выбран тот же пресет, не сбрасываем пользовательские настройки
+            return
+        }
+
         providerID = preset.id
-        baseURL = preset.baseURL
-        model = preset.defaultModel
+
+        // Восстанавливаем ранее сохраненные настройки именно для этого провайдера,
+        // либо берем дефолтные значения пресета
+        baseURL = Self.defaults.string(forKey: "ai.provider.\(preset.id).baseURL") ?? preset.baseURL
+        model = Self.defaults.string(forKey: "ai.provider.\(preset.id).model") ?? preset.defaultModel
+        apiKey = KeyStore.get("ai.provider.\(preset.id).apiKey") ?? (preset.needsKey ? "" : "")
+
         testResult = nil
         testOK = false
         installedModels = []
         if preset.id == "ollama" {
             refreshModels()
         }
-        AppLogger.shared.info("AI", "Выбран провайдер \(preset.name)", details: preset.baseURL)
+        AppLogger.shared.info("AI", "Выбран провайдер \(preset.name)", details: baseURL)
     }
 
     func refreshModels() {
