@@ -22,6 +22,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 AudioCapture.shared.stopRecording()
             }
         }
+        hotKey.onSelectionHotKeyPressed = {
+            AISelectionManager.shared.trigger()
+        }
         hotKey.register()
     }
 }
