@@ -1,6 +1,58 @@
 import SwiftUI
 import AppKit
 
+final class OverlayHostingView<Content: View>: NSHostingView<Content> {
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool {
+        true
+    }
+
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        for area in trackingAreas {
+            removeTrackingArea(area)
+        }
+        let area = NSTrackingArea(
+            rect: bounds,
+            options: [.mouseEnteredAndExited, .mouseMoved, .activeAlways, .inVisibleRect],
+            owner: self,
+            userInfo: nil
+        )
+        addTrackingArea(area)
+    }
+
+    override func mouseEntered(with event: NSEvent) {
+        if AudioCapture.shared.aiStatusText != nil {
+            DispatchQueue.main.async {
+                AudioCapture.shared.isHoveringAICancel = true
+            }
+        }
+    }
+
+    override func mouseExited(with event: NSEvent) {
+        DispatchQueue.main.async {
+            AudioCapture.shared.isHoveringAICancel = false
+        }
+    }
+
+    override func hitTest(_ point: NSPoint) -> NSView? {
+        // Во время ИИ-обработки перехватываем мышь для наведения и отмены
+        if AudioCapture.shared.aiStatusText != nil {
+            return super.hitTest(point)
+        }
+        // Во время обычной записи пропускаем клики сквозь оверлей
+        return nil
+    }
+
+    override func mouseDown(with event: NSEvent) {
+        if AudioCapture.shared.aiStatusText != nil {
+            AppLogger.shared.info("AISelection", "Клик по оверлею — отмена генерации")
+            AISelectionManager.shared.cancelCurrentOperation()
+            return
+        }
+        super.mouseDown(with: event)
+    }
+}
+
 class OverlayPanelManager {
     static let shared = OverlayPanelManager()
     private var panel: NSPanel?
@@ -14,7 +66,7 @@ class OverlayPanelManager {
             
             if self.panel == nil {
                 let newPanel = NSPanel(
-                    contentRect: NSRect(x: 0, y: 0, width: 220, height: 60),
+                    contentRect: NSRect(x: 0, y: 0, width: 240, height: 60),
                     styleMask: [.borderless, .nonactivatingPanel],
                     backing: .buffered,
                     defer: false
@@ -25,13 +77,14 @@ class OverlayPanelManager {
                 newPanel.appearance = NSApp.effectiveAppearance
                 newPanel.hidesOnDeactivate = false
                 newPanel.isReleasedWhenClosed = false
-                newPanel.level = .screenSaver
+                newPanel.level = .popUpMenu
                 newPanel.isFloatingPanel = true
-                newPanel.ignoresMouseEvents = true
+                newPanel.acceptsMouseMovedEvents = true
+                newPanel.ignoresMouseEvents = false
                 newPanel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]
                 
                 let view = FloatingWidgetView()
-                let hostingView = NSHostingView(rootView: view)
+                let hostingView = OverlayHostingView(rootView: view)
                 hostingView.wantsLayer = true
                 hostingView.layer?.backgroundColor = NSColor.clear.cgColor
                 hostingView.layer?.isOpaque = false
@@ -40,7 +93,8 @@ class OverlayPanelManager {
                 self.panel = newPanel
             }
             
-            if let screen = NSScreen.main {
+            let mouseLoc = NSEvent.mouseLocation
+            if let screen = NSScreen.screens.first(where: { NSMouseInRect(mouseLoc, $0.frame, false) }) ?? NSScreen.main ?? NSScreen.screens.first {
                 let panelWidth: CGFloat = 240
                 let x = screen.frame.midX - (panelWidth / 2.0)
                 let targetY = screen.visibleFrame.maxY - 44
@@ -179,6 +233,7 @@ struct FloatingWidgetView: View {
     @ObservedObject var audioCapture = AudioCapture.shared
     @Environment(\.colorScheme) private var colorScheme
     @State private var isAppeared = false
+    @State private var isHoveringCancel = false
     
     let greenGradient = LinearGradient(colors: [Color(hex: "#34D399"), Color(hex: "#059669")], startPoint: .top, endPoint: .bottom)
     let purpleGradient = LinearGradient(colors: [Color(hex: "#C084FC"), Color(hex: "#6366F1")], startPoint: .top, endPoint: .bottom)
@@ -212,6 +267,19 @@ struct FloatingWidgetView: View {
                             .font(.system(size: 12, weight: .bold, design: .monospaced))
                             .foregroundColor(.white)
                     }
+                } else if let aiStatus = audioCapture.aiStatusText {
+                    let isHovering = audioCapture.isHoveringAICancel
+                    HStack(spacing: 8) {
+                        Image(systemName: isHovering ? "xmark.circle.fill" : "sparkles")
+                            .font(.system(size: 12, weight: .bold))
+                            .foregroundColor(isHovering ? Color(hex: "#F43F5E") : Color(hex: "#C084FC"))
+                        Text(isHovering ? LocalizedStringKey("Отменить") : LocalizedStringKey(aiStatus))
+                            .font(UIStyleFont.body(size: 12, weight: .semibold))
+                            .foregroundColor(.white)
+                            .lineLimit(1)
+                    }
+                    .contentShape(Rectangle())
+                    .help(String(localized: "Нажмите, чтобы отменить генерацию"))
                 } else if audioCapture.transcribedText == String(localized: "Расшифровка...") {
                     HStack(spacing: 2.0) {
                         TimelineView(.animation) { timeline in
@@ -260,7 +328,7 @@ struct FloatingWidgetView: View {
             .clipShape(Capsule())
             .overlay(
                 Group {
-                    if audioCapture.transcribedText == String(localized: "Расшифровка...") || audioCapture.isProcessingFile {
+                    if audioCapture.transcribedText == String(localized: "Расшифровка...") || audioCapture.isProcessingFile || audioCapture.aiStatusText != nil {
                         RotatingGlowBorder()
                     } else if audioCapture.warningMessage != nil {
                         Capsule().stroke(Color(hex: "#F59E0B").opacity(0.6), lineWidth: 1.2)
@@ -289,6 +357,9 @@ struct FloatingWidgetView: View {
     
     private func getWidth() -> CGFloat {
         if audioCapture.warningMessage != nil { return 210 }
+        if audioCapture.aiStatusText != nil {
+            return audioCapture.isHoveringAICancel ? 150 : 175
+        }
         if audioCapture.isProcessingFile { return 110 }
         if audioCapture.isRecording { return 200 }
         if audioCapture.isSuccessDone { return 150 }
@@ -297,6 +368,7 @@ struct FloatingWidgetView: View {
     
     private func getGlowColor() -> Color {
         if audioCapture.warningMessage != nil { return Color(hex: "#F59E0B") }
+        if audioCapture.aiStatusText != nil { return Color(hex: "#C084FC") }
         if audioCapture.isProcessingFile || audioCapture.transcribedText == String(localized: "Расшифровка...") { return Color(hex: "#6366F1") }
         if audioCapture.isSuccessDone { return Color(hex: "#10B981") }
         return Color(hex: "#10B981")

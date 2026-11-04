@@ -131,11 +131,31 @@ struct AIResultSheet: View {
 
     @State private var phase: Phase = .loading
     @State private var resultText = ""
+    @State private var reasoningText = ""
+    @State private var isReasoningExpanded = false
     @State private var errorText: String?
     @State private var copied = false
     @State private var fromCache = false
+    @State private var currentTask: URLSessionDataTask?
 
-    enum Phase { case loading, done, error }
+    enum Phase { case loading, streaming, done, error }
+
+    private func cancelGeneration() {
+        currentTask?.cancel()
+        currentTask = nil
+    }
+
+    private func stopStreaming() {
+        currentTask?.cancel()
+        currentTask = nil
+        let trimmed = resultText.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !trimmed.isEmpty {
+            resultText = trimmed
+            phase = .done
+        } else {
+            dismiss()
+        }
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -158,7 +178,10 @@ struct AIResultSheet: View {
                         .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.uiHairline, lineWidth: 1))
                 }
                 Spacer()
-                Button(action: { dismiss() }) {
+                Button(action: {
+                    cancelGeneration()
+                    dismiss()
+                }) {
                     Image(systemName: "xmark")
                         .font(.system(size: 11, weight: .bold))
                         .foregroundColor(.uiMidGray)
@@ -181,13 +204,30 @@ struct AIResultSheet: View {
             if phase == .done {
                 Divider().background(Color.uiHairline)
                 footer
+            } else if phase == .streaming {
+                Divider().background(Color.uiHairline)
+                streamingBar
             }
         }
         .padding(24)
-        .frame(minWidth: request.scope.isSelection ? 760 : 560,
-               minHeight: request.scope.isSelection ? 480 : 400)
+        .frame(minWidth: request.scope.isSelection ? 820 : 680,
+               minHeight: request.scope.isSelection ? 500 : 420)
         .background(Color.uiPaper)
         .onAppear(perform: run)
+        .onDisappear(perform: cancelGeneration)
+    }
+
+    private var streamingBar: some View {
+        HStack(spacing: 10) {
+            ProgressView().controlSize(.small)
+            Text(resultText.isEmpty ? String(localized: "Размышления модели…") : String(localized: "Печатает ответ…"))
+                .font(UIStyleFont.body(size: 12, weight: .medium))
+                .foregroundColor(.uiMidGray)
+            Spacer()
+            UIOutlineButton(title: "Остановить") {
+                stopStreaming()
+            }
+        }
     }
 
     @ViewBuilder
@@ -195,12 +235,45 @@ struct AIResultSheet: View {
         switch phase {
         case .loading:
             VStack(spacing: 16) {
+                Spacer()
                 AIThinkingOrb(icon: request.template.icon)
                 Text("Генерация…")
-                    .font(UIStyleFont.body(size: 12, weight: .regular))
+                    .font(UIStyleFont.body(size: 13, weight: .medium))
                     .foregroundColor(.uiMidGray)
+
+                UIOutlineButton(title: "Отмена") {
+                    cancelGeneration()
+                    dismiss()
+                }
+                .padding(.top, 4)
+                Spacer()
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+        case .streaming:
+            if resultText.isEmpty {
+                if !reasoningText.isEmpty {
+                    liveReasoningView
+                } else {
+                    VStack(spacing: 16) {
+                        Spacer()
+                        AIThinkingOrb(icon: request.template.icon)
+                        Text("Генерация…")
+                            .font(UIStyleFont.body(size: 13, weight: .medium))
+                            .foregroundColor(.uiMidGray)
+
+                        UIOutlineButton(title: "Отмена") {
+                            cancelGeneration()
+                            dismiss()
+                        }
+                        .padding(.top, 4)
+                        Spacer()
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                }
+            } else {
+                outputView
+            }
 
         case .error:
             VStack(spacing: 14) {
@@ -216,17 +289,118 @@ struct AIResultSheet: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
 
         case .done:
-            if request.scope.isSelection {
-                splitView
-            } else {
+            outputView
+        }
+    }
+
+    private var liveReasoningView: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 6) {
+                Image(systemName: "brain")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundColor(.uiMidGray)
+                Text("Размышления…")
+                    .font(UIStyleFont.body(size: 11, weight: .semibold))
+                    .foregroundColor(.uiMidGray)
+                Spacer()
+            }
+
+            ScrollViewReader { proxy in
                 ScrollView {
-                    markdownText
+                    Text(reasoningText)
+                        .font(UIStyleFont.body(size: 12.5, weight: .regular))
+                        .italic()
+                        .foregroundColor(.uiMidGray)
+                        .lineSpacing(3)
+                        .textSelection(.enabled)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(14)
+                        .id("liveReasoningBottom")
                 }
                 .background(Color.uiSidebar)
                 .cornerRadius(16)
                 .overlay(RoundedRectangle(cornerRadius: 16).stroke(Color.uiHairline, lineWidth: 1))
+                .onChange(of: reasoningText) { _ in
+                    proxy.scrollTo("liveReasoningBottom", anchor: .bottom)
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private var reasoningCollapsibleBar: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Button(action: {
+                withAnimation(.easeInOut(duration: 0.18)) {
+                    isReasoningExpanded.toggle()
+                }
+            }) {
+                HStack(spacing: 6) {
+                    Image(systemName: isReasoningExpanded ? "chevron.down" : "chevron.right")
+                        .font(.system(size: 9, weight: .bold))
+                        .foregroundColor(.uiMidGray)
+                    Image(systemName: "brain")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(.uiMidGray)
+                    Text("Размышления")
+                        .font(UIStyleFont.body(size: 11, weight: .semibold))
+                        .foregroundColor(.uiMidGray)
+                    Spacer()
+                }
+                .padding(.vertical, 5)
+                .padding(.horizontal, 10)
+                .background(Color.uiCanvas)
+                .cornerRadius(8)
+                .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.uiHairline, lineWidth: 1))
+            }
+            .buttonStyle(TactileButtonStyle())
+
+            if isReasoningExpanded {
+                ScrollView {
+                    Text(reasoningText)
+                        .font(UIStyleFont.body(size: 12, weight: .regular))
+                        .italic()
+                        .foregroundColor(.uiMidGray)
+                        .lineSpacing(2)
+                        .textSelection(.enabled)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(10)
+                }
+                .frame(maxHeight: 160)
+                .background(Color.uiSidebar)
+                .cornerRadius(10)
+                .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.uiHairline, lineWidth: 1))
+                .transition(.opacity.combined(with: .move(edge: .top)))
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var outputView: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            if !reasoningText.isEmpty {
+                reasoningCollapsibleBar
+            }
+
+            if request.scope.isSelection {
+                splitView
+            } else {
+                ScrollViewReader { proxy in
+                    ScrollView {
+                        markdownText
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(14)
+                            .id("streamResultBottom")
+                    }
+                    .background(Color.uiSidebar)
+                    .cornerRadius(16)
+                    .overlay(RoundedRectangle(cornerRadius: 16).stroke(Color.uiHairline, lineWidth: 1))
+                    .onChange(of: resultText) { _ in
+                        if phase == .streaming {
+                            proxy.scrollTo("streamResultBottom", anchor: .bottom)
+                        }
+                    }
+                }
             }
         }
     }
@@ -392,21 +566,29 @@ struct AIResultSheet: View {
                 }
             }
             Spacer()
-            Button(action: copy) {
-                HStack(spacing: 5) {
-                    Image(systemName: copied ? "checkmark" : "doc.on.doc")
-                        .font(.system(size: 11, weight: .medium))
-                    Text(copied ? "Готово!" : "Копировать")
-                        .font(UIStyleFont.body(size: 13, weight: .medium))
-                }
-                .foregroundColor(copied ? Color(hex: "#10B981") : .uiInk)
-                .padding(.vertical, 8)
-                .padding(.horizontal, 14)
-                .background(Color.uiPaper)
-                .cornerRadius(18)
-                .overlay(RoundedRectangle(cornerRadius: 18).stroke(copied ? Color(hex: "#10B981").opacity(0.5) : Color.uiHairline, lineWidth: 1))
+            Button(action: regenerate) {
+                Image(systemName: "arrow.clockwise")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundColor(.uiInk)
+                    .frame(width: 36, height: 36)
+                    .background(Color.uiPaper)
+                    .clipShape(Circle())
+                    .overlay(Circle().stroke(Color.uiHairline, lineWidth: 1))
             }
             .buttonStyle(TactileButtonStyle())
+            .help(String(localized: "Перегенерировать"))
+
+            Button(action: copy) {
+                Image(systemName: copied ? "checkmark" : "doc.on.doc")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundColor(copied ? Color(hex: "#10B981") : .uiInk)
+                    .frame(width: 36, height: 36)
+                    .background(Color.uiPaper)
+                    .clipShape(Circle())
+                    .overlay(Circle().stroke(copied ? Color(hex: "#10B981").opacity(0.5) : Color.uiHairline, lineWidth: 1))
+            }
+            .buttonStyle(TactileButtonStyle())
+            .help(String(localized: copied ? "Готово!" : "Копировать"))
         }
     }
 
@@ -429,6 +611,9 @@ struct AIResultSheet: View {
         fromCache = false
         phase = .loading
         errorText = nil
+        resultText = ""
+        reasoningText = ""
+        cancelGeneration()
 
         guard AIProviderStore.shared.isConfigured else {
             phase = .error
@@ -437,19 +622,44 @@ struct AIResultSheet: View {
         }
 
         let messages = request.template.messages(for: request.noteText)
-        AIService.shared.chat(messages: messages, using: AIProviderStore.shared.config) { result in
-            DispatchQueue.main.async {
-                switch result {
-                case .success(let text):
-                    resultText = text.trimmingCharacters(in: .whitespacesAndNewlines)
-                    phase = .done
-                    AICache.shared.store(noteID: request.noteID, templateID: request.template.id, scopeID: request.scope.cacheKey, text: request.noteText, result: resultText)
-                case .failure(let error):
-                    errorText = error.localizedDescription
-                    phase = .error
+        currentTask = AIService.shared.chatStream(
+            messages: messages,
+            using: AIProviderStore.shared.config,
+            promptLength: request.noteText.count,
+            onChunk: { [self] contentChunk, reasoningChunk in
+                if let reasoningChunk, !reasoningChunk.isEmpty {
+                    reasoningText.append(reasoningChunk)
+                }
+                if !contentChunk.isEmpty {
+                    resultText.append(contentChunk)
+                }
+                if phase != .streaming {
+                    phase = .streaming
+                }
+            },
+            completion: { [self] result in
+                DispatchQueue.main.async {
+                    currentTask = nil
+                    switch result {
+                    case .success(let text):
+                        let final = text.trimmingCharacters(in: .whitespacesAndNewlines)
+                        resultText = final.isEmpty ? resultText.trimmingCharacters(in: .whitespacesAndNewlines) : final
+                        phase = .done
+                        if !resultText.isEmpty {
+                            AICache.shared.store(noteID: request.noteID, templateID: request.template.id, scopeID: request.scope.cacheKey, text: request.noteText, result: resultText)
+                        }
+                    case .failure(let error):
+                        if !resultText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                            resultText = resultText.trimmingCharacters(in: .whitespacesAndNewlines)
+                            phase = .done
+                        } else {
+                            errorText = error.localizedDescription
+                            phase = .error
+                        }
+                    }
                 }
             }
-        }
+        )
     }
 
     private var cacheBar: some View {

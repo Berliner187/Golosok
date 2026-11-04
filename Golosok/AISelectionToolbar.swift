@@ -1,10 +1,17 @@
 import SwiftUI
 import AppKit
 
+// MARK: - Состояние навигации палитры
+
+final class AISelectionToolbarState: ObservableObject {
+    @Published var selectedIndex: Int = 0
+}
+
 // MARK: - Контент мини-тулбара
 
 struct AISelectionToolbarContent: View {
     let templates: [AIPromptTemplate]
+    @ObservedObject var state: AISelectionToolbarState
     let onPick: (AIPromptTemplate) -> Void
 
     var body: some View {
@@ -13,7 +20,7 @@ struct AISelectionToolbarContent: View {
                 Image(systemName: "sparkles")
                     .font(.system(size: 11, weight: .semibold))
                     .foregroundColor(Color.uiAccent)
-                Text("AI-действия с выделением")
+                Text(LocalizedStringKey("AI-действия с выделением"))
                     .font(UIStyleFont.body(size: 11, weight: .semibold))
                     .foregroundColor(.uiInk)
                     .lineLimit(1)
@@ -34,16 +41,31 @@ struct AISelectionToolbarContent: View {
 
             Divider().background(Color.uiHairline)
 
-            ScrollView {
-                VStack(spacing: 0) {
-                    ForEach(Array(templates.enumerated()), id: \.element.id) { idx, t in
-                        AISelectionToolbarRow(template: t) { onPick(t) }
-                        if idx < templates.count - 1 {
-                            Divider().background(Color.uiHairline).padding(.horizontal, 10)
+            ScrollViewReader { proxy in
+                ScrollView(showsIndicators: false) {
+                    VStack(spacing: 0) {
+                        ForEach(Array(templates.enumerated()), id: \.element.id) { idx, t in
+                            AISelectionToolbarRow(
+                                index: idx,
+                                isSelected: state.selectedIndex == idx,
+                                template: t
+                            ) {
+                                state.selectedIndex = idx
+                                onPick(t)
+                            }
+                            .id(idx)
+                            if idx < templates.count - 1 {
+                                Divider().background(Color.uiHairline).padding(.horizontal, 10)
+                            }
                         }
                     }
+                    .padding(.vertical, 6)
                 }
-                .padding(.vertical, 6)
+                .onChange(of: state.selectedIndex) { newIdx in
+                    withAnimation(.easeInOut(duration: 0.1)) {
+                        proxy.scrollTo(newIdx, anchor: .center)
+                    }
+                }
             }
         }
         .frame(width: 260, alignment: .leading)
@@ -61,30 +83,45 @@ struct AISelectionToolbarContent: View {
 }
 
 private struct AISelectionToolbarRow: View {
+    let index: Int
+    let isSelected: Bool
     let template: AIPromptTemplate
     let onPick: () -> Void
     @State private var hover = false
 
     var body: some View {
         Button(action: onPick) {
-            HStack(spacing: 10) {
+            HStack(spacing: 8) {
                 Image(systemName: template.icon)
                     .font(.system(size: 12, weight: .medium))
-                    .foregroundColor(Color.uiAccent.opacity(0.85))
+                    .foregroundColor(isSelected ? Color.uiInk : Color.uiAccent.opacity(0.85))
                     .frame(width: 16)
                 Text(LocalizedStringKey(template.title))
-                    .font(UIStyleFont.body(size: 12, weight: .medium))
+                    .font(UIStyleFont.body(size: 12, weight: isSelected ? .semibold : .medium))
                     .foregroundColor(.uiInk)
                     .lineLimit(1)
                 Spacer(minLength: 4)
+                Text("\(index + 1)")
+                    .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                    .foregroundColor(isSelected ? Color.uiInk : .uiMidGray)
+                    .padding(.horizontal, 4)
+                    .padding(.vertical, 1)
+                    .background(isSelected ? Color.uiPaper : Color.uiCanvas)
+                    .cornerRadius(4)
+                    .overlay(RoundedRectangle(cornerRadius: 4).stroke(Color.uiHairline, lineWidth: 1))
                 Image(systemName: "chevron.right")
                     .font(.system(size: 9, weight: .bold))
                     .foregroundColor(Color.uiAccent.opacity(0.6))
-                    .opacity(hover ? 1 : 0)
+                    .opacity(isSelected || hover ? 1 : 0)
             }
             .padding(.horizontal, 10)
             .frame(height: 30)
-            .background(hover ? Color.uiCanvas : Color.clear)
+            .background(isSelected ? Color.uiCanvas : (hover ? Color.uiCanvas.opacity(0.6) : Color.clear))
+            .overlay(
+                RoundedRectangle(cornerRadius: 8)
+                    .stroke(isSelected ? Color.uiAccent.opacity(0.4) : Color.clear, lineWidth: 1)
+                    .padding(.horizontal, 4)
+            )
             .contentShape(Rectangle())
         }
         .buttonStyle(TactileButtonStyle())
@@ -94,14 +131,21 @@ private struct AISelectionToolbarRow: View {
 
 // MARK: - Presenter (плавающая NSPanel над выделением)
 
+final class KeyableSelectionPanel: NSPanel {
+    override var canBecomeKey: Bool { true }
+    override var canBecomeMain: Bool { true }
+}
+
 final class AISelectionToolbarPresenter {
     static let shared = AISelectionToolbarPresenter()
 
     private var panel: NSPanel?
     private var hostingController: NSHostingController<AISelectionToolbarContent>?
+    private var state: AISelectionToolbarState?
     private var localClick: Any?
     private var globalClick: Any?
     private var keyMonitor: Any?
+    private var globalKeyMonitor: Any?
     private var onClose: (() -> Void)?
 
     func present(anchorScreenRect: CGRect,
@@ -111,32 +155,38 @@ final class AISelectionToolbarPresenter {
         close()
         self.onClose = onClose
 
-        let content = AISelectionToolbarContent(templates: templates) { tpl in
+        let toolbarState = AISelectionToolbarState()
+        self.state = toolbarState
+
+        let content = AISelectionToolbarContent(templates: templates, state: toolbarState) { tpl in
             onPick(tpl)
             AISelectionToolbarPresenter.shared.close()
         }
 
         let controller = NSHostingController(rootView: content)
-        let measured = controller.sizeThatFits(in: NSSize(width: 260, height: CGFloat.greatestFiniteMagnitude))
-        let width: CGFloat = max(220, min(320, measured.width))
-        let height: CGFloat = min(360, max(140, measured.height))
+        let width: CGFloat = 260
+        let targetScreen = Self.screenContaining(anchorScreenRect)
+        let screenHeight = targetScreen?.visibleFrame.height ?? 800
+        let maxAllowedHeight = min(620, screenHeight * 0.75)
+        let naturalHeight = CGFloat(46 + templates.count * 31)
+        let height = min(maxAllowedHeight, max(140, naturalHeight))
 
         controller.view.frame = NSRect(x: 0, y: 0, width: width, height: height)
         controller.view.wantsLayer = true
         controller.view.layer?.backgroundColor = NSColor.clear.cgColor
         hostingController = controller
 
-        let p = NSPanel(contentRect: NSRect(x: 0, y: 0, width: width, height: height),
-                        styleMask: [.borderless], backing: .buffered, defer: false)
+        let p = KeyableSelectionPanel(contentRect: NSRect(x: 0, y: 0, width: width, height: height),
+                                      styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
         p.isOpaque = false
         p.backgroundColor = NSColor.clear
         p.hasShadow = true
         p.hidesOnDeactivate = false
         p.isReleasedWhenClosed = false
-        p.level = .statusBar
+        p.level = .screenSaver
         p.isFloatingPanel = true
         p.ignoresMouseEvents = false
-        p.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+        p.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]
         p.contentView = controller.view
 
         let origin = Self.computeOrigin(anchorScreenRect: anchorScreenRect,
@@ -146,12 +196,13 @@ final class AISelectionToolbarPresenter {
         panel = p
         p.alphaValue = 0
         p.orderFrontRegardless()
+        p.makeKey()
         NSAnimationContext.runAnimationGroup { ctx in
             ctx.duration = 0.12
             p.animator().alphaValue = 1
         }
 
-        installMonitors()
+        installMonitors(templates: templates, onPick: onPick)
     }
 
     /// Универсальный апдейт: либо открывает панель при первом выделении,
@@ -190,6 +241,7 @@ final class AISelectionToolbarPresenter {
         let closure = onClose
         self.panel = nil
         self.hostingController = nil
+        self.state = nil
         self.onClose = nil
         NSAnimationContext.runAnimationGroup({ ctx in
             ctx.duration = 0.1
@@ -212,7 +264,7 @@ final class AISelectionToolbarPresenter {
         let pw = panelSize.width
         let ph = panelSize.height
 
-        // Сначала пробуем расположить-toolbar над выделением с 6pt просветом.
+        // Сначала пробуем расположить toolbar над выделением с 6pt просветом.
         var ox = anchorScreenRect.midX - pw / 2
         var oy = anchorScreenRect.maxY + 6
         if oy + ph > visible.maxY {
@@ -239,7 +291,7 @@ final class AISelectionToolbarPresenter {
         return NSScreen.main
     }
 
-    private func installMonitors() {
+    private func installMonitors(templates: [AIPromptTemplate], onPick: @escaping (AIPromptTemplate) -> Void) {
         localClick = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown, .otherMouseDown]) { [weak self] event in
             guard let self, let panel = self.panel else { return event }
             if event.window === panel { return event }
@@ -250,13 +302,91 @@ final class AISelectionToolbarPresenter {
             self?.close()
         }
         keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
-            if event.keyCode == 53 { self?.close() }
-            return event
+            guard let self, let state = self.state else { return event }
+
+            switch event.keyCode {
+            case 53: // Esc
+                self.close()
+                return nil
+
+            case 126: // Up Arrow
+                guard !templates.isEmpty else { return nil }
+                state.selectedIndex = (state.selectedIndex - 1 + templates.count) % templates.count
+                return nil
+
+            case 125: // Down Arrow
+                guard !templates.isEmpty else { return nil }
+                state.selectedIndex = (state.selectedIndex + 1) % templates.count
+                return nil
+
+            case 36, 76: // Enter / Return
+                if state.selectedIndex >= 0 && state.selectedIndex < templates.count {
+                    let selected = templates[state.selectedIndex]
+                    DispatchQueue.main.async {
+                        self.close()
+                        onPick(selected)
+                    }
+                }
+                return nil
+
+            default:
+                if let char = event.characters?.first, let digit = char.wholeNumberValue {
+                    let targetIndex: Int? = (digit >= 1 && digit <= 9) ? (digit - 1) : (digit == 0 ? 9 : nil)
+                    if let idx = targetIndex, idx < templates.count {
+                        let t = templates[idx]
+                        DispatchQueue.main.async {
+                            self.close()
+                            onPick(t)
+                        }
+                        return nil
+                    }
+                }
+                return event
+            }
+        }
+        globalKeyMonitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            guard let self, let state = self.state, !templates.isEmpty else { return }
+
+            switch event.keyCode {
+            case 53: // Esc
+                self.close()
+
+            case 126: // Up Arrow
+                DispatchQueue.main.async {
+                    state.selectedIndex = (state.selectedIndex - 1 + templates.count) % templates.count
+                }
+
+            case 125: // Down Arrow
+                DispatchQueue.main.async {
+                    state.selectedIndex = (state.selectedIndex + 1) % templates.count
+                }
+
+            case 36, 76: // Enter / Return
+                if state.selectedIndex >= 0 && state.selectedIndex < templates.count {
+                    let selected = templates[state.selectedIndex]
+                    DispatchQueue.main.async {
+                        self.close()
+                        onPick(selected)
+                    }
+                }
+
+            default:
+                if let char = event.characters?.first, let digit = char.wholeNumberValue {
+                    let targetIndex: Int? = (digit >= 1 && digit <= 9) ? (digit - 1) : (digit == 0 ? 9 : nil)
+                    if let idx = targetIndex, idx < templates.count {
+                        let t = templates[idx]
+                        DispatchQueue.main.async {
+                            self.close()
+                            onPick(t)
+                        }
+                    }
+                }
+            }
         }
     }
 
     private func removeMonitors() {
-        [localClick, globalClick, keyMonitor].compactMap { $0 }.forEach { NSEvent.removeMonitor($0) }
-        localClick = nil; globalClick = nil; keyMonitor = nil
+        [localClick, globalClick, keyMonitor, globalKeyMonitor].compactMap { $0 }.forEach { NSEvent.removeMonitor($0) }
+        localClick = nil; globalClick = nil; keyMonitor = nil; globalKeyMonitor = nil
     }
 }
