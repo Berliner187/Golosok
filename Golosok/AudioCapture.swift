@@ -27,6 +27,7 @@ struct TranscriptionItem: Identifiable, Codable, Hashable {
     let duration: String
     var speedup: Double?
     var isUnread: Bool? = false
+    var isAITransform: Bool? = false
     
     var formattedSpeedup: String {
         if let s = speedup, s > 0 { return String(format: "x%.0f", s) }
@@ -83,6 +84,46 @@ class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
     @Published var isPlayerPlaying: Bool = false
     
     @Published var isSuccessDone = false
+    @Published var aiStatusText: String? = nil
+    @Published var isHoveringAICancel = false
+
+    /// Запуск индикации работы ИИ-обработки выделения в оверлее
+    func startAIProcessing(status: String = String(localized: "ИИ-обработка...")) {
+        DispatchQueue.main.async {
+            self.warningMessage = nil
+            self.isSuccessDone = false
+            self.isHoveringAICancel = false
+            self.aiStatusText = status
+            OverlayPanelManager.shared.showOverlay()
+        }
+    }
+
+    /// Успешное завершение ИИ-обработки с анимацией галочки и звуковым сигналом
+    func finishAIProcessing() {
+        DispatchQueue.main.async {
+            self.aiStatusText = nil
+            self.isHoveringAICancel = false
+            self.isSuccessDone = true
+            SoundEffect.playSuccess()
+            OverlayPanelManager.shared.scheduleHide(after: 1.0)
+        }
+    }
+
+    /// Отмена или ошибка ИИ-обработки
+    func cancelAIProcessing(warning: String? = nil) {
+        DispatchQueue.main.async {
+            self.aiStatusText = nil
+            self.isHoveringAICancel = false
+            self.isSuccessDone = false
+            if let warning = warning {
+                SoundEffect.playWarning()
+                OverlayPanelManager.shared.showWarning(message: warning)
+            } else {
+                SoundEffect.playCancel()
+                OverlayPanelManager.shared.hideOverlay()
+            }
+        }
+    }
     
     @Published var soundEnabled: Bool = UserDefaults.standard.object(forKey: "soundEnabled") as? Bool ?? true {
         didSet { UserDefaults.standard.set(soundEnabled, forKey: "soundEnabled") }
@@ -539,6 +580,38 @@ class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
         let dateStr = formatter.string(from: Date())
         let item = TranscriptionItem(id: UUID(), date: dateStr, text: text, duration: "—", speedup: nil, isUnread: false)
         history.insert(item, at: 0)
+        return item.id
+    }
+
+    @discardableResult
+    func addAINote(originalText: String, transformedText: String, templateTitle: String) -> UUID {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "dd.MM.yyyy, HH:mm"
+        let dateStr = formatter.string(from: Date())
+
+        let afterLabel = String(localized: "Стало")
+
+        let combined = """
+        \(originalText.trimmingCharacters(in: .whitespacesAndNewlines))
+
+        ----------------
+
+        \(afterLabel) (\(templateTitle)):
+
+        \(transformedText.trimmingCharacters(in: .whitespacesAndNewlines))
+        """
+
+        let item = TranscriptionItem(
+            id: UUID(),
+            date: dateStr,
+            text: combined,
+            duration: "AI",
+            speedup: nil,
+            isUnread: true,
+            isAITransform: true
+        )
+        history.insert(item, at: 0)
+        NotificationCenter.default.post(name: NSNotification.Name("AutoSelectNote"), object: item.id)
         return item.id
     }
 
