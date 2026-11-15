@@ -1,7 +1,8 @@
 import SwiftUI
 import AppKit
 
-class AppDelegate: NSObject, NSApplicationDelegate {
+@MainActor
+final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         let mic = PermissionManager.shared.isMicGranted
         let ax = PermissionManager.shared.isAccessibilityGranted
@@ -77,7 +78,7 @@ struct GolosokApp: App {
 
         .defaultSize(width: 990, height: 710)
         
-        MenuBarExtra("Голосок", systemImage: "waveform") {
+        MenuBarExtra(content: {
             Button("Скопировать последнюю запись") {
                 if let last = audioCapture.history.first?.text {
                     NSPasteboard.general.clearContents()
@@ -102,6 +103,29 @@ struct GolosokApp: App {
             Divider()
             
             Button("Завершить") { NSApplication.shared.terminate(nil) }
-        }
+        }, label: {
+            Image(nsImage: Self.menuBarIcon)
+        })
     }
+
+    /// MenuBarExtra draws a bare SF Symbol at a legacy fixed size, which reads
+    /// too small on the taller Tahoe status bar. Draw the app logo — a filled
+    /// dot — into a fixed canvas at a controlled size instead.
+    private static let menuBarIcon: NSImage = {
+        let canvas = NSSize(width: 22, height: 22)
+        let diameter: CGFloat = 18
+        let image = NSImage(size: canvas, flipped: false) { rect in
+            let circle = NSRect(
+                x: rect.midX - diameter / 2,
+                y: rect.midY - diameter / 2,
+                width: diameter,
+                height: diameter
+            )
+            NSColor.black.setFill()
+            NSBezierPath(ovalIn: circle).fill()
+            return true
+        }
+        image.isTemplate = true
+        return image
+    }()
 }
