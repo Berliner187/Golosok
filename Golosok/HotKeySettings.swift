@@ -1,16 +1,19 @@
 import SwiftUI
-import AppKit
+@preconcurrency import AppKit
 import Carbon
+import Observation
 
-final class HotKeySettings: ObservableObject {
+@MainActor
+@Observable
+final class HotKeySettings {
     static let shared = HotKeySettings()
 
-    @Published var mode: HotKeyMode {
+    var mode: HotKeyMode {
         didSet { NativeHotKeyManager.shared.mode = mode }
     }
-    @Published var hotKeyName: String = ""
-    @Published var isCapturing = false
-    @Published var isTaken = false
+    var hotKeyName: String = ""
+    var isCapturing = false
+    var isTaken = false
 
     private var monitor: Any?
 
@@ -32,36 +35,47 @@ final class HotKeySettings: ObservableObject {
         guard !isCapturing else { return }
         isCapturing = true
         isTaken = false
-        monitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
-            if event.keyCode == 53 {
-                self.endCapture()
-                return event
-            }
-            let allowed: NSEvent.ModifierFlags = [.command, .option, .control, .shift]
-            let mods = event.modifierFlags.intersection(allowed)
-            guard !mods.isEmpty, let carbon = self.carbonModifiers(from: mods) else {
-                return event
-            }
+        monitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            guard let self else { return event }
             let keyCode = UInt32(event.keyCode)
-            let succeeded = self.sameAsCurrent(keyCode: keyCode, carbon: carbon)
-                || NativeHotKeyManager.shared.setHotKey(keyCode: keyCode, modifiers: carbon)
-            self.isTaken = !succeeded
-            if succeeded { self.refreshName() }
-            self.endCapture()
-            return nil
+            let modifiers = self.carbonModifiers(from: event.modifierFlags)
+            // NSEvent local monitors fire on the main run loop, so only
+            // Sendable primitives cross the isolation boundary.
+            let consume = MainActor.assumeIsolated {
+                self.handleCaptureEvent(keyCode: keyCode, modifiers: modifiers, isEscape: event.keyCode == 53)
+            }
+            return consume ? nil : event
         }
+    }
+
+    /// - Returns: `true` if the event was consumed as a new hotkey.
+    private func handleCaptureEvent(keyCode: UInt32, modifiers: UInt32?, isEscape: Bool) -> Bool {
+        if isEscape {
+            endCapture()
+            return false
+        }
+        guard let carbon = modifiers else { return false }
+        let succeeded = sameAsCurrent(keyCode: keyCode, carbon: carbon)
+            || NativeHotKeyManager.shared.setHotKey(keyCode: keyCode, modifiers: carbon)
+        isTaken = !succeeded
+        if succeeded { refreshName() }
+        endCapture()
+        return succeeded
     }
 
     private func sameAsCurrent(keyCode: UInt32, carbon: UInt32) -> Bool {
         NativeHotKeyManager.shared.keyCode == keyCode && NativeHotKeyManager.shared.modifierFlags == carbon
     }
 
-    private func carbonModifiers(from flags: NSEvent.ModifierFlags) -> UInt32? {
+    private nonisolated func carbonModifiers(from flags: NSEvent.ModifierFlags) -> UInt32? {
+        let allowed: NSEvent.ModifierFlags = [.command, .option, .control, .shift]
+        let mods = flags.intersection(allowed)
+        guard !mods.isEmpty else { return nil }
         var value: UInt32 = 0
-        if flags.contains(.control) { value |= UInt32(controlKey) }
-        if flags.contains(.option) { value |= UInt32(optionKey) }
-        if flags.contains(.shift) { value |= UInt32(shiftKey) }
-        if flags.contains(.command) { value |= UInt32(cmdKey) }
+        if mods.contains(.control) { value |= UInt32(controlKey) }
+        if mods.contains(.option) { value |= UInt32(optionKey) }
+        if mods.contains(.shift) { value |= UInt32(shiftKey) }
+        if mods.contains(.command) { value |= UInt32(cmdKey) }
         return value
     }
 

@@ -2080,6 +2080,7 @@
       }
     },
     "Запись идет..." : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -2096,6 +2097,7 @@
       }
     },
     "Запись отменена" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -2193,6 +2195,7 @@
       }
     },
     "Извлечение аудио..." : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -2963,6 +2966,7 @@
       }
     },
     "Нет доступа к микрофону." : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -4265,6 +4269,7 @@
       }
     },
     "Расшифровка..." : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {

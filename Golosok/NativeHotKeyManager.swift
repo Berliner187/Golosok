@@ -13,13 +13,14 @@ enum HotKeyMode: String, CaseIterable, Identifiable {
     var id: String { rawValue }
 }
 
-class NativeHotKeyManager {
+@MainActor
+final class NativeHotKeyManager {
     static let shared = NativeHotKeyManager()
     private var hotKeyRef: EventHotKeyRef?
     private var eventHandlerRef: EventHandlerRef?
 
-    var onHotKeyPressed: (() -> Void)?
-    var onHotKeyReleased: (() -> Void)?
+    var onHotKeyPressed: (@MainActor () -> Void)?
+    var onHotKeyReleased: (@MainActor () -> Void)?
 
     private init() {
         var eventTypes = [
@@ -28,10 +29,14 @@ class NativeHotKeyManager {
         ]
         InstallEventHandler(GetApplicationEventTarget(), { (_, eventRef, _) -> OSStatus in
             guard let eventRef else { return noErr }
-            switch GetEventKind(eventRef) {
-            case UInt32(kEventHotKeyPressed): NativeHotKeyManager.shared.onHotKeyPressed?()
-            case UInt32(kEventHotKeyReleased): NativeHotKeyManager.shared.onHotKeyReleased?()
-            default: break
+            let eventKind = GetEventKind(eventRef)
+            Task { @MainActor in
+                let manager = NativeHotKeyManager.shared
+                switch eventKind {
+                case UInt32(kEventHotKeyPressed): manager.onHotKeyPressed?()
+                case UInt32(kEventHotKeyReleased): manager.onHotKeyReleased?()
+                default: break
+                }
             }
             return noErr
         }, 2, &eventTypes, nil, &eventHandlerRef)
@@ -107,11 +112,5 @@ class NativeHotKeyManager {
             45: "N", 46: "M", 47: "."
         ]
         return special[keyCode] ?? String(format: "K%u", keyCode)
-    }
-
-    deinit {
-        if let ref = eventHandlerRef {
-            RemoveEventHandler(ref)
-        }
     }
 }

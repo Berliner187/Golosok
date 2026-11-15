@@ -584,7 +584,7 @@ struct ContentView: View {
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("FindPreviousInTranscript"))) { _ in
             goToMatch(offset: -1)
         }
-        .onChange(of: transcriptSearchText) { _ in
+        .onChange(of: transcriptSearchText) {
             recomputeSearchMatches()
         }
         .background(
@@ -596,7 +596,7 @@ struct ContentView: View {
         .onDrop(of: [UTType.fileURL], isTargeted: $isFileDropTargeted) { providers in
             handleDroppedProviders(providers)
         }
-        .onChange(of: searchText) { newValue in
+        .onChange(of: searchText) { _, newValue in
             scheduleSearch(newValue)
         }
         .overlay {
@@ -613,25 +613,38 @@ struct ContentView: View {
         let fileType = UTType.fileURL.identifier
         let loaders = providers.filter { $0.hasItemConformingToTypeIdentifier(fileType) }
         guard !loaders.isEmpty else { return false }
-        var urls: [URL] = []
-        let group = DispatchGroup()
-        for provider in loaders {
-            group.enter()
-            provider.loadItem(forTypeIdentifier: fileType, options: nil) { item, _ in
-                defer { group.leave() }
-                if let url = item as? URL {
-                    urls.append(url)
-                } else if let data = item as? Data, let url = URL(dataRepresentation: data, relativeTo: nil) {
-                    urls.append(url)
-                } else if let str = item as? String, let url = URL(string: str) {
-                    urls.append(url)
-                }
+
+        Task {
+            let urls = await Self.loadDroppedURLs(from: loaders, fileType: fileType)
+            if !urls.isEmpty {
+                audioCapture.importFiles(urls)
             }
         }
-        group.notify(queue: .main) {
-            if !urls.isEmpty { audioCapture.importFiles(urls) }
-        }
         return true
+    }
+
+    private static func loadDroppedURLs(from providers: [NSItemProvider], fileType: String) async -> [URL] {
+        await withTaskGroup(of: URL?.self) { group in
+            for provider in providers {
+                group.addTask {
+                    await withCheckedContinuation { continuation in
+                        provider.loadItem(forTypeIdentifier: fileType, options: nil) { item, _ in
+                            let url = (item as? URL)
+                                ?? ((item as? Data).flatMap { URL(dataRepresentation: $0, relativeTo: nil) })
+                                ?? ((item as? String).flatMap { URL(string: $0) })
+                            continuation.resume(returning: url)
+                        }
+                    }
+                }
+            }
+
+            var urls: [URL] = []
+            urls.reserveCapacity(providers.count)
+            for await url in group {
+                if let url { urls.append(url) }
+            }
+            return urls
+        }
     }
 
     private func scheduleSearch(_ query: String) {
@@ -1002,7 +1015,7 @@ struct ContentView: View {
             }.padding(20)
         }
         .onAppear { loadSelectedTimings() }
-        .onChange(of: selectedItemId) { newId in
+        .onChange(of: selectedItemId) { _, newId in
             audioCapture.stopSyncedPlayback()
             if isEditing, let prev = editingItemID, prev != newId {
                 flushPendingEdits()
@@ -1018,7 +1031,7 @@ struct ContentView: View {
             cachedNativeMatchRanges = []
             currentMatchPosition = 0
         }
-        .onChange(of: currentTab) { _ in
+        .onChange(of: currentTab) {
             if isEditing { flushPendingEdits(); isEditing = false; editingItemID = nil }
             if currentSelection != nil { currentSelection = nil }
             AISelectionToolbarPresenter.shared.close()
@@ -1028,7 +1041,7 @@ struct ContentView: View {
             cachedNativeMatchRanges = []
             currentMatchPosition = 0
         }
-        .onChange(of: isEditing) { editing in
+        .onChange(of: isEditing) { _, editing in
             if editing {
                 if currentSelection != nil { currentSelection = nil }
                 AISelectionToolbarPresenter.shared.close()

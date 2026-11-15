@@ -7,3 +7,6 @@ Golosok/whisper-cli
 *.pbxproj
 Golosok/ffmpeg
 Golosok.xcodeproj/project.pbxproj
+/.kimi-tmp
+/.venv
+*.md

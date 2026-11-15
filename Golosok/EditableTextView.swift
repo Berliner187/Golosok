@@ -53,11 +53,11 @@ struct EditableTextView: NSViewRepresentable {
             self.parent = parent
         }
 
-        func textViewDidBeginEditing(_ notification: Notification) {
+        func textDidBeginEditing(_ notification: Notification) {
             isEditing = true
         }
 
-        func textViewDidEndEditing(_ notification: Notification) {
+        func textDidEndEditing(_ notification: Notification) {
             isEditing = false
         }
 

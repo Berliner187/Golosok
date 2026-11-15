@@ -7,12 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		C457EFF53017853C007F26A1 /* NativeHotKeyManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = C457EFF43017853C007F26A1 /* NativeHotKeyManager.swift */; };
-		C4F2FF393016646A006F9170 /* OverlayPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = C4F2FF383016646A006F9170 /* OverlayPanel.swift */; };
-		C4F2FF3B30166B56006F9170 /* PermissionManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = C4F2FF3A30166B56006F9170 /* PermissionManager.swift */; };
-		C4F2FF3D30166B6D006F9170 /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C4F2FF3C30166B6D006F9170 /* OnboardingView.swift */; };
 		C4F2FF3F30166DA8006F9170 /* README.md in Resources */ = {isa = PBXBuildFile; fileRef = C4F2FF3E30166DA1006F9170 /* README.md */; };
-		C4F2FF4130168DD0006F9170 /* DashboardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C4F2FF4030168DD0006F9170 /* DashboardView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -33,15 +28,10 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
-		C457EFF43017853C007F26A1 /* NativeHotKeyManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeHotKeyManager.swift; sourceTree = "<group>"; };
 		C4F2FEF930165037006F9170 /* Golosok.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Golosok.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		C4F2FF0730165038006F9170 /* GolosokTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = GolosokTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		C4F2FF1130165038006F9170 /* GolosokUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = GolosokUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
-		C4F2FF383016646A006F9170 /* OverlayPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OverlayPanel.swift; sourceTree = "<group>"; };
-		C4F2FF3A30166B56006F9170 /* PermissionManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PermissionManager.swift; sourceTree = "<group>"; };
-		C4F2FF3C30166B6D006F9170 /* OnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingView.swift; sourceTree = "<group>"; };
 		C4F2FF3E30166DA1006F9170 /* README.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = README.md; sourceTree = "<group>"; };
-		C4F2FF4030168DD0006F9170 /* DashboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -90,12 +80,7 @@
 		C4F2FEF030165037006F9170 = {
 			isa = PBXGroup;
 			children = (
-				C457EFF43017853C007F26A1 /* NativeHotKeyManager.swift */,
 				C4F2FF3E30166DA1006F9170 /* README.md */,
-				C4F2FF4030168DD0006F9170 /* DashboardView.swift */,
-				C4F2FF383016646A006F9170 /* OverlayPanel.swift */,
-				C4F2FF3A30166B56006F9170 /* PermissionManager.swift */,
-				C4F2FF3C30166B6D006F9170 /* OnboardingView.swift */,
 				C4F2FEFB30165037006F9170 /* Golosok */,
 				C4F2FF0A30165038006F9170 /* GolosokTests */,
 				C4F2FF1430165038006F9170 /* GolosokUITests */,
@@ -268,11 +253,6 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				C4F2FF393016646A006F9170 /* OverlayPanel.swift in Sources */,
-				C4F2FF4130168DD0006F9170 /* DashboardView.swift in Sources */,
-				C4F2FF3B30166B56006F9170 /* PermissionManager.swift in Sources */,
-				C457EFF53017853C007F26A1 /* NativeHotKeyManager.swift in Sources */,
-				C4F2FF3D30166B6D006F9170 /* OnboardingView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -366,7 +346,6 @@
 				ONLY_ACTIVE_ARCH = YES;
 				SDKROOT = macosx;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
-				SWIFT_OBJC_BRIDGING_HEADER = "Golosok/MonoSTT-Bridging-Header.h";
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 			};
 			name = Debug;
@@ -424,7 +403,6 @@
 				MTL_FAST_MATH = YES;
 				SDKROOT = macosx;
 				SWIFT_COMPILATION_MODE = wholemodule;
-				SWIFT_OBJC_BRIDGING_HEADER = "Golosok/MonoSTT-Bridging-Header.h";
 			};
 			name = Release;
 		};
@@ -446,13 +424,12 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MACOSX_DEPLOYMENT_TARGET = 13.5;
-				MARKETING_VERSION = 1.2;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MARKETING_VERSION = 1.13.10;
 				PRODUCT_BUNDLE_IDENTIFIER = "kozak-developer.Golosok";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
 				SWIFT_EMIT_LOC_STRINGS = YES;
-				SWIFT_OBJC_BRIDGING_HEADER = "Golosok/MonoSTT-Bridging-Header.h";
 				SWIFT_VERSION = 5.0;
 			};
 			name = Debug;
@@ -475,13 +452,12 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MACOSX_DEPLOYMENT_TARGET = 13.5;
-				MARKETING_VERSION = 1.2;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MARKETING_VERSION = 1.13.10;
 				PRODUCT_BUNDLE_IDENTIFIER = "kozak-developer.Golosok";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
 				SWIFT_EMIT_LOC_STRINGS = YES;
-				SWIFT_OBJC_BRIDGING_HEADER = "Golosok/MonoSTT-Bridging-Header.h";
 				SWIFT_VERSION = 5.0;
 			};
 			name = Release;

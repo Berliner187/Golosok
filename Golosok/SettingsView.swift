@@ -5,7 +5,7 @@ struct SettingsView: View {
     @ObservedObject var permissions = PermissionManager.shared
     @ObservedObject var language = LanguageSettings.shared
     @ObservedObject var models = ModelStore.shared
-    @ObservedObject var hotKey = HotKeySettings.shared
+    @Bindable var hotKey = HotKeySettings.shared
     @State private var showingClearHistoryAlert = false
     @State private var showingAboutSheet = false
     @State private var showingLogsSheet = false

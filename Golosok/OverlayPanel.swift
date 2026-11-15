@@ -1,308 +1,607 @@
 import SwiftUI
 import AppKit
+import Foundation
 
-class OverlayPanelManager {
+private enum OverlayMetrics {
+    /// Panel and pill share the same bounds — no transparent margins,
+    /// so nothing stray can cast a shadow.
+    static let panelSize = NSSize(width: 240, height: 40)
+    static let pillHeight: CGFloat = 40
+    static let horizontalPadding: CGFloat = 14
+}
+
+enum OverlayPhase: Equatable {
+    case idle
+    case recording
+    case transcribing
+    case processing(progress: Double)
+    case warning(String)
+    case success
+
+    var contentWidth: CGFloat { OverlayMetrics.panelSize.width }
+}
+
+@MainActor
+@Observable
+final class OverlayPanelState {
+    private(set) var phase: OverlayPhase = .idle
+    private(set) var elapsedSeconds = 0
+    private(set) var samples: [Float] = Array(repeating: 0.15, count: 18)
+
+    func showRecording() {
+        phase = .recording
+        elapsedSeconds = 0
+        samples = Array(repeating: 0.15, count: 18)
+    }
+
+    func updateRecording(elapsedSeconds: Int, samples: [Float]) {
+        guard phase == .recording else { return }
+        if self.elapsedSeconds != elapsedSeconds {
+            self.elapsedSeconds = elapsedSeconds
+        }
+        if self.samples != samples {
+            self.samples = samples
+        }
+    }
+
+    func showTranscribing() {
+        phase = .transcribing
+    }
+
+    func showProcessing(progress: Double) {
+        let clamped = min(max(progress, 0), 1)
+        if case .processing(let current) = phase, abs(current - clamped) < 0.001 { return }
+        phase = .processing(progress: clamped)
+    }
+
+    func showWarning(_ message: String) {
+        phase = .warning(message)
+    }
+
+    func showSuccess() {
+        phase = .success
+    }
+
+    func reset() {
+        phase = .idle
+        elapsedSeconds = 0
+        samples = Array(repeating: 0.15, count: 18)
+    }
+}
+
+@MainActor
+final class OverlayPanelManager {
     static let shared = OverlayPanelManager()
+
+    private let state = OverlayPanelState()
     private var panel: NSPanel?
-    private var pendingHideWorkItem: DispatchWorkItem?
-    
-    func showOverlay(completion: (() -> Void)? = nil) {
-        DispatchQueue.main.async {
-            self.pendingHideWorkItem?.cancel()
-            self.pendingHideWorkItem = nil
-            AudioCapture.shared.isSuccessDone = false
-            
-            if self.panel == nil {
-                let newPanel = NSPanel(
-                    contentRect: NSRect(x: 0, y: 0, width: 220, height: 60),
-                    styleMask: [.borderless, .nonactivatingPanel],
-                    backing: .buffered,
-                    defer: false
-                )
-                newPanel.isOpaque = false
-                newPanel.backgroundColor = .clear
-                newPanel.hasShadow = false
-                newPanel.appearance = NSApp.effectiveAppearance
-                newPanel.hidesOnDeactivate = false
-                newPanel.isReleasedWhenClosed = false
-                newPanel.level = .screenSaver
-                newPanel.isFloatingPanel = true
-                newPanel.ignoresMouseEvents = true
-                newPanel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]
-                
-                let view = FloatingWidgetView()
-                let hostingView = NSHostingView(rootView: view)
-                hostingView.wantsLayer = true
-                hostingView.layer?.backgroundColor = NSColor.clear.cgColor
-                hostingView.layer?.isOpaque = false
-                
-                newPanel.contentView = hostingView
-                self.panel = newPanel
-            }
-            
-            if let screen = NSScreen.main {
-                let panelWidth: CGFloat = 240
-                let x = screen.frame.midX - (panelWidth / 2.0)
-                let targetY = screen.visibleFrame.maxY - 44
-                
-                self.panel?.alphaValue = 0.0
-                self.panel?.setFrameOrigin(NSPoint(x: x, y: targetY + 10))
-                self.panel?.orderFrontRegardless()
-                
-                NSAnimationContext.runAnimationGroup { context in
-                    context.duration = 0.22
-                    context.timingFunction = CAMediaTimingFunction(name: .easeOut)
-                    self.panel?.animator().alphaValue = 1.0
-                    self.panel?.animator().setFrameOrigin(NSPoint(x: x, y: targetY))
-                }
-            }
-            
-            completion?()
-        }
+    private var targetScreen: NSScreen?
+    private var hideTask: Task<Void, Never>?
+    private var screenChangeObserver: NSObjectProtocol?
+    /// Bumped on every present(). A fade-out completion that sees a newer
+    /// generation lost the race to a new present() and must not orderOut/reset.
+    private var presentGeneration: UInt64 = 0
+
+    private init() {}
+
+    func showRecording() {
+        state.showRecording()
+        present()
     }
-    
+
+    func updateRecording(elapsedSeconds: Int, samples: [Float]) {
+        state.updateRecording(elapsedSeconds: elapsedSeconds, samples: samples)
+    }
+
+    func showTranscribing() {
+        state.showTranscribing()
+        present()
+    }
+
+    func showProcessing(progress: Double) {
+        state.showProcessing(progress: progress)
+        present()
+    }
+
     func showWarning(message: String) {
-        DispatchQueue.main.async {
-            self.pendingHideWorkItem?.cancel()
-            AudioCapture.shared.warningMessage = message
-            AudioCapture.shared.isProcessingFile = false
-            SoundEffect.playWarning()
-            self.showOverlay {
-                let workItem = DispatchWorkItem { [weak self] in
-                    self?.hideOverlay()
-                }
-                self.pendingHideWorkItem = workItem
-                DispatchQueue.main.asyncAfter(deadline: .now() + 3.5, execute: workItem)
-            }
+        state.showWarning(message)
+        SoundEffect.playWarning()
+        present()
+        scheduleHide(after: 3.5)
+    }
+
+    func showSuccess() {
+        state.showSuccess()
+        present()
+    }
+
+    func scheduleHide(after delay: TimeInterval) {
+        hideTask?.cancel()
+        let nanoseconds = UInt64(max(delay, 0) * 1_000_000_000)
+        hideTask = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: nanoseconds)
+            guard !Task.isCancelled else { return }
+            self?.hideOverlay()
         }
     }
-    
-    func scheduleHide(after delay: Double) {
-        DispatchQueue.main.async {
-            self.pendingHideWorkItem?.cancel()
-            let workItem = DispatchWorkItem { [weak self] in self?.hideOverlay() }
-            self.pendingHideWorkItem = workItem
-            DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: workItem)
-        }
-    }
-    
+
     func hideOverlay() {
-        DispatchQueue.main.async {
-            self.pendingHideWorkItem?.cancel()
-            self.pendingHideWorkItem = nil
-            
-            guard let panel = self.panel else { return }
-            let currentFrame = panel.frame
-            
-            NSAnimationContext.runAnimationGroup({ context in
-                context.duration = 0.22
-                context.timingFunction = CAMediaTimingFunction(name: .easeIn)
-                panel.animator().alphaValue = 0.0
-                panel.animator().setFrameOrigin(NSPoint(x: currentFrame.minX, y: currentFrame.minY + 6))
-            }) {
-                panel.orderOut(nil)
-                AudioCapture.shared.warningMessage = nil
-                AudioCapture.shared.isSuccessDone = false
+        hideTask?.cancel()
+        hideTask = nil
+
+        guard let panel, panel.isVisible else {
+            state.reset()
+            return
+        }
+
+        let generation = presentGeneration
+        let currentFrame = panel.frame
+        NSAnimationContext.runAnimationGroup({ context in
+            context.duration = 0.22
+            context.timingFunction = CAMediaTimingFunction(name: .easeIn)
+            panel.animator().alphaValue = 0
+            panel.animator().setFrameOrigin(NSPoint(x: currentFrame.minX, y: currentFrame.minY + 6))
+        }) { [self, state] in
+            guard generation == MainActor.assumeIsolated({ self.presentGeneration }) else {
+                // A present() landed while the fade-out was in flight: cancel the
+                // fade visually instead of ordering the panel out.
+                panel.alphaValue = 1
+                return
             }
+            panel.orderOut(nil)
+            // NSAnimationContext completion fires on the main thread.
+            MainActor.assumeIsolated { state.reset() }
         }
     }
 
-    func keepFront() {
-        guard let panel = self.panel, panel.alphaValue > 0, !panel.isVisible else { return }
+    private func present() {
+        hideTask?.cancel()
+        hideTask = nil
+        presentGeneration &+= 1
+
+        if panel == nil {
+            createPanel()
+        }
+
+        guard let screen = currentTargetScreen() else { return }
+        guard let panel else { return }
+
+        let targetFrame = preferredFrame(on: screen)
+
+        // Already on screen: update geometry silently. Re-running the entrance
+        // fade here makes the pill blink on every progress tick (0% → 25% → …).
+        if panel.isVisible {
+            panel.setFrame(targetFrame, display: true)
+            panel.alphaValue = 1
+            return
+        }
+
+        panel.alphaValue = 0
+        panel.setFrame(targetFrame, display: false)
         panel.orderFrontRegardless()
-    }
-}
 
-struct CircularProgressView: View {
-    var progress: Double
-    let progressGradient = LinearGradient(colors: [Color(hex: "#38BDF8"), Color(hex: "#10B981")], startPoint: .topLeading, endPoint: .bottomTrailing)
-    
-    var body: some View {
-        ZStack {
-            Circle().stroke(Color(hex: "#6366F1").opacity(0.25), lineWidth: 2.5)
-            Circle()
-                .trim(from: 0, to: CGFloat(progress))
-                .stroke(progressGradient, style: StrokeStyle(lineWidth: 2.5, lineCap: .round))
-                .rotationEffect(.degrees(-90))
-                .animation(.spring(response: 0.3, dampingFraction: 0.7), value: progress)
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = 0.2
+            context.timingFunction = CAMediaTimingFunction(name: .easeOut)
+            panel.animator().alphaValue = 1
         }
-        .frame(width: 18, height: 18)
     }
-}
 
-struct RotatingGlowBorder: View {
-    var body: some View {
-        GeometryReader { geo in
-            let size = max(geo.size.width, geo.size.height) * 2.0
-            TimelineView(.animation) { timeline in
-                let angle = (timeline.date.timeIntervalSince1970 * 360.0 / 1.5).truncatingRemainder(dividingBy: 360)
-                ZStack {
-                    AngularGradient(
-                        gradient: Gradient(colors: [Color(hex: "#C084FC"), Color(hex: "#6366F1"), Color(hex: "#38BDF8"), Color(hex: "#10B981"), Color(hex: "#C084FC")]),
-                        center: .center
-                    )
-                    .frame(width: size, height: size)
-                    .rotationEffect(.degrees(angle))
+    private func createPanel() {
+        let size = OverlayMetrics.panelSize
+        let newPanel = NSPanel(
+            contentRect: NSRect(origin: .zero, size: size),
+            styleMask: [.borderless, .nonactivatingPanel],
+            backing: .buffered,
+            defer: false
+        )
+        newPanel.isOpaque = false
+        newPanel.backgroundColor = .clear
+        newPanel.hasShadow = false
+        // No pinned appearance: the pill must follow the system theme
+        // automatically when the user switches dark/light mode.
+        newPanel.hidesOnDeactivate = false
+        newPanel.isReleasedWhenClosed = false
+        newPanel.level = .statusBar
+        newPanel.isFloatingPanel = true
+        newPanel.ignoresMouseEvents = true
+        newPanel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]
+        newPanel.contentMinSize = size
+        newPanel.contentMaxSize = size
+        newPanel.setContentSize(size)
+
+        let hostingView = NSHostingView(rootView: FloatingWidgetView(state: state))
+        hostingView.frame = NSRect(origin: .zero, size: size)
+        hostingView.autoresizingMask = [.width, .height]
+        hostingView.wantsLayer = true
+        hostingView.layer?.backgroundColor = NSColor.clear.cgColor
+        hostingView.layer?.isOpaque = false
+        newPanel.contentView = hostingView
+
+        targetScreen = NSScreen.main ?? NSScreen.screens.first
+        observeScreenChanges()
+        panel = newPanel
+    }
+
+    private func observeScreenChanges() {
+        guard screenChangeObserver == nil else { return }
+        screenChangeObserver = NotificationCenter.default.addObserver(
+            forName: NSApplication.didChangeScreenParametersNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in
+                guard let self, let panel = self.panel, panel.isVisible else { return }
+                if let screen = self.currentTargetScreen() {
+                    panel.setFrame(self.preferredFrame(on: screen), display: true)
                 }
-                .frame(width: geo.size.width, height: geo.size.height)
-                .mask(Capsule().stroke(lineWidth: 1.5))
             }
         }
     }
+
+    private func currentTargetScreen() -> NSScreen? {
+        if let targetScreen, NSScreen.screens.contains(targetScreen) {
+            return targetScreen
+        }
+        targetScreen = NSScreen.main ?? NSScreen.screens.first
+        return targetScreen
+    }
+
+    private func preferredFrame(on screen: NSScreen) -> NSRect {
+        let size = OverlayMetrics.panelSize
+        let hasCameraHousing = screen.safeAreaInsets.top > 0
+        // With a notch the pill hangs from the camera housing: its top edge sits
+        // inside the notch band, so a 300 pt pill visibly peeks out on both sides.
+        // Without a notch it tucks 6 pt into the menu bar bottom.
+        let topInset = hasCameraHousing ? 6.0 : 4.0
+        let topEdge = hasCameraHousing
+            ? screen.frame.maxY - topInset
+            : screen.visibleFrame.maxY + topInset
+
+        return NSRect(
+            x: screen.frame.midX - (size.width / 2),
+            y: topEdge - size.height,
+            width: size.width,
+            height: size.height
+        )
+    }
 }
 
-struct SuccessCheckView: View {
-    @State private var appeared = false
+enum OverlayPanelPresenter {
+    static func showRecording() {
+        perform { OverlayPanelManager.shared.showRecording() }
+    }
 
-    var body: some View {
-        ZStack {
-            Circle()
-                .stroke(Color(hex: "#34D399").opacity(0.45), lineWidth: 2)
-                .frame(width: 24, height: 24)
-            Image(systemName: "checkmark")
-                .font(.system(size: 13, weight: .bold))
-                .foregroundColor(.white)
-        }
-        .scaleEffect(appeared ? 1.0 : 0.2)
-        .offset(y: appeared ? 0 : -10)
-        .opacity(appeared ? 1 : 0)
-        .onAppear {
-            appeared = false
-            withAnimation(.spring(response: 0.4, dampingFraction: 0.52)) {
-                appeared = true
+    static func updateRecording(elapsedSeconds: Int, samples: [Float]) {
+        if Thread.isMainThread {
+            MainActor.assumeIsolated {
+                OverlayPanelManager.shared.updateRecording(elapsedSeconds: elapsedSeconds, samples: samples)
             }
+        } else {
+            Task { @MainActor in
+                OverlayPanelManager.shared.updateRecording(elapsedSeconds: elapsedSeconds, samples: samples)
+            }
+        }
+    }
+
+    static func showTranscribing() {
+        perform { OverlayPanelManager.shared.showTranscribing() }
+    }
+
+    static func showProcessing(progress: Double) {
+        perform { OverlayPanelManager.shared.showProcessing(progress: progress) }
+    }
+
+    static func showWarning(message: String) {
+        perform { OverlayPanelManager.shared.showWarning(message: message) }
+    }
+
+    static func showSuccess() {
+        perform { OverlayPanelManager.shared.showSuccess() }
+    }
+
+    static func scheduleHide(after delay: TimeInterval) {
+        perform { OverlayPanelManager.shared.scheduleHide(after: delay) }
+    }
+
+    static func hide() {
+        perform { OverlayPanelManager.shared.hideOverlay() }
+    }
+
+    private static func perform(_ operation: @escaping @MainActor () -> Void) {
+        if Thread.isMainThread {
+            MainActor.assumeIsolated(operation)
+        } else {
+            Task { @MainActor in operation() }
         }
     }
 }
 
 struct FloatingWidgetView: View {
-    @ObservedObject var audioCapture = AudioCapture.shared
-    @Environment(\.colorScheme) private var colorScheme
+    let state: OverlayPanelState
+
     @State private var isAppeared = false
-    
-    let greenGradient = LinearGradient(colors: [Color(hex: "#34D399"), Color(hex: "#059669")], startPoint: .top, endPoint: .bottom)
-    let purpleGradient = LinearGradient(colors: [Color(hex: "#C084FC"), Color(hex: "#6366F1")], startPoint: .top, endPoint: .bottom)
-    let glassBorderGradient = LinearGradient(colors: [Color.white.opacity(0.85), Color.white.opacity(0.12)], startPoint: .top, endPoint: .bottom)
-    
+
     var body: some View {
-        ZStack {
-            Color.clear
-            
+        phaseContent
+            .padding(.horizontal, OverlayMetrics.horizontalPadding)
+            .frame(width: OverlayMetrics.panelSize.width, height: OverlayMetrics.pillHeight)
+            .background(PillGlassBackground())
+            .overlay(PillBorder(phase: state.phase))
+            .scaleEffect(isAppeared ? 1 : 0.72, anchor: .top)
+            .offset(y: isAppeared ? 0 : -10)
+            .onAppear {
+                withAnimation(.spring(response: 0.42, dampingFraction: 0.68)) {
+                    isAppeared = true
+                }
+            }
+            .onDisappear {
+                isAppeared = false
+            }
+    }
+
+    @ViewBuilder
+    private var phaseContent: some View {
+        switch state.phase {
+        case .idle:
+            EmptyView()
+        case .recording:
+            RecordingOverlayContent(state: state)
+                .transition(.opacity)
+        case .transcribing:
+            ProcessingOverlayContent(progress: nil)
+                .transition(.opacity)
+        case .processing(let progress):
+            ProcessingOverlayContent(progress: progress)
+                .transition(.opacity)
+        case .warning(let message):
+            WarningOverlayContent(message: message)
+                .transition(.opacity)
+        case .success:
+            SuccessCheckView()
+                .transition(.opacity)
+        }
+    }
+}
+
+private struct PillGlassBackground: View {
+    var body: some View {
+        Capsule()
+            .fill(.white.opacity(0.08))
+            .modifier(PillGlassModifier())
+    }
+}
+
+private struct PillGlassModifier: ViewModifier {
+    func body(content: Content) -> some View {
+        if #available(macOS 26.0, iOS 26.0, *) {
+            content.glassEffect(.regular, in: .capsule)
+        } else {
+            content.background(.ultraThinMaterial, in: .capsule)
+        }
+    }
+}
+
+private struct PillBorder: View {
+    let phase: OverlayPhase
+
+    var body: some View {
+        if #available(macOS 26.0, iOS 26.0, *) {
             Capsule()
-                .fill(getGlowColor())
-                .frame(width: getWidth() - 10, height: 28)
-                .blur(radius: 12)
-                .opacity(0.4)
-            
-            HStack(alignment: .center, spacing: 10) {
-                if let warningText = audioCapture.warningMessage {
-                    HStack(spacing: 6) {
-                        Image(systemName: "exclamationmark.triangle.fill")
-                            .font(.system(size: 13, weight: .bold))
-                            .foregroundColor(Color(hex: "#F59E0B"))
-                        Text(warningText)
-                            .font(UIStyleFont.body(size: 12, weight: .semibold))
-                            .foregroundColor(.white)
-                            .lineLimit(1)
-                    }
-                } else if audioCapture.isProcessingFile {
-                    HStack(spacing: 8) {
-                        CircularProgressView(progress: audioCapture.fileProcessingProgress)
-                        Text("\(Int(audioCapture.fileProcessingProgress * 100))%")
-                            .font(.system(size: 12, weight: .bold, design: .monospaced))
-                            .foregroundColor(.white)
-                    }
-                } else if audioCapture.transcribedText == String(localized: "Расшифровка...") {
-                    HStack(spacing: 2.0) {
-                        TimelineView(.animation) { timeline in
-                            let time = timeline.date.timeIntervalSince1970 * 4.5
-                            HStack(spacing: 2.0) {
-                                ForEach(0..<18, id: \.self) { i in
-                                    let height = sin(time + Double(i) * 0.5) * 7 + 11
-                                    RoundedRectangle(cornerRadius: 1).fill(purpleGradient).frame(width: 2.0, height: height)
-                                }
-                            }
-                        }
-                    }
-                } else if audioCapture.isSuccessDone {
-                    SuccessCheckView()
-                        .transition(.opacity)
-                } else {
-                    HStack(spacing: 6) {
-                        Circle()
-                            .fill(Color(hex: "#10B981"))
-                            .frame(width: 7, height: 7)
-                            .shadow(color: Color(hex: "#10B981").opacity(0.8), radius: 3, x: 0, y: 0)
-                        
-                        Text(audioCapture.formattedRecordingTime)
-                            .font(.system(size: 13, weight: .bold, design: .monospaced))
-                            .foregroundColor(timerColor)
-                            .shadow(color: timerColor.opacity(0.55), radius: 2, x: 0, y: 0)
-                    }
-                    
-                    Spacer()
-                    
-                    HStack(spacing: 2.0) {
-                        ForEach(0..<18, id: \.self) { i in
-                            let sampleVal = i < audioCapture.audioSamples.count ? audioCapture.audioSamples[i] : 0.15
-                            
-                            RoundedRectangle(cornerRadius: 1)
-                                .fill(greenGradient)
-                                .frame(width: 2.0, height: CGFloat(sampleVal) * 22)
-                                .animation(.spring(response: 0.12, dampingFraction: 0.55), value: sampleVal)
-                        }
-                    }
-                }
-            }
-            .padding(.horizontal, 14)
-            .frame(width: getWidth(), height: 36)
-            .background(.ultraThinMaterial)
-            .clipShape(Capsule())
-            .overlay(
-                Group {
-                    if audioCapture.transcribedText == String(localized: "Расшифровка...") || audioCapture.isProcessingFile {
-                        RotatingGlowBorder()
-                    } else if audioCapture.warningMessage != nil {
-                        Capsule().stroke(Color(hex: "#F59E0B").opacity(0.6), lineWidth: 1.2)
-                    } else if audioCapture.isSuccessDone {
-                        Capsule().stroke(Color(hex: "#34D399").opacity(0.75), lineWidth: 1.2)
-                    } else {
-                        Capsule().stroke(glassBorderGradient, lineWidth: 1.0)
-                    }
-                }
-            )
-            .shadow(color: Color.black.opacity(0.12), radius: 10, x: 0, y: 4)
-            .animation(.spring(response: 0.35, dampingFraction: 0.7), value: getWidth())
-        }
-        .scaleEffect(isAppeared ? 1.0 : 0.65)
-        .offset(y: isAppeared ? 0 : -14)
-        .onAppear {
-            withAnimation(.spring(response: 0.36, dampingFraction: 0.55)) {
-                isAppeared = true
+                .stroke(.white.opacity(0.42), lineWidth: 0.8)
+        } else {
+            switch phase {
+            case .warning:
+                Capsule().stroke(Color(hex: "#F59E0B").opacity(0.72), lineWidth: 1.1)
+            case .success:
+                Capsule().stroke(Color(hex: "#34D399").opacity(0.82), lineWidth: 1.1)
+            default:
+                Capsule().stroke(
+                    LinearGradient(
+                        colors: [.white.opacity(0.78), .white.opacity(0.16)],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    ),
+                    lineWidth: 1
+                )
             }
         }
-        .onDisappear {
-            isAppeared = false
+    }
+}
+
+private struct RecordingOverlayContent: View {
+    let state: OverlayPanelState
+
+    @Environment(\.colorScheme) private var colorScheme
+
+    var body: some View {
+        HStack(spacing: 10) {
+            HStack(spacing: 7) {
+                Circle()
+                    .fill(Color(hex: "#10B981"))
+                    .frame(width: 6, height: 6)
+
+                Text(verbatim: Self.format(state.elapsedSeconds))
+                    .font(.system(size: 13, weight: .semibold, design: .monospaced))
+                    .foregroundStyle(timerColor)
+                    .monospacedDigit()
+            }
+            .frame(height: 20)
+
+            Spacer(minLength: 12)
+
+            WaveformBars(samples: state.samples, tint: Color(hex: "#34D399"))
+                .frame(width: 88, height: 18)
         }
-        .frame(width: 240, height: 60)
-    }
-    
-    private func getWidth() -> CGFloat {
-        if audioCapture.warningMessage != nil { return 210 }
-        if audioCapture.isProcessingFile { return 110 }
-        if audioCapture.isRecording { return 200 }
-        if audioCapture.isSuccessDone { return 150 }
-        return 130
-    }
-    
-    private func getGlowColor() -> Color {
-        if audioCapture.warningMessage != nil { return Color(hex: "#F59E0B") }
-        if audioCapture.isProcessingFile || audioCapture.transcribedText == String(localized: "Расшифровка...") { return Color(hex: "#6366F1") }
-        if audioCapture.isSuccessDone { return Color(hex: "#10B981") }
-        return Color(hex: "#10B981")
     }
 
     private var timerColor: Color {
         colorScheme == .dark ? Color(hex: "#10B981") : Color(hex: "#047857")
+    }
+
+    private static func format(_ seconds: Int) -> String {
+        String(format: "%02d:%02d", seconds / 60, seconds % 60)
+    }
+}
+
+private struct WaveformBars: View {
+    let samples: [Float]
+    let tint: Color
+
+    var body: some View {
+        Canvas { context, size in
+            guard !samples.isEmpty, size.width > 0, size.height > 0 else { return }
+
+            let count = samples.count
+            let stepX = size.width / CGFloat(count)
+            let barWidth = min(3, max(1.5, stepX * 0.48))
+
+            for index in samples.indices {
+                let value = CGFloat(min(max(samples[index], 0.08), 1))
+                let height = max(3, value * size.height)
+                let x = CGFloat(index) * stepX + ((stepX - barWidth) / 2)
+                let rect = CGRect(
+                    x: x,
+                    y: (size.height - height) / 2,
+                    width: barWidth,
+                    height: height
+                )
+                let path = Path(roundedRect: rect, cornerRadius: barWidth / 2)
+                context.fill(path, with: .color(tint))
+            }
+        }
+    }
+}
+
+private struct ProcessingOverlayContent: View {
+    let progress: Double?
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        HStack(spacing: 10) {
+            if let progress {
+                Text("\(Int(progress * 100))%")
+                    .font(.system(size: 13, weight: .semibold, design: .monospaced))
+                    .foregroundStyle(.secondary)
+                    .monospacedDigit()
+                    .contentTransition(.numericText(value: progress))
+                    .frame(height: 20)
+
+                Spacer(minLength: 12)
+
+                LiquidWaveform(isAnimated: !reduceMotion)
+                    .frame(width: 92, height: 18)
+            } else {
+                Spacer(minLength: 0)
+                LiquidWaveform(isAnimated: !reduceMotion)
+                    .frame(width: 128, height: 18)
+                Spacer(minLength: 0)
+            }
+        }
+    }
+}
+
+/// Three flowing sine ribbons in the Siri palette — blue, violet, mint —
+/// drifting and breathing inside the pill. The amplitude envelope fades to
+/// zero at both ends, so the wave dissolves softly instead of being clipped.
+private struct LiquidWaveform: View {
+    let isAnimated: Bool
+
+    private let waves: [(hue: Double, phaseOffset: Double)] = [
+        (0.58, 0.0),
+        (0.76, 2.1),
+        (0.47, 4.2)
+    ]
+
+    var body: some View {
+        TimelineView(.periodic(from: Date(), by: 1.0 / 30.0)) { timeline in
+            Canvas { context, size in
+                drawWaves(
+                    context: &context,
+                    size: size,
+                    time: isAnimated ? timeline.date.timeIntervalSince1970 : 0
+                )
+            }
+        }
+    }
+
+    private func drawWaves(context: inout GraphicsContext, size: CGSize, time: TimeInterval) {
+        guard size.width > 0, size.height > 0 else { return }
+        let midY = size.height / 2
+        let segments = max(12, Int(size.width / 3))
+        let stepX = size.width / CGFloat(segments)
+
+        for (index, wave) in waves.enumerated() {
+            let speed = 2.1 + (Double(index) * 0.55)
+            let phase = (time * speed) + wave.phaseOffset
+            let amplitude = Double(midY) * (0.6 + (0.32 * sin((time * 1.1) + (Double(index) * 1.7))))
+            let frequency = 2.3 + (Double(index) * 0.5)
+
+            var previous = CGPoint(x: 0, y: midY)
+            for segment in 1...segments {
+                let x = CGFloat(segment) * stepX
+                let progress = Double(x / size.width)
+                let envelope = sin(.pi * progress)
+                let y = midY + CGFloat(
+                    amplitude * envelope * sin((progress * frequency * 2 * .pi) - phase)
+                )
+
+                var path = Path()
+                path.move(to: previous)
+                path.addLine(to: CGPoint(x: x, y: y))
+                context.stroke(
+                    path,
+                    with: .color(Color(
+                        hue: wave.hue + (0.05 * sin(progress * .pi)),
+                        saturation: 0.72,
+                        brightness: 0.98
+                    ).opacity(0.3 + (0.6 * envelope))),
+                    style: StrokeStyle(lineWidth: 2.1, lineCap: .round)
+                )
+                previous = CGPoint(x: x, y: y)
+            }
+        }
+    }
+}
+
+private struct WarningOverlayContent: View {
+    let message: String
+
+    var body: some View {
+        HStack(spacing: 7) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .font(.system(size: 13, weight: .bold))
+                .foregroundStyle(Color(hex: "#F59E0B"))
+
+            Text(message)
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(.primary)
+                .lineLimit(1)
+        }
+    }
+}
+
+private struct SuccessCheckView: View {
+    @State private var appeared = false
+
+    var body: some View {
+        ZStack {
+            Circle()
+                .stroke(Color(hex: "#34D399").opacity(0.48), lineWidth: 2)
+                .frame(width: 24, height: 24)
+            Image(systemName: "checkmark")
+                .font(.system(size: 13, weight: .bold))
+                .foregroundStyle(.primary)
+        }
+        .scaleEffect(appeared ? 1 : 0.2)
+        .offset(y: appeared ? 0 : -8)
+        .opacity(appeared ? 1 : 0)
+        .onAppear {
+            appeared = false
+            withAnimation(.spring(response: 0.38, dampingFraction: 0.54)) {
+                appeared = true
+            }
+        }
     }
 }

@@ -62,18 +62,13 @@ class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
     
     @Published var isRecording = false
     @Published var isProcessingFile = false
-    @Published var fileProcessingProgress: Double = 0.0
-    @Published var transcribedText = ""
-    @Published var warningMessage: String? = nil
-    @Published var audioSamples: [Float] = Array(repeating: 0.15, count: 18)
-    @Published var formattedRecordingTime: String = "00:00"
-    
+
     // АПДЕЙТЫ
     @Published var updateInfo: UpdateInfo? = nil
     @Published var isDownloadingUpdate = false
     @Published var updateProgressText: String = ""
     private var downloadTask: URLSessionDownloadTask?
-    
+
     @Published var playingItemId: UUID? = nil
     @Published var playheadTime: Double = 0
     private var audioPlayer: AVAudioPlayer?
@@ -81,9 +76,9 @@ class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
     private var preloadedPlayerId: UUID?
 
     @Published var isPlayerPlaying: Bool = false
-    
-    @Published var isSuccessDone = false
-    
+
+    private var meterSamples: [Float] = Array(repeating: 0.15, count: 18)
+
     @Published var soundEnabled: Bool = UserDefaults.standard.object(forKey: "soundEnabled") as? Bool ?? true {
         didSet { UserDefaults.standard.set(soundEnabled, forKey: "soundEnabled") }
     }
@@ -181,14 +176,11 @@ class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
         SoundEffect.playCancel()
         
         DispatchQueue.main.async {
-            self.warningMessage = nil
             self.isRecording = false
-            self.audioSamples = Array(repeating: 0.15, count: 9)
-            self.transcribedText = String(localized: "Запись отменена")
-            OverlayPanelManager.shared.hideOverlay()
+            OverlayPanelPresenter.hide()
         }
     }
-    
+
     func startRecording() {
         guard !isProcessingFile else { return }
         switch AVCaptureDevice.authorizationStatus(for: .audio) {
@@ -198,18 +190,17 @@ class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
             }
             return
         case .denied, .restricted:
-            DispatchQueue.main.async { self.transcribedText = String(localized: "Нет доступа к микрофону.") }
             return
         case .authorized: break
         @unknown default: break
         }
-        
+
         let settings: [String: Any] = [
             AVFormatIDKey: Int(kAudioFormatLinearPCM), AVSampleRateKey: 16000.0,
             AVNumberOfChannelsKey: 1, AVLinearPCMBitDepthKey: 16,
             AVLinearPCMIsBigEndianKey: false, AVLinearPCMIsFloatKey: false
         ]
-        
+
         do {
             if FileManager.default.fileExists(atPath: tempAudioURL.path) { try FileManager.default.removeItem(at: tempAudioURL) }
             audioRecorder = try AVAudioRecorder(url: tempAudioURL, settings: settings)
@@ -217,27 +208,25 @@ class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
             audioRecorder?.isMeteringEnabled = true
             audioRecorder?.prepareToRecord()
             guard audioRecorder?.record() == true else { return }
-            
+
             startTime = Date()
             SoundEffect.playStart()
-            AppLogger.shared.info("Recording", "Запись началась", details: "режим: \(HotKeySettings.shared.mode == .pushToTalk ? "рация" : "переключатель")")
-            
+
             escMonitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { [weak self] event in
                 if event.keyCode == 53 { self?.cancelRecording() }
             }
-            
+
             DispatchQueue.main.async {
-                self.warningMessage = nil
                 self.isRecording = true
-                self.transcribedText = String(localized: "Запись идет...")
-                OverlayPanelManager.shared.showOverlay()
+                AppLogger.shared.info("Recording", "Запись началась", details: "режим: \(HotKeySettings.shared.mode == .pushToTalk ? "рация" : "переключатель")")
+                OverlayPanelPresenter.showRecording()
             }
             let meteringTimer = Timer(timeInterval: 0.05, repeats: true) { [weak self] _ in self?.updateMetering() }
             RunLoop.main.add(meteringTimer, forMode: .common)
             timer = meteringTimer
         } catch {}
     }
-    
+
     func stopRecording() {
         removeEscMonitor()
         pasteTarget = NSWorkspace.shared.frontmostApplication
@@ -245,56 +234,49 @@ class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
         timer = nil
         audioRecorder?.stop()
         audioRecorder = nil
-        
+
         let durationSec = Date().timeIntervalSince(startTime ?? Date())
-        
+
         AppLogger.shared.info("Recording", "Запись остановлена", details: String(format: "длительность %.1f с, цель вставки: %@", durationSec, NSWorkspace.shared.frontmostApplication?.localizedName ?? "?"))
-        
+
         DispatchQueue.main.async {
             self.isRecording = false
-            self.isProcessingFile = false
-            self.fileProcessingProgress = 0.0
-            self.audioSamples = Array(repeating: 0.15, count: 9)
-            self.transcribedText = String(localized: "Расшифровка...")
+            self.isProcessingFile = true
+            OverlayPanelPresenter.showTranscribing()
         }
-        
-        DispatchQueue.global(qos: .utility).async {
-            self.processLongFileInChunks(fileURL: self.tempAudioURL, isFileImport: false, audioDurationSec: durationSec)
+
+        Task.detached(priority: .utility) { [weak self] in
+            guard let self else { return }
+            await self.processLongFileInChunks(fileURL: self.tempAudioURL, isFileImport: false, audioDurationSec: durationSec)
         }
     }
-    
+
     private func removeEscMonitor() {
         if let monitor = escMonitor {
             NSEvent.removeMonitor(monitor)
             escMonitor = nil
         }
     }
-    
+
     private func updateMetering() {
         guard let recorder = audioRecorder, recorder.isRecording else { return }
         recorder.updateMeters()
-        
+
         let elapsed = Int(Date().timeIntervalSince(startTime ?? Date()))
-        let mins = elapsed / 60
-        let secs = elapsed % 60
-        let timeStr = String(format: "%02d:%02d", mins, secs)
-        
         let power = recorder.averagePower(forChannel: 0)
         let level = max(0.15, min(1.0, (power + 40.0) / 35.0))
-        
+        let time = CACurrentMediaTime()
+
         var newSamples: [Float] = []
-        for i in 0..<18 {
-            let randomFactor = Float.random(in: 0.7...1.3)
-            let targetVal = max(0.15, min(1.0, level * randomFactor))
-            let currentVal = i < audioSamples.count ? audioSamples[i] : 0.15
-            newSamples.append(currentVal * 0.35 + targetVal * 0.65)
+        newSamples.reserveCapacity(meterSamples.count)
+        for index in meterSamples.indices {
+            let shape = 0.76 + (0.24 * sin((time * 6.8) + Double(index) * 0.52))
+            let target = max(0.15, min(1.0, Double(level) * shape))
+            newSamples.append((meterSamples[index] * 0.35) + Float(target * 0.65))
         }
-        
-        DispatchQueue.main.async {
-            self.formattedRecordingTime = timeStr
-            self.audioSamples = newSamples
-            OverlayPanelManager.shared.keepFront()
-        }
+        meterSamples = newSamples
+
+        OverlayPanelPresenter.updateRecording(elapsedSeconds: elapsed, samples: newSamples)
     }
 
     func importAndTranscribeFile() {
@@ -325,40 +307,34 @@ class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
         let media = urls.filter { Self.isMediaURL($0) }
         guard !media.isEmpty else { return }
         DispatchQueue.main.async {
-            self.warningMessage = nil
             self.isProcessingFile = true
-            self.fileProcessingProgress = 0.0
-            self.transcribedText = String(localized: "Извлечение аудио...")
-            OverlayPanelManager.shared.showOverlay()
+            OverlayPanelPresenter.showProcessing(progress: 0)
         }
         DispatchQueue.global(qos: .utility).async {
             self.processQueue(media)
         }
     }
-    
+
     private func processQueue(_ urls: [URL]) {
         processNextInQueue(urls, index: 0)
     }
-    
+
     private func processNextInQueue(_ urls: [URL], index: Int) {
         guard index < urls.count else {
             DispatchQueue.main.async {
                 self.isProcessingFile = false
-                OverlayPanelManager.shared.scheduleHide(after: 0.8)
+                OverlayPanelPresenter.scheduleHide(after: 0.8)
             }
             return
         }
         let url = urls[index]
         DispatchQueue.main.async {
-            self.warningMessage = nil
             self.isProcessingFile = true
-            self.fileProcessingProgress = 0.0
-            self.transcribedText = String(localized: "Извлечение аудио...")
-            OverlayPanelManager.shared.showOverlay()
+            OverlayPanelPresenter.showProcessing(progress: 0)
         }
-        DispatchQueue.global(qos: .utility).async { [weak self] in
+        Task.detached(priority: .utility) { [weak self] in
             guard let self else { return }
-            self.processLongFileInChunks(fileURL: url, isFileImport: true, audioDurationSec: 0) {
+            await self.processLongFileInChunks(fileURL: url, isFileImport: true, audioDurationSec: 0) {
                 DispatchQueue.main.async { self.processNextInQueue(urls, index: index + 1) }
             }
         }
@@ -374,7 +350,7 @@ class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
         return false
     }
     
-    private func processLongFileInChunks(fileURL: URL, isFileImport: Bool, audioDurationSec: Double, completion: (() -> Void)? = nil) {
+    private func processLongFileInChunks(fileURL: URL, isFileImport: Bool, audioDurationSec: Double, completion: (() -> Void)? = nil) async {
         let processStartTime = Date()
         let tempWavURL = FileManager.default.temporaryDirectory.appendingPathComponent("temp_file_full.wav")
         let sourceURL = isFileImport ? tempWavURL : fileURL
@@ -389,23 +365,19 @@ class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
         
         if isFileImport {
             var conversionSuccess = false
-            conversionSuccess = convertMediaTo16kHzWav(inputURL: fileURL, outputURL: tempWavURL)
+            conversionSuccess = await convertMediaTo16kHzWav(inputURL: fileURL, outputURL: tempWavURL)
             if !conversionSuccess { conversionSuccess = convertWithFFmpeg(inputURL: fileURL, outputURL: tempWavURL) }
             if !conversionSuccess { conversionSuccess = convertAudioTo16kHzWav(inputURL: fileURL, outputURL: tempWavURL) }
             
             if !conversionSuccess {
-                DispatchQueue.main.async {
-                    OverlayPanelManager.shared.showWarning(message: String(localized: "Не удалось извлечь аудио"))
-                }
+                OverlayPanelPresenter.showWarning(message: String(localized: "Не удалось извлечь аудио"))
                 finish()
                 return
             }
         }
-        
+
         guard let inputFile = try? AVAudioFile(forReading: sourceURL) else {
-            DispatchQueue.main.async {
-                OverlayPanelManager.shared.showWarning(message: String(localized: "Ошибка чтения файла"))
-            }
+            OverlayPanelPresenter.showWarning(message: String(localized: "Ошибка чтения файла"))
             finish()
             return
         }
@@ -448,10 +420,8 @@ class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
                 }
                 
                 if isFileImport {
-                    DispatchQueue.main.async {
-                        self.fileProcessingProgress = Double(chunkIndex + 1) / Double(totalChunks)
-                        OverlayPanelManager.shared.keepFront()
-                    }
+                    let progress = Double(chunkIndex + 1) / Double(totalChunks)
+                    OverlayPanelPresenter.showProcessing(progress: progress)
                 }
             }
         }
@@ -465,39 +435,39 @@ class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
             if prettyFormattedText.isEmpty {
                 AppLogger.shared.warn("Recognition", "Речь не распознана", details: String(format: "аудио %.1f с", realAudioSecs))
                 Telemetry.shared.event("dictation_failed", ["audio_duration_sec": realAudioSecs])
-                OverlayPanelManager.shared.showWarning(message: String(localized: "Речь не распознана"))
+                OverlayPanelPresenter.showWarning(message: String(localized: "Речь не распознана"))
             } else {
-                self.transcribedText = prettyFormattedText
-                self.isSuccessDone = true
                 let formatter = DateFormatter()
                 formatter.dateFormat = "dd.MM.yyyy, HH:mm"
                 let dateStr = formatter.string(from: Date())
-                
+
                 let newItem = TranscriptionItem(id: UUID(), date: dateStr, text: prettyFormattedText, duration: durationFormatted, speedup: calculatedSpeedup, isUnread: true)
-                
+
                 self.saveAudioForNote(id: newItem.id, sourceURL: sourceURL)
                 if !accumulatedWords.isEmpty {
                     self.saveTimingsForNote(id: newItem.id, words: accumulatedWords, duration: realAudioSecs)
                 }
                 if isFileImport { try? FileManager.default.removeItem(at: sourceURL) }
                 self.history.insert(newItem, at: 0)
-                
+
                 NotificationCenter.default.post(name: NSNotification.Name("AutoSelectNote"), object: newItem.id)
                 NSPasteboard.general.clearContents()
                 NSPasteboard.general.setString(prettyFormattedText, forType: .string)
-                
+
+                OverlayPanelPresenter.showSuccess()
+
                 if !isFileImport && self.autoPasteEnabled {
                     self.pasteToActiveApp()
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { SoundEffect.playSuccess() }
                 } else {
                     SoundEffect.playSuccess()
                 }
-                
+
                 if completion == nil {
-                    OverlayPanelManager.shared.scheduleHide(after: 0.8)
+                    OverlayPanelPresenter.scheduleHide(after: 0.8)
                 }
             }
-            
+
             self.sendTelemetry(eventType: isFileImport ? "file_import" : "dictation", audioDurationSec: realAudioSecs, characterCount: rawText.count, speedup: calculatedSpeedup)
             finish()
         }
@@ -568,20 +538,9 @@ class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
         } catch { return false }
     }
 
-    private func convertMediaTo16kHzWav(inputURL: URL, outputURL: URL) -> Bool {
+    private func convertMediaTo16kHzWav(inputURL: URL, outputURL: URL) async -> Bool {
         let asset = AVURLAsset(url: inputURL)
-        let semaphore = DispatchSemaphore(value: 0)
-        var audioTrack: AVAssetTrack?
-        Task.detached {
-            do {
-                audioTrack = try await asset.loadTracks(withMediaType: .audio).first
-            } catch {
-                audioTrack = nil
-            }
-            semaphore.signal()
-        }
-        semaphore.wait()
-        guard let track = audioTrack else { return false }
+        guard let track = try? await asset.loadTracks(withMediaType: .audio).first else { return false }
         do {
             let reader = try AVAssetReader(asset: asset)
             let outputSettings: [String: Any] = [ AVFormatIDKey: kAudioFormatLinearPCM, AVSampleRateKey: 16000.0, AVNumberOfChannelsKey: 1, AVLinearPCMBitDepthKey: 32, AVLinearPCMIsBigEndianKey: false, AVLinearPCMIsFloatKey: true ]
@@ -960,7 +919,7 @@ class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
 
     static func interpolateTimings(_ words: [TimedWord], from startSecs: Double, to endSecs: Double) -> [TimedWord] {
         guard words.count > 1, endSecs > startSecs else { return words }
-        var weights: [Double] = words.map { max(1.0, Double(($0.text as NSString).length)) }
+        let weights: [Double] = words.map { max(1.0, Double(($0.text as NSString).length)) }
         let total = weights.reduce(0, +)
         guard total > 0 else { return words }
         var result: [TimedWord] = []
@@ -999,7 +958,7 @@ class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
         }
         guard let target = pasteTarget else { return }
         let pid = target.processIdentifier
-        target.activate(options: [.activateIgnoringOtherApps])
+        target.activate()
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
             guard self.canAcceptPaste(pid: pid) else {
                 AppLogger.shared.info("Paste", "Вставка пропущена: под фокусом нет редактируемого поля", details: target.localizedName)
@@ -1316,7 +1275,7 @@ extension AudioCapture: URLSessionDownloadDelegate {
         let mbTotal = Double(totalBytesExpectedToWrite) / (1024.0 * 1024.0)
         let percent = Int(progress * 100.0)
         let text = String(format: "%.0f / %.0f МБ (%d%%)", mbWritten, mbTotal, percent)
-        DispatchQueue.main.async { self.fileProcessingProgress = progress; self.updateProgressText = text }
+        DispatchQueue.main.async { self.updateProgressText = text }
     }
     func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didFinishDownloadingTo location: URL) {
         let dest = FileManager.default.temporaryDirectory.appendingPathComponent("Golosok_Update.dmg")
