@@ -142,7 +142,7 @@ struct OnboardingView: View {
                 
                 HStack(spacing: 0) {
                     Text("Design & Development by ")
-                    Link("Kozak", destination: URL(string: "https://dprofile.ru/kozak_developer")!)
+                    Link("Kozak", destination: URL(string: "https://berliner187.github.io/")!)
                         .foregroundColor(Color(hex: "#6366F1"))
                     Text(" • 2026")
                 }

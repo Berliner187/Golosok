@@ -827,6 +827,54 @@
         }
       }
     },
+    "Mic.ModeNoBluetooth" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mac microphone (no Bluetooth)"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Микрофон Mac (без Bluetooth)"
+          }
+        }
+      }
+    },
+    "Mic.ModeSpecific" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Specific device"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Конкретное устройство"
+          }
+        }
+      }
+    },
+    "Mic.ModeSystem" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "System default"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Системное по умолчанию"
+          }
+        }
+      }
+    },
     "MP3, MP4, WebM, MKV, WAV и другие" : {
       "localizations" : {
         "en" : {
@@ -2564,6 +2612,25 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Меньше"
+          }
+        }
+      }
+    },
+    "МИКРОФОН" : {
+
+    },
+    "Микрофон записи" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Recording microphone"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Микрофон записи"
           }
         }
       }
@@ -5264,6 +5331,38 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "УРОВЕНЬ:"
+          }
+        }
+      }
+    },
+    "Устройство" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Device"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Устройство"
+          }
+        }
+      }
+    },
+    "Устройство, с которого Голосок пишет звук" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The device Golosok records from"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Устройство, с которого Голосок пишет звук"
           }
         }
       }

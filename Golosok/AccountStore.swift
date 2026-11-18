@@ -135,7 +135,7 @@ final class AccountStore: ObservableObject {
                         let expires = decoded.expiresAt.flatMap { ISO8601DateFormatter().date(from: $0) }
                         self.features = decoded.features ?? []
                         self.status = .connected(subscription: decoded.subscription ?? "base", expiresAt: expires)
-                        AppLogger.shared.info("Account", "Токен подтверждён", details: "subscription=\(decoded.subscription ?? "base"), features=\(self.features.count)")
+                        AppLogger.shared.info("Account", "Токен подтверждён", details: "subscription=\(decoded.subscription ?? "base"), features=\(self.features.count), expires_at=\(decoded.expiresAt ?? "null")")
                         return
                     }
                     self.features = []

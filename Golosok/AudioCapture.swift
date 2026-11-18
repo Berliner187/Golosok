@@ -51,13 +51,22 @@ struct SubtitleCue: Equatable {
     let text: String
 }
 
-class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
+class AudioCapture: NSObject, ObservableObject {
     static let shared = AudioCapture()
-    
-    private var audioRecorder: AVAudioRecorder?
+
+    private var captureSession: AVCaptureSession?
+    private var audioOutputFile: AVAudioFile?
+    private var audioConverter: AVAudioConverter?
+    private var currentDeviceUID: String?
+    private let captureQueue = DispatchQueue(label: "com.golosok.audiocapture")
+    private let captureQueueKey = DispatchSpecificKey<Void>()
+    private let meterLock = NSLock()
+    private var meterSquareSum: Double = 0
+    private var meterSampleCount: Int = 0
     private var timer: Timer?
     private var startTime: Date?
     private var escMonitor: Any?
+    private var escLocalMonitor: Any?
     private var pasteTarget: NSRunningApplication?
     
     @Published var isRecording = false
@@ -113,6 +122,7 @@ class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
     
     override init() {
         super.init()
+        captureQueue.setSpecific(key: captureQueueKey, value: ())
         
         if UserDefaults.standard.object(forKey: "analyticsEnabled") == nil {
             self.analyticsEnabled = true
@@ -128,6 +138,14 @@ class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
         UserDefaults.standard.set(currentVer, forKey: "lastActiveVersion")
 
         loadHistory()
+        NotificationCenter.default.addObserver(forName: AVCaptureDevice.wasDisconnectedNotification, object: nil, queue: .main) { [weak self] note in
+            guard let self, self.isRecording,
+                  let device = note.object as? AVCaptureDevice,
+                  device.uniqueID == self.currentDeviceUID else { return }
+            AppLogger.shared.warn("Recording", "Микрофон отключён во время записи — запись отменена", details: device.localizedName)
+            Telemetry.shared.event("mic_disconnected_mid_recording", ["device_uid": device.uniqueID])
+            self.cancelRecording()
+        }
         DispatchQueue.main.asyncAfter(deadline: .now() + 4.5) { [weak self] in
             self?.checkUpdates()
         }
@@ -171,8 +189,7 @@ class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
         guard isRecording else { return }
         timer?.invalidate()
         timer = nil
-        audioRecorder?.stop()
-        audioRecorder = nil
+        teardownCaptureSession()
         SoundEffect.playCancel()
         
         DispatchQueue.main.async {
@@ -195,19 +212,14 @@ class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
         @unknown default: break
         }
 
-        let settings: [String: Any] = [
-            AVFormatIDKey: Int(kAudioFormatLinearPCM), AVSampleRateKey: 16000.0,
-            AVNumberOfChannelsKey: 1, AVLinearPCMBitDepthKey: 16,
-            AVLinearPCMIsBigEndianKey: false, AVLinearPCMIsFloatKey: false
-        ]
+        guard let device = MicrophoneStore.shared.resolveDevice() else {
+            AppLogger.shared.warn("Recording", "Нет доступного микрофона для записи")
+            return
+        }
 
         do {
             if FileManager.default.fileExists(atPath: tempAudioURL.path) { try FileManager.default.removeItem(at: tempAudioURL) }
-            audioRecorder = try AVAudioRecorder(url: tempAudioURL, settings: settings)
-            audioRecorder?.delegate = self
-            audioRecorder?.isMeteringEnabled = true
-            audioRecorder?.prepareToRecord()
-            guard audioRecorder?.record() == true else { return }
+            try startCaptureSession(device: device)
 
             startTime = Date()
             SoundEffect.playStart()
@@ -215,16 +227,62 @@ class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
             escMonitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { [weak self] event in
                 if event.keyCode == 53 { self?.cancelRecording() }
             }
+            // Глобальный монитор не видит события, пока фокус у самого Голосок —
+            // для этого случая добавляем локальный монитор.
+            escLocalMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+                if event.keyCode == 53 { self?.cancelRecording() }
+                return event
+            }
 
             DispatchQueue.main.async {
                 self.isRecording = true
-                AppLogger.shared.info("Recording", "Запись началась", details: "режим: \(HotKeySettings.shared.mode == .pushToTalk ? "рация" : "переключатель")")
+                AppLogger.shared.info("Recording", "Запись началась", details: "микрофон: \(device.localizedName), режим: \(HotKeySettings.shared.mode == .pushToTalk ? "рация" : "переключатель")")
                 OverlayPanelPresenter.showRecording()
             }
             let meteringTimer = Timer(timeInterval: 0.05, repeats: true) { [weak self] _ in self?.updateMetering() }
             RunLoop.main.add(meteringTimer, forMode: .common)
             timer = meteringTimer
-        } catch {}
+        } catch {
+            teardownCaptureSession()
+            AppLogger.shared.error("Recording", "Не удалось запустить захват аудио", details: String(describing: error))
+        }
+    }
+
+    private func startCaptureSession(device: AVCaptureDevice) throws {
+        let session = AVCaptureSession()
+        let input = try AVCaptureDeviceInput(device: device)
+        guard session.canAddInput(input) else {
+            throw NSError(domain: "Golosok", code: 1, userInfo: [NSLocalizedDescriptionKey: "canAddInput failed"])
+        }
+        session.addInput(input)
+
+        let output = AVCaptureAudioDataOutput()
+        output.setSampleBufferDelegate(self, queue: captureQueue)
+        guard session.canAddOutput(output) else {
+            throw NSError(domain: "Golosok", code: 2, userInfo: [NSLocalizedDescriptionKey: "canAddOutput failed"])
+        }
+        session.addOutput(output)
+
+        let targetFormat = AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: 16000, channels: 1, interleaved: false)!
+        let file = try AVAudioFile(forWriting: tempAudioURL, settings: targetFormat.settings)
+
+        captureSession = session
+        audioOutputFile = file
+        currentDeviceUID = device.uniqueID
+        session.startRunning()
+    }
+
+    private func teardownCaptureSession() {
+        captureSession?.stopRunning()
+        // Drain: дожидаемся блоков captureOutput, уже стоящих в очереди,
+        // чтобы хвост записи дописался в файл до его освобождения.
+        if DispatchQueue.getSpecific(key: captureQueueKey) == nil {
+            captureQueue.sync {}
+        }
+        captureSession = nil
+        audioConverter = nil
+        audioOutputFile = nil
+        currentDeviceUID = nil
     }
 
     func stopRecording() {
@@ -232,8 +290,7 @@ class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
         pasteTarget = NSWorkspace.shared.frontmostApplication
         timer?.invalidate()
         timer = nil
-        audioRecorder?.stop()
-        audioRecorder = nil
+        teardownCaptureSession()
 
         let durationSec = Date().timeIntervalSince(startTime ?? Date())
 
@@ -256,14 +313,25 @@ class AudioCapture: NSObject, ObservableObject, AVAudioRecorderDelegate {
             NSEvent.removeMonitor(monitor)
             escMonitor = nil
         }
+        if let monitor = escLocalMonitor {
+            NSEvent.removeMonitor(monitor)
+            escLocalMonitor = nil
+        }
     }
 
     private func updateMetering() {
-        guard let recorder = audioRecorder, recorder.isRecording else { return }
-        recorder.updateMeters()
+        guard isRecording else { return }
+
+        meterLock.lock()
+        let squareSum = meterSquareSum
+        let sampleCount = meterSampleCount
+        meterSquareSum = 0
+        meterSampleCount = 0
+        meterLock.unlock()
 
         let elapsed = Int(Date().timeIntervalSince(startTime ?? Date()))
-        let power = recorder.averagePower(forChannel: 0)
+        let rms = sampleCount > 0 ? sqrt(squareSum / Double(sampleCount)) : 0
+        let power = 20.0 * log10(max(rms, 0.00001))
         let level = max(0.15, min(1.0, (power + 40.0) / 35.0))
         let time = CACurrentMediaTime()
 
@@ -1264,6 +1332,68 @@ func checkUpdates(force: Bool = false) {
         if FileManager.default.fileExists(atPath: fileURL.path) { try? FileManager.default.removeItem(at: fileURL) }
         let segURL = appSupport.appendingPathComponent("Golosok/Audio/\(id.uuidString).segments.json")
         if FileManager.default.fileExists(atPath: segURL.path) { try? FileManager.default.removeItem(at: segURL) }
+    }
+}
+
+extension AudioCapture: AVCaptureAudioDataOutputSampleBufferDelegate {
+    func captureOutput(_ output: AVCaptureOutput, didOutput sampleBuffer: CMSampleBuffer, from connection: AVCaptureConnection) {
+        guard let formatDesc = CMSampleBufferGetFormatDescription(sampleBuffer),
+              let asbdPointer = CMAudioFormatDescriptionGetStreamBasicDescription(formatDesc),
+              let bufferFormat = AVAudioFormat(streamDescription: asbdPointer),
+              let blockBuffer = CMSampleBufferGetDataBuffer(sampleBuffer) else { return }
+
+        var length = 0
+        var dataPointer: UnsafeMutablePointer<Int8>?
+        CMBlockBufferGetDataPointer(blockBuffer, atOffset: 0, lengthAtOffsetOut: nil, totalLengthOut: &length, dataPointerOut: &dataPointer)
+        guard let ptr = dataPointer, length > 0 else { return }
+
+        let bytesPerFrame = Int(asbdPointer.pointee.mBytesPerFrame)
+        guard bytesPerFrame > 0 else { return }
+        let frameCount = AVAudioFrameCount(length / bytesPerFrame)
+        guard frameCount > 0,
+              let inputBuffer = AVAudioPCMBuffer(pcmFormat: bufferFormat, frameCapacity: frameCount) else { return }
+        inputBuffer.frameLength = frameCount
+        guard let dst = inputBuffer.mutableAudioBufferList.pointee.mBuffers.mData else { return }
+        memcpy(dst, ptr, length)
+
+        guard let file = audioOutputFile else { return }
+        if audioConverter == nil {
+            audioConverter = AVAudioConverter(from: bufferFormat, to: file.processingFormat)
+        }
+        guard let converter = audioConverter else { return }
+
+        let ratio = file.processingFormat.sampleRate / bufferFormat.sampleRate
+        let outputCapacity = AVAudioFrameCount((Double(frameCount) * ratio) + 1)
+        guard let outputBuffer = AVAudioPCMBuffer(pcmFormat: file.processingFormat, frameCapacity: max(outputCapacity, 1)) else { return }
+
+        var consumed = false
+        var conversionError: NSError?
+        let status = converter.convert(to: outputBuffer, error: &conversionError) { _, outStatus in
+            if consumed { outStatus.pointee = .noDataNow; return nil }
+            consumed = true
+            outStatus.pointee = .haveData
+            return inputBuffer
+        }
+        guard status != .error, conversionError == nil, outputBuffer.frameLength > 0 else { return }
+
+        if let channelData = outputBuffer.floatChannelData {
+            let frames = Int(outputBuffer.frameLength)
+            var squareSum: Float = 0
+            let samples = channelData[0]
+            for i in 0..<frames { squareSum += samples[i] * samples[i] }
+            meterLock.lock()
+            meterSquareSum += Double(squareSum)
+            meterSampleCount += frames
+            meterLock.unlock()
+        }
+
+        do {
+            try file.write(from: outputBuffer)
+        } catch {
+            AppLogger.shared.error("Recording", "Ошибка записи аудиофайла", details: String(describing: error))
+            audioConverter = nil
+            audioOutputFile = nil
+        }
     }
 }
 

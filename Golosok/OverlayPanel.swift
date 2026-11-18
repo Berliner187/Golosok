@@ -130,6 +130,7 @@ final class OverlayPanelManager {
         hideTask = nil
 
         guard let panel, panel.isVisible else {
+            AppLogger.shared.info("Overlay", "hide: панель не на экране, фаза сброшена", details: "phase \(state.phase)")
             state.reset()
             return
         }
@@ -145,6 +146,7 @@ final class OverlayPanelManager {
             guard generation == MainActor.assumeIsolated({ self.presentGeneration }) else {
                 // A present() landed while the fade-out was in flight: cancel the
                 // fade visually instead of ordering the panel out.
+                AppLogger.shared.info("Overlay", "hide: race с present(), отмена скрытия", details: "gen \(generation) -> \(self.presentGeneration)")
                 panel.alphaValue = 1
                 return
             }
@@ -163,7 +165,10 @@ final class OverlayPanelManager {
             createPanel()
         }
 
-        guard let screen = currentTargetScreen() else { return }
+        guard let screen = currentTargetScreen() else {
+            AppLogger.shared.error("Overlay", "present: нет целевого экрана", details: "screens: \(NSScreen.screens.count), phase \(state.phase)")
+            return
+        }
         guard let panel else { return }
 
         let targetFrame = preferredFrame(on: screen)
@@ -171,11 +176,13 @@ final class OverlayPanelManager {
         // Already on screen: update geometry silently. Re-running the entrance
         // fade here makes the pill blink on every progress tick (0% → 25% → …).
         if panel.isVisible {
+            AppLogger.shared.info("Overlay", "present: панель уже видима", details: "alpha \(panel.alphaValue), phase \(state.phase), frame \(panel.frame)")
             panel.setFrame(targetFrame, display: true)
             panel.alphaValue = 1
             return
         }
 
+        AppLogger.shared.info("Overlay", "present: показ островка", details: "screen \(screen.localizedName ?? "?"), frame \(targetFrame)")
         panel.alphaValue = 0
         panel.setFrame(targetFrame, display: false)
         panel.orderFrontRegardless()

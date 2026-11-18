@@ -377,7 +377,11 @@ struct AccountSection: View {
         case .verifying:
             return nil
         case .connected(_, let expiresAt):
-            guard let expiresAt else { return String(localized: "Подписка активна") }
+            // Сервер может возвращать бессмысленную дату (например, сегодняшнюю).
+            // Показываем "До …" только для реально будущего срока; иначе — без даты.
+            guard let expiresAt, expiresAt.timeIntervalSinceNow > 36 * 3600 else {
+                return String(localized: "Подписка активна")
+            }
             let formatter = DateFormatter()
             formatter.dateFormat = "d MMMM yyyy"
             return String(localized: "До") + " " + formatter.string(from: expiresAt)

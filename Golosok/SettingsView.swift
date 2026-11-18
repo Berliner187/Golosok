@@ -2,6 +2,7 @@ import SwiftUI
 
 struct SettingsView: View {
     @ObservedObject var audioCapture = AudioCapture.shared
+    @ObservedObject var microphones = MicrophoneStore.shared
     @ObservedObject var permissions = PermissionManager.shared
     @ObservedObject var language = LanguageSettings.shared
     @ObservedObject var models = ModelStore.shared
@@ -207,6 +208,48 @@ struct SettingsView: View {
                                 .foregroundColor(.uiInk)
                             Spacer()
                             UIBadge(text: "ESC")
+                        }
+                    }
+                }
+                
+                // РАЗДЕЛ 2.5: МИКРОФОН
+                UICard {
+                    VStack(alignment: .leading, spacing: 14) {
+                        Text("МИКРОФОН")
+                            .font(UIStyleFont.body(size: 11, weight: .bold))
+                            .tracking(1.0)
+                            .foregroundColor(.uiMidGray)
+                        
+                        HStack {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Микрофон записи")
+                                    .font(UIStyleFont.body(size: 13, weight: .medium))
+                                    .foregroundColor(.uiInk)
+                                Text("Устройство, с которого Голосок пишет звук")
+                                    .font(UIStyleFont.body(size: 11, weight: .regular))
+                                    .foregroundColor(.uiMidGray)
+                            }
+                            Spacer()
+                            UIDropdownPicker(selection: $microphones.mode, options: [
+                                .init(LocalizedStringKey("Mic.ModeSystem"), value: MicrophoneMode.systemDefault),
+                                .init(LocalizedStringKey("Mic.ModeNoBluetooth"), value: MicrophoneMode.macBuiltInNoBluetooth),
+                                .init(LocalizedStringKey("Mic.ModeSpecific"), value: MicrophoneMode.specific)
+                            ], width: 220)
+                        }
+                        
+                        if microphones.mode == .specific {
+                            Divider().background(Color.uiHairline)
+                            
+                            HStack {
+                                Text("Устройство")
+                                    .font(UIStyleFont.body(size: 13, weight: .medium))
+                                    .foregroundColor(.uiInk)
+                                Spacer()
+                                UIDropdownPicker(selection: Binding(
+                                    get: { microphones.specificDeviceUID },
+                                    set: { microphones.specificDeviceUID = $0 }
+                                ), options: microphones.devices.map { .init($0.localizedName, value: $0.uniqueID) }, width: 220)
+                            }
                         }
                     }
                 }
