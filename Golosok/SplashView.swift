@@ -175,6 +175,16 @@ private struct SplashScene: View {
     }
 }
 
+// MARK: - Блокировка записи на время сплэша
+
+/// Пока показывается сплэш, запись включать нельзя (звук запуска и старт микрофона конфликтуют).
+/// Читается из кода записи: `guard !SplashGate.shared.isActive else { return }`.
+final class SplashGate: @unchecked Sendable {
+    static let shared = SplashGate()
+    private init() {}
+    var isActive = false
+}
+
 // MARK: - Вью
 
 struct SplashView: View {
@@ -193,14 +203,17 @@ struct SplashView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .onAppear { start() }
+        .onDisappear { SplashGate.shared.isActive = false }     // окно закрыли посреди сплэша — не блокируем запись
     }
 
     private func start() {
         guard origin == nil else { return }
         let now = Date()
         origin = now                                   // картинка стартует сразу, звук подхватывается синхронно
+        SplashGate.shared.isActive = true
         SoundEngine.shared.playStartup(origin: now)
         DispatchQueue.main.asyncAfter(deadline: .now() + SplashTime.total) {
+            SplashGate.shared.isActive = false
             withAnimation(.easeInOut(duration: 0.3)) { isFinished = true }
         }
     }

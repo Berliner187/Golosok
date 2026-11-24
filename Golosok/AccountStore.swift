@@ -25,6 +25,23 @@ final class AccountStore: ObservableObject {
 
     static let verifyBaseURL = "https://golosok.space"
     static let loginURL = URL(string: "https://golosok.space/login/")!
+    
+    static let cloudURL = URL(string: "https://golosok.space/")!
+
+    private static func parseDate(_ string: String) -> Date? {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        if let d = f.date(from: string) { return d }
+        f.formatOptions = [.withInternetDateTime]
+        if let d = f.date(from: string) { return d }
+        f.formatOptions = [.withFullDate]
+        return f.date(from: string)
+    }
+
+    var tokenHint: String {
+        guard token.count > 8 else { return "" }
+        return String(token.prefix(4)) + "••••" + String(token.suffix(4))
+    }
 
     // Гейтинг фич остаётся выключенным до включения оплаты: BYO-ключ бесплатен всегда.
     // Проверка токена при этом — живая, идёт на реальный эндпоинт.
@@ -132,7 +149,7 @@ final class AccountStore: ObservableObject {
 
                 if let decoded = try? JSONDecoder().decode(AccountVerifyResponse.self, from: data) {
                     if decoded.valid {
-                        let expires = decoded.expiresAt.flatMap { ISO8601DateFormatter().date(from: $0) }
+                        let expires = decoded.expiresAt.flatMap(Self.parseDate)
                         self.features = decoded.features ?? []
                         self.status = .connected(subscription: decoded.subscription ?? "base", expiresAt: expires)
                         AppLogger.shared.info("Account", "Токен подтверждён", details: "subscription=\(decoded.subscription ?? "base"), features=\(self.features.count), expires_at=\(decoded.expiresAt ?? "null")")
