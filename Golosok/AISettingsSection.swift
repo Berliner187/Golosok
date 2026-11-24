@@ -58,6 +58,8 @@ struct AIProviderSection: View {
                             .font(UIStyleFont.body(size: 12, weight: .regular))
                             .foregroundColor(.uiMidGray)
                     }
+                } else if store.providerID == AppleLocalAI.presetID {
+                    appleLocalBlock
                 } else {
                     AIInputField(title: "Base URL", text: $store.baseURL, placeholder: "https://api.openai.com/v1")
                     AIInputField(title: "API-ключ", text: $store.apiKey, placeholder: "sk-…", isSecure: true)
@@ -144,6 +146,43 @@ struct AIProviderSection: View {
             .overlay(RoundedRectangle(cornerRadius: 14).stroke(isSelected ? Color.uiInk : accent.opacity(0.28), lineWidth: 1))
         }
         .buttonStyle(TactileButtonStyle())
+    }
+
+    private var appleLocalBlock: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 8) {
+                Image(systemName: AppleLocalAI.isSupported ? "cpu.fill" : "exclamationmark.triangle.fill")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(AppleLocalAI.isSupported ? Color(hex: "#10B981") : .uiEmber)
+                Text(AppleLocalAI.status().title)
+                    .font(UIStyleFont.body(size: 12, weight: .medium))
+                    .foregroundColor(.uiInk)
+            }
+            Text(LocalizedStringKey("Текст расшифровки обрабатывается системной моделью Apple прямо на устройстве: без сервера, без API-ключа и без скачивания весов. Работает не на всех Mac и только при включённом Apple Intelligence с английским языком Siri. Качество ниже облачных моделей, зато данные не покидают Mac."))
+                .font(UIStyleFont.body(size: 11, weight: .regular))
+                .foregroundColor(.uiMidGray)
+                .lineSpacing(2)
+                .fixedSize(horizontal: false, vertical: true)
+
+            HStack(spacing: 10) {
+                UIOutlineButton(title: "Проверить") {
+                    store.testConnection()
+                }
+                .disabled(store.isTesting)
+
+                if store.isTesting {
+                    ProgressView().controlSize(.small)
+                }
+
+                if let result = store.testResult {
+                    Text(result)
+                        .font(UIStyleFont.body(size: 12, weight: .medium))
+                        .foregroundColor(store.testOK ? Color(hex: "#10B981") : .uiEmber)
+                        .lineLimit(2)
+                }
+                Spacer()
+            }
+        }
     }
 
     private var ollamaModelField: some View {

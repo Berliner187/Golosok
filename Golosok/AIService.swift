@@ -51,6 +51,14 @@ enum AIProviderPresets {
             needsKey: false
         ),
         AIProviderPreset(
+            id: "apple_local",
+            name: "Apple (локально)",
+            hint: "Системная модель Apple — без сервера и скачивания, macOS 26+",
+            baseURL: "",
+            defaultModel: "apple-foundation-model",
+            needsKey: false
+        ),
+        AIProviderPreset(
             id: "golosok_proxy",
             name: "Голосок+",
             hint: "Облачные модели на серверах Голоска — по подписке",
@@ -71,6 +79,7 @@ struct AIProviderConfig {
     let apiKey: String
     let model: String
     let isProxy: Bool
+    let isAppleLocal: Bool
 }
 
 enum AIError: LocalizedError {
@@ -133,13 +142,17 @@ final class AIProviderStore: ObservableObject {
             baseURL: baseURL,
             apiKey: isProxy ? AccountStore.shared.token : apiKey,
             model: model,
-            isProxy: isProxy
+            isProxy: isProxy,
+            isAppleLocal: providerID == AppleLocalAI.presetID
         )
     }
 
     var isConfigured: Bool {
         if currentPreset?.isProxy == true {
             return true
+        }
+        if providerID == AppleLocalAI.presetID {
+            return AppleLocalAI.status() == .ready
         }
         return !baseURL.trimmingCharacters(in: .whitespaces).isEmpty
             && !model.trimmingCharacters(in: .whitespaces).isEmpty
@@ -160,7 +173,7 @@ final class AIProviderStore: ObservableObject {
     }
 
     func refreshModels() {
-        guard !(currentPreset?.isProxy ?? false) else { return }
+        guard !(currentPreset?.isProxy ?? false), providerID != AppleLocalAI.presetID else { return }
         isLoadingModels = true
         installedModels = []
         AIService.shared.listModels(using: config) { [weak self] result in
@@ -187,6 +200,38 @@ final class AIProviderStore: ObservableObject {
             testOK = true
             testResult = String(localized: "Сервер доступен через аккаунт")
             return
+        }
+        if providerID == AppleLocalAI.presetID {
+            let appleStatus = AppleLocalAI.status()
+            switch appleStatus {
+            case .ready:
+                #if canImport(FoundationModels)
+                if #available(macOS 26, *) {
+                    isTesting = true
+                    testResult = nil
+                    AppleLocalAIService.shared.test { [weak self] result in
+                        DispatchQueue.main.async {
+                            guard let self else { return }
+                            self.isTesting = false
+                            switch result {
+                            case .success:
+                                self.testOK = true
+                                self.testResult = String(localized: "Подключено")
+                            case .failure(let error):
+                                self.testOK = false
+                                self.testResult = error.localizedDescription
+                            }
+                        }
+                    }
+                    return
+                }
+                #endif
+                fallthrough
+            default:
+                testOK = false
+                testResult = appleStatus.title
+                return
+            }
         }
         isTesting = true
         testResult = nil
@@ -230,6 +275,16 @@ final class AIService {
     }
 
     func chat(messages: [AIChatMessage], using config: AIProviderConfig, completion: @escaping (Result<String, AIError>) -> Void) {
+        if config.isAppleLocal {
+            #if canImport(FoundationModels)
+            if #available(macOS 26, *) {
+                AppleLocalAIService.shared.chat(messages: messages, completion: completion)
+                return
+            }
+            #endif
+            completion(.failure(.notConfigured))
+            return
+        }
         guard let url = url(config.baseURL, path: "chat/completions") else {
             completion(.failure(.invalidURL))
             return

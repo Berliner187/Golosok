@@ -3,11 +3,8 @@ import SwiftUI
 struct AboutView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.openURL) private var openURL
-    
-    var currentVersionStr: String {
-        let ver = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? ""
-        return "v\(ver)"
-    }
+    @EnvironmentObject private var updater: AppUpdater
+    @State private var showUpdateSheet = false
     
     var body: some View {
         VStack(spacing: 20) {
@@ -22,7 +19,7 @@ struct AboutView: View {
                     .font(UIStyleFont.display(size: 20, weight: .bold))
                     .foregroundColor(.uiInk)
                 
-                UIBadge(text: currentVersionStr)
+                UIBadge(text: updater.currentVersionStr)
             }
             
             // 2. ОПИСАНИЕ
@@ -63,6 +60,13 @@ struct AboutView: View {
                         openURL(URL(string: "https://github.com/Berliner187/Golosok/releases")!)
                     }
                 }
+
+                AboutLinkButton(title: "Обновление", icon: "arrow.triangle.2.circlepath") {
+                    showUpdateSheet = true
+                }
+            }
+            .sheet(isPresented: $showUpdateSheet) {
+                UpdateView(updater: updater)
             }
             
             Divider().background(Color.uiHairline)

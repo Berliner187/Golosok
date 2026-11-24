@@ -5,6 +5,7 @@ struct SettingsView: View {
     @ObservedObject var microphones = MicrophoneStore.shared
     @ObservedObject var permissions = PermissionManager.shared
     @ObservedObject var language = LanguageSettings.shared
+    @ObservedObject var theme = ThemeSettings.shared
     @ObservedObject var models = ModelStore.shared
     @Bindable var hotKey = HotKeySettings.shared
     @State private var showingClearHistoryAlert = false
@@ -16,26 +17,50 @@ struct SettingsView: View {
         ScrollView {
             VStack(spacing: 20) {
                 
-                // РАЗДЕЛ 0: ЯЗЫК
+                // РАЗДЕЛ 0: ЯЗЫК И ТЕМА
                 UICard {
-                    HStack {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("Язык приложения")
-                                .font(UIStyleFont.body(size: 13, weight: .medium))
-                                .foregroundColor(.uiInk)
-                            Text("Приложение перезапустится автоматически")
-                                .font(UIStyleFont.body(size: 11, weight: .regular))
-                                .foregroundColor(.uiMidGray)
+                    VStack(spacing: 14) {
+                        HStack {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Язык приложения")
+                                    .font(UIStyleFont.body(size: 13, weight: .medium))
+                                    .foregroundColor(.uiInk)
+                                Text("Приложение перезапустится автоматически")
+                                    .font(UIStyleFont.body(size: 11, weight: .regular))
+                                    .foregroundColor(.uiMidGray)
+                            }
+                            Spacer()
+                            UIDropdownPicker(selection: Binding(
+                                get: { language.current },
+                                set: { language.select($0) }
+                            ), options: [
+                                .init("Система", value: AppLanguage.system),
+                                .init("Русский", value: AppLanguage.ru),
+                                .init("English", value: AppLanguage.en)
+                            ], width: 140)
                         }
-                        Spacer()
-                        UIDropdownPicker(selection: Binding(
-                            get: { language.current },
-                            set: { language.select($0) }
-                        ), options: [
-                            .init("Система", value: AppLanguage.system),
-                            .init("Русский", value: AppLanguage.ru),
-                            .init("English", value: AppLanguage.en)
-                        ], width: 140)
+
+                        Divider().background(Color.uiHairline)
+
+                        HStack {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Тема")
+                                    .font(UIStyleFont.body(size: 13, weight: .medium))
+                                    .foregroundColor(.uiInk)
+                                Text("Применяется сразу, без перезапуска")
+                                    .font(UIStyleFont.body(size: 11, weight: .regular))
+                                    .foregroundColor(.uiMidGray)
+                            }
+                            Spacer()
+                            UIDropdownPicker(selection: Binding(
+                                get: { theme.current },
+                                set: { theme.rawTheme = $0.rawValue }
+                            ), options: [
+                                .init("Система", value: AppTheme.system),
+                                .init("Светлая", value: AppTheme.light),
+                                .init("Тёмная", value: AppTheme.dark)
+                            ], width: 140)
+                        }
                     }
                 }
                 

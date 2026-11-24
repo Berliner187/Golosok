@@ -199,7 +199,8 @@ class AudioCapture: NSObject, ObservableObject {
     }
 
     func startRecording() {
-        guard !isProcessingFile else { return }
+        guard !isProcessingFile, !isRecording, captureSession == nil else { return }
+        
         switch AVCaptureDevice.authorizationStatus(for: .audio) {
         case .notDetermined:
             AVCaptureDevice.requestAccess(for: .audio) { granted in

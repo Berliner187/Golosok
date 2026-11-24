@@ -5,7 +5,9 @@ import Foundation
 private enum OverlayMetrics {
     /// Panel and pill share the same bounds — no transparent margins,
     /// so nothing stray can cast a shadow.
-    static let panelSize = NSSize(width: 240, height: 40)
+    static let cardHeight: CGFloat = 72
+    static let cardTint: Double = 0.45
+    static let panelSize = NSSize(width: 240, height: cardHeight + 2)
     static let pillHeight: CGFloat = 40
     static let horizontalPadding: CGFloat = 14
 }
@@ -27,6 +29,8 @@ final class OverlayPanelState {
     private(set) var phase: OverlayPhase = .idle
     private(set) var elapsedSeconds = 0
     private(set) var samples: [Float] = Array(repeating: 0.15, count: 18)
+    /// Управляет появлением/исчезновением в SwiftUI. Окно само всегда alpha 1.
+    var isShown = false
 
     func showRecording() {
         phase = .recording
@@ -75,11 +79,10 @@ final class OverlayPanelManager {
 
     private let state = OverlayPanelState()
     private var panel: NSPanel?
-    private var targetScreen: NSScreen?
     private var hideTask: Task<Void, Never>?
-    private var screenChangeObserver: NSObjectProtocol?
-    /// Bumped on every present(). A fade-out completion that sees a newer
-    /// generation lost the race to a new present() and must not orderOut/reset.
+    private var observers: [NSObjectProtocol] = []
+    /// Растёт при каждом present()/hide(). Отложенные действия сверяются с ним
+    /// и молча отменяются, если за это время случилось что-то новое.
     private var presentGeneration: UInt64 = 0
 
     private init() {}
@@ -91,6 +94,12 @@ final class OverlayPanelManager {
 
     func updateRecording(elapsedSeconds: Int, samples: [Float]) {
         state.updateRecording(elapsedSeconds: elapsedSeconds, samples: samples)
+        // Самолечение: идёт запись, а панели на экране нет.
+        if state.phase == .recording, panel?.isVisible != true {
+            AppLogger.shared.warn("Overlay", "панель пропала во время записи — возвращаю",
+                                  details: "visible \(panel?.isVisible ?? false), shown \(state.isShown)")
+            present()
+        }
     }
 
     func showTranscribing() {
@@ -128,31 +137,22 @@ final class OverlayPanelManager {
     func hideOverlay() {
         hideTask?.cancel()
         hideTask = nil
+        presentGeneration &+= 1
+        let generation = presentGeneration
 
         guard let panel, panel.isVisible else {
-            AppLogger.shared.info("Overlay", "hide: панель не на экране, фаза сброшена", details: "phase \(state.phase)")
+            state.isShown = false
             state.reset()
             return
         }
 
-        let generation = presentGeneration
-        let currentFrame = panel.frame
-        NSAnimationContext.runAnimationGroup({ context in
-            context.duration = 0.22
-            context.timingFunction = CAMediaTimingFunction(name: .easeIn)
-            panel.animator().alphaValue = 0
-            panel.animator().setFrameOrigin(NSPoint(x: currentFrame.minX, y: currentFrame.minY + 6))
-        }) { [self, state] in
-            guard generation == MainActor.assumeIsolated({ self.presentGeneration }) else {
-                // A present() landed while the fade-out was in flight: cancel the
-                // fade visually instead of ordering the panel out.
-                AppLogger.shared.info("Overlay", "hide: race с present(), отмена скрытия", details: "gen \(generation) -> \(self.presentGeneration)")
-                panel.alphaValue = 1
-                return
-            }
-            panel.orderOut(nil)
-            // NSAnimationContext completion fires on the main thread.
-            MainActor.assumeIsolated { state.reset() }
+        state.isShown = false   // SwiftUI проигрывает исчезновение
+        hideTask = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: 280_000_000)
+            guard let self, !Task.isCancelled, generation == self.presentGeneration else { return }
+            self.panel?.orderOut(nil)
+            self.state.reset()
+            self.hideTask = nil
         }
     }
 
@@ -160,38 +160,41 @@ final class OverlayPanelManager {
         hideTask?.cancel()
         hideTask = nil
         presentGeneration &+= 1
+        let generation = presentGeneration
 
-        if panel == nil {
-            createPanel()
-        }
+        if panel == nil { createPanel() }
 
-        guard let screen = currentTargetScreen() else {
-            AppLogger.shared.error("Overlay", "present: нет целевого экрана", details: "screens: \(NSScreen.screens.count), phase \(state.phase)")
+        guard let panel, let screen = currentTargetScreen() else {
+            AppLogger.shared.error("Overlay", "present: нет панели или экрана",
+                                   details: "screens: \(NSScreen.screens.count), phase \(state.phase)")
             return
         }
-        guard let panel else { return }
 
+        let wasVisible = panel.isVisible
         let targetFrame = preferredFrame(on: screen)
-
-        // Already on screen: update geometry silently. Re-running the entrance
-        // fade here makes the pill blink on every progress tick (0% → 25% → …).
-        if panel.isVisible {
-            AppLogger.shared.info("Overlay", "present: панель уже видима", details: "alpha \(panel.alphaValue), phase \(state.phase), frame \(panel.frame)")
-            panel.setFrame(targetFrame, display: true)
-            panel.alphaValue = 1
-            return
-        }
-
-        AppLogger.shared.info("Overlay", "present: показ островка", details: "screen \(screen.localizedName ?? "?"), frame \(targetFrame)")
-        panel.alphaValue = 0
-        panel.setFrame(targetFrame, display: false)
+        if panel.frame != targetFrame { panel.setFrame(targetFrame, display: true) }
+        panel.alphaValue = 1
         panel.orderFrontRegardless()
 
-        NSAnimationContext.runAnimationGroup { context in
-            context.duration = 0.2
-            context.timingFunction = CAMediaTimingFunction(name: .easeOut)
-            panel.animator().alphaValue = 1
+        guard !state.isShown else { return }
+        if wasVisible {
+            state.isShown = true
+        } else {
+            // Даём SwiftUI отрисовать начальное состояние, чтобы появление анимировалось.
+            Task { @MainActor [weak self] in
+                guard let self, generation == self.presentGeneration else { return }
+                self.state.isShown = true
+            }
         }
+    }
+
+    /// Вернуть панель на экран после сна, смены Space или конфигурации экранов.
+    private func reassert() {
+        guard let panel, state.phase != .idle, state.isShown,
+              let screen = currentTargetScreen() else { return }
+        panel.setFrame(preferredFrame(on: screen), display: true)
+        panel.alphaValue = 1
+        panel.orderFrontRegardless()
     }
 
     private func createPanel() {
@@ -205,8 +208,6 @@ final class OverlayPanelManager {
         newPanel.isOpaque = false
         newPanel.backgroundColor = .clear
         newPanel.hasShadow = false
-        // No pinned appearance: the pill must follow the system theme
-        // automatically when the user switches dark/light mode.
         newPanel.hidesOnDeactivate = false
         newPanel.isReleasedWhenClosed = false
         newPanel.level = .statusBar
@@ -217,7 +218,8 @@ final class OverlayPanelManager {
         newPanel.contentMaxSize = size
         newPanel.setContentSize(size)
 
-        let hostingView = NSHostingView(rootView: FloatingWidgetView(state: state))
+        let hostingView = NSHostingView(rootView: FloatingWidgetView(state: state)
+            .preferredColorScheme(ThemeSettings.shared.current.colorScheme))
         hostingView.frame = NSRect(origin: .zero, size: size)
         hostingView.autoresizingMask = [.width, .height]
         hostingView.wantsLayer = true
@@ -225,41 +227,39 @@ final class OverlayPanelManager {
         hostingView.layer?.isOpaque = false
         newPanel.contentView = hostingView
 
-        targetScreen = NSScreen.main ?? NSScreen.screens.first
-        observeScreenChanges()
         panel = newPanel
+        installObservers()
     }
 
-    private func observeScreenChanges() {
-        guard screenChangeObserver == nil else { return }
-        screenChangeObserver = NotificationCenter.default.addObserver(
+    private func installObservers() {
+        guard observers.isEmpty else { return }
+        let reassertBlock: @Sendable (Notification) -> Void = { [weak self] _ in
+            Task { @MainActor in self?.reassert() }
+        }
+        observers.append(NotificationCenter.default.addObserver(
             forName: NSApplication.didChangeScreenParametersNotification,
-            object: nil,
-            queue: .main
-        ) { [weak self] _ in
-            Task { @MainActor in
-                guard let self, let panel = self.panel, panel.isVisible else { return }
-                if let screen = self.currentTargetScreen() {
-                    panel.setFrame(self.preferredFrame(on: screen), display: true)
-                }
-            }
-        }
+            object: nil, queue: .main, using: reassertBlock))
+        let ws = NSWorkspace.shared.notificationCenter
+        observers.append(ws.addObserver(
+            forName: NSWorkspace.didWakeNotification,
+            object: nil, queue: .main, using: reassertBlock))
+        observers.append(ws.addObserver(
+            forName: NSWorkspace.activeSpaceDidChangeNotification,
+            object: nil, queue: .main, using: reassertBlock))
     }
 
+    /// Экран с курсором; запасной вариант — главный.
     private func currentTargetScreen() -> NSScreen? {
-        if let targetScreen, NSScreen.screens.contains(targetScreen) {
-            return targetScreen
+        let mouse = NSEvent.mouseLocation
+        if let hit = NSScreen.screens.first(where: { NSMouseInRect(mouse, $0.frame, false) }) {
+            return hit
         }
-        targetScreen = NSScreen.main ?? NSScreen.screens.first
-        return targetScreen
+        return NSScreen.main ?? NSScreen.screens.first
     }
 
     private func preferredFrame(on screen: NSScreen) -> NSRect {
         let size = OverlayMetrics.panelSize
         let hasCameraHousing = screen.safeAreaInsets.top > 0
-        // With a notch the pill hangs from the camera housing: its top edge sits
-        // inside the notch band, so a 300 pt pill visibly peeks out on both sides.
-        // Without a notch it tucks 6 pt into the menu bar bottom.
         let topInset = hasCameraHousing ? 6.0 : 4.0
         let topEdge = hasCameraHousing
             ? screen.frame.maxY - topInset
@@ -327,24 +327,67 @@ enum OverlayPanelPresenter {
 struct FloatingWidgetView: View {
     let state: OverlayPanelState
 
-    @State private var isAppeared = false
+    @Environment(\.colorScheme) private var scheme
+
+    private static let cardRadius: CGFloat = 28
+
+    private var isCard: Bool {
+        if case .warning = state.phase { return false }
+        return true
+    }
+
+    private var cardWidth: CGFloat {
+        switch state.phase {
+        case .recording, .processing: return 168
+        default: return 104
+        }
+    }
 
     var body: some View {
         phaseContent
-            .padding(.horizontal, OverlayMetrics.horizontalPadding)
-            .frame(width: OverlayMetrics.panelSize.width, height: OverlayMetrics.pillHeight)
-            .background(PillGlassBackground())
-            .overlay(PillBorder(phase: state.phase))
-            .scaleEffect(isAppeared ? 1 : 0.72, anchor: .top)
-            .offset(y: isAppeared ? 0 : -10)
-            .onAppear {
-                withAnimation(.spring(response: 0.42, dampingFraction: 0.68)) {
-                    isAppeared = true
-                }
-            }
-            .onDisappear {
-                isAppeared = false
-            }
+            .padding(.horizontal, isCard ? 0 : OverlayMetrics.horizontalPadding)
+            .frame(width: isCard ? cardWidth : 240,
+                   height: isCard ? OverlayMetrics.cardHeight : OverlayMetrics.pillHeight)
+            .background { islandBackground }
+            .overlay { islandBorder }
+            .animation(.spring(response: 0.45, dampingFraction: 0.82), value: cardWidth)
+            .animation(.spring(response: 0.45, dampingFraction: 0.82), value: isCard)
+            .scaleEffect(state.isShown ? 1 : 0.72, anchor: .top)
+            .offset(y: state.isShown ? 0 : -10)
+            .opacity(state.isShown ? 1 : 0)
+            .animation(
+                state.isShown
+                    ? .spring(response: 0.42, dampingFraction: 0.68)
+                    : .easeIn(duration: 0.22),
+                value: state.isShown
+            )
+            .frame(width: OverlayMetrics.panelSize.width,
+                   height: OverlayMetrics.panelSize.height,
+                   alignment: .top)
+    }
+
+    @ViewBuilder
+    private var islandBackground: some View {
+        if isCard {
+            RoundedRectangle(cornerRadius: Self.cardRadius, style: .continuous)
+                .fill(.ultraThinMaterial)
+                .overlay(
+                    RoundedRectangle(cornerRadius: Self.cardRadius, style: .continuous)
+                        .fill((scheme == .dark ? Color.black : Color.white).opacity(OverlayMetrics.cardTint))
+                )
+        } else {
+            PillGlassBackground()
+        }
+    }
+
+    @ViewBuilder
+    private var islandBorder: some View {
+        if isCard {
+            RoundedRectangle(cornerRadius: Self.cardRadius, style: .continuous)
+                .stroke((scheme == .dark ? Color.white : Color.black).opacity(0.10), lineWidth: 0.8)
+        } else {
+            PillBorder(phase: state.phase)
+        }
     }
 
     @ViewBuilder
@@ -352,21 +395,11 @@ struct FloatingWidgetView: View {
         switch state.phase {
         case .idle:
             EmptyView()
-        case .recording:
-            RecordingOverlayContent(state: state)
-                .transition(.opacity)
-        case .transcribing:
-            ProcessingOverlayContent(progress: nil)
-                .transition(.opacity)
-        case .processing(let progress):
-            ProcessingOverlayContent(progress: progress)
-                .transition(.opacity)
         case .warning(let message):
             WarningOverlayContent(message: message)
                 .transition(.opacity)
-        case .success:
-            SuccessCheckView()
-                .transition(.opacity)
+        default:
+            OrbCardContent(state: state)
         }
     }
 }
@@ -415,35 +448,60 @@ private struct PillBorder: View {
         }
     }
 }
+private enum OrbMode: Equatable { case listening, thinking, done }
 
-private struct RecordingOverlayContent: View {
+private struct OrbCardContent: View {
     let state: OverlayPanelState
 
-    @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.colorScheme) private var scheme
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    var body: some View {
-        HStack(spacing: 10) {
-            HStack(spacing: 7) {
-                Circle()
-                    .fill(Color(hex: "#10B981"))
-                    .frame(width: 6, height: 6)
+    private var ink: Color { scheme == .dark ? .white : Color(white: 0.04) }
 
-                Text(verbatim: Self.format(state.elapsedSeconds))
-                    .font(.system(size: 13, weight: .semibold, design: .monospaced))
-                    .foregroundStyle(timerColor)
-                    .monospacedDigit()
-            }
-            .frame(height: 20)
-
-            Spacer(minLength: 12)
-
-            WaveformBars(samples: state.samples, tint: Color(hex: "#34D399"))
-                .frame(width: 88, height: 18)
+    private var mode: OrbMode {
+        switch state.phase {
+        case .recording: return .listening
+        case .success: return .done
+        default: return .thinking
         }
     }
 
-    private var timerColor: Color {
-        colorScheme == .dark ? Color(hex: "#10B981") : Color(hex: "#047857")
+    /// Средняя громкость 0...1 (нижний порог метеринга — 0.15).
+    private var level: Double {
+        guard !state.samples.isEmpty else { return 0 }
+        let avg = state.samples.reduce(0, +) / Float(state.samples.count)
+        return Double(min(max((avg - 0.15) / 0.85, 0), 1))
+    }
+
+    var body: some View {
+        HStack(spacing: 4) {
+            SphereOrb(level: level, mode: mode, ink: ink, calm: reduceMotion)
+                .frame(width: OverlayMetrics.cardHeight, height: OverlayMetrics.cardHeight)
+            trailing
+        }
+    }
+
+    @ViewBuilder
+    private var trailing: some View {
+        switch state.phase {
+        case .recording:
+            Text(verbatim: Self.format(state.elapsedSeconds))
+                .font(.system(size: 17, weight: .medium, design: .rounded))
+                .monospacedDigit()
+                .foregroundStyle(ink.opacity(0.85))
+                .frame(width: 56, alignment: .leading)
+                .transition(.opacity)
+        case .processing(let progress):
+            Text("\(Int(progress * 100))%")
+                .font(.system(size: 17, weight: .medium, design: .rounded))
+                .monospacedDigit()
+                .foregroundStyle(ink.opacity(0.85))
+                .contentTransition(.numericText(value: progress))
+                .frame(width: 56, alignment: .leading)
+                .transition(.opacity)
+        default:
+            EmptyView()
+        }
     }
 
     private static func format(_ seconds: Int) -> String {
@@ -451,31 +509,188 @@ private struct RecordingOverlayContent: View {
     }
 }
 
-private struct WaveformBars: View {
-    let samples: [Float]
-    let tint: Color
+// MARK: - Sphere
+
+private final class OrbDriver {
+    var level = 0.0      // сглаженная громкость
+    var think = 0.0      // 0...1 — режим обработки
+    var collapse = 0.0   // 0...1 — схлопывание в точку
+    var doneT = 0.0      // секунд с начала успеха
+    var yaw = 0.0        // накопленный угол вращения (без рывков при смене скорости)
+    private var last = 0.0
+    private var doneStart: Double?
+
+    func step(target: Double, mode: OrbMode, now: Double, calm: Bool) {
+        let dt = min(max(now - last, 0), 0.1)
+        last = now
+        // Быстрая атака, медленное затухание.
+        level += (target - level) * (1 - exp(-(target > level ? 14.0 : 5.0) * dt))
+        think += ((mode == .thinking ? 1.0 : 0.0) - think) * (1 - exp(-4 * dt))
+        if !calm { yaw += dt * (0.42 + 0.9 * think) }
+        if mode == .done {
+            if doneStart == nil { doneStart = now }
+            doneT = now - (doneStart ?? now)
+            collapse = min(1, doneT / 0.4)
+        } else {
+            doneStart = nil
+            doneT = 0
+            collapse += (0 - collapse) * (1 - exp(-8 * dt))
+        }
+    }
+}
+
+private struct OrbPoint {
+    let x, y, z, delay: Double
+}
+
+private enum OrbGeometry {
+    /// Сфера Фибоначчи: равномерное распределение без «полюсов».
+    static let points: [OrbPoint] = {
+        let n = 560
+        let golden = Double.pi * (3 - 5.0.squareRoot())
+        return (0..<n).map { i in
+            let y = 1 - 2 * (Double(i) + 0.5) / Double(n)
+            let r = (1 - y * y).squareRoot()
+            let a = golden * Double(i)
+            let h = Double((i &* 2654435761) % 1000) / 1000
+            return OrbPoint(x: cos(a) * r, y: y, z: sin(a) * r, delay: h)
+        }
+    }()
+}
+
+private struct SphereOrb: View {
+    let level: Double
+    let mode: OrbMode
+    let ink: Color
+    let calm: Bool
+
+    @State private var born = Date()
+    @State private var driver = OrbDriver()
 
     var body: some View {
-        Canvas { context, size in
-            guard !samples.isEmpty, size.width > 0, size.height > 0 else { return }
-
-            let count = samples.count
-            let stepX = size.width / CGFloat(count)
-            let barWidth = min(3, max(1.5, stepX * 0.48))
-
-            for index in samples.indices {
-                let value = CGFloat(min(max(samples[index], 0.08), 1))
-                let height = max(3, value * size.height)
-                let x = CGFloat(index) * stepX + ((stepX - barWidth) / 2)
-                let rect = CGRect(
-                    x: x,
-                    y: (size.height - height) / 2,
-                    width: barWidth,
-                    height: height
-                )
-                let path = Path(roundedRect: rect, cornerRadius: barWidth / 2)
-                context.fill(path, with: .color(tint))
+        TimelineView(.animation(minimumInterval: 1.0 / 60.0)) { timeline in
+            Canvas { context, size in
+                let t = max(timeline.date.timeIntervalSince(born), 0)
+                driver.step(target: level, mode: mode, now: t, calm: calm)
+                Self.draw(&context, size: size, t: t, d: driver, ink: ink, calm: calm)
             }
+        }
+        .onAppear { born = Date() }
+    }
+
+    private static func easeOutBack(_ x: Double) -> Double {
+        let c1 = 1.4, c3 = c1 + 1
+        return 1 + c3 * pow(x - 1, 3) + c1 * pow(x - 1, 2)
+    }
+
+    private static func easeOut(_ x: Double) -> Double { 1 - pow(1 - x, 3) }
+    private static func clamp01(_ x: Double) -> Double { min(max(x, 0), 1) }
+
+    private static func ring(_ ctx: inout GraphicsContext, c: CGPoint, r: Double,
+                             alpha: Double, wob: Double, t: Double, k: Int, ink: Color) {
+        if alpha < 0.01 { return }
+        var path = Path()
+        let seg = 72
+        for s in 0...seg {
+            let a = Double(s) / Double(seg) * 2 * Double.pi
+            let w = 1 + 0.07 * wob * sin(a * 3 + t * 2.2 + Double(k) * 1.7)
+                      + 0.04 * wob * sin(a * 5 - t * 1.6)
+            let pt = CGPoint(x: Double(c.x) + cos(a) * r * w, y: Double(c.y) + sin(a) * r * w)
+            if s == 0 { path.move(to: pt) } else { path.addLine(to: pt) }
+        }
+        ctx.stroke(path, with: .color(ink.opacity(alpha)), lineWidth: 1)
+    }
+
+    private static func draw(_ ctx: inout GraphicsContext, size: CGSize, t: Double,
+                             d: OrbDriver, ink: Color, calm: Bool) {
+        let c = CGPoint(x: size.width / 2, y: size.height / 2)
+        let R = Double(min(size.width, size.height)) * 0.27
+        let form = min(max(t - 0.12, 0) / 1.0, 1)   // 0.12 с только точка, затем «взрыв» в сферу
+        let tt = calm ? 0 : t
+        let think = d.think, collapse = d.collapse
+
+        // В обработке громкости нет — сфера «дышит» синтетическим пульсом.
+        let lvl = d.level * (1 - think) + think * (0.30 + 0.10 * sin(tt * 2.4))
+        let pitch = 0.38
+        let cp = cos(pitch), sp = sin(pitch)
+        let amp = 0.05 + 0.32 * lvl
+        let twist = think * 1.5 * sin(tt * 1.1)      // скручивание в спираль
+        let sweep = sin(tt * 1.7)                    // положение полосы-сканера
+        let shrink = 1 - pow(collapse, 2)
+
+        var layers = [Path](repeating: Path(), count: 4)
+        if collapse < 0.98 {
+            for p in OrbGeometry.points {
+                let local = min(max((form - p.delay * 0.4) / 0.6, 0), 1)
+                if local <= 0 { continue }
+                let e = easeOutBack(local)
+
+                let n = sin(p.x * 3.1 + tt * 1.3) * cos(p.y * 2.7 - tt * 1.1)
+                      + 0.6 * sin(p.z * 4.0 + tt * 0.9 + p.x * 2)
+                let band = think > 0.01 ? think * exp(-pow((p.y - sweep) / 0.22, 2)) : 0
+                let rad = e * (1 + amp * n + 0.12 * band) * shrink
+
+                let ang = d.yaw + lvl * 0.4 + twist * p.y
+                let ca = cos(ang), sa = sin(ang)
+                let x = p.x * rad, y = p.y * rad, z = p.z * rad
+                let x1 = x * ca + z * sa
+                let z1 = -x * sa + z * ca
+                let y2 = y * cp - z1 * sp
+                let z2 = y * sp + z1 * cp
+
+                let depth = min(max((z2 / max(rad, 0.001) + 1) / 2, 0), 1)
+                let persp = 1 + 0.18 * z2
+                let px = Double(c.x) + x1 * R * persp
+                let py = Double(c.y) + y2 * R * persp
+                let dia = (1.1 + 1.3 * depth) * (0.4 + 0.6 * local) * (1 + 0.9 * band) * (1 - 0.5 * collapse)
+                let bucket = min(3, Int(depth * 4) + (band > 0.4 ? 1 : 0))
+                layers[bucket].addEllipse(in: CGRect(x: px - dia / 2, y: py - dia / 2, width: dia, height: dia))
+            }
+        }
+        let alphas = [0.22, 0.40, 0.65, 0.95]
+        for i in 0..<4 { ctx.fill(layers[i], with: .color(ink.opacity(alphas[i]))) }
+
+        // Точка-логотип: в начале растворяется в сферу, в конце — собирается обратно.
+        let checkP = easeOut(clamp01((d.doneT - 0.4) / 0.35))
+        let dotA = max(max(0, 1 - form * 2.2), pow(collapse, 2) * (1 - checkP))
+        if dotA > 0.01 {
+            let r = 3.6
+            ctx.fill(Path(ellipseIn: CGRect(x: Double(c.x) - r, y: Double(c.y) - r, width: r * 2, height: r * 2)),
+                     with: .color(ink.opacity(dotA)))
+        }
+
+        // Кольца: наружу на голос, внутрь при обработке.
+        if !calm && form > 0.6 && collapse < 0.05 {
+            let out = min(1, lvl * 1.5) * (1 - think)
+            for k in 0..<3 {
+                if out > 0.01 {
+                    let ph = (t * (0.3 + 0.45 * lvl) + Double(k) / 3).truncatingRemainder(dividingBy: 1)
+                    ring(&ctx, c: c, r: R * (1.12 + 0.5 * ph), alpha: pow(1 - ph, 1.6) * out * 0.55,
+                         wob: lvl, t: t, k: k, ink: ink)
+                }
+                if think > 0.01 {
+                    let ph = (t * 0.55 + Double(k) / 3).truncatingRemainder(dividingBy: 1)
+                    ring(&ctx, c: c, r: R * (1.62 - 0.5 * ph), alpha: sin(Double.pi * ph) * 0.45 * think,
+                         wob: 0.3, t: t, k: k, ink: ink)
+                }
+            }
+        }
+
+        // Успех: вспышка-кольцо и галочка, которая «рисуется».
+        if d.doneT > 0.38 {
+            let u = clamp01((d.doneT - 0.38) / 0.55)
+            if u < 1 {
+                ring(&ctx, c: c, r: R * (0.25 + 1.2 * u), alpha: 0.5 * (1 - u), wob: 0, t: t, k: 0, ink: ink)
+            }
+        }
+        if checkP > 0 {
+            let s = R * 0.62
+            var check = Path()
+            check.move(to: CGPoint(x: Double(c.x) - 0.55 * s, y: Double(c.y) + 0.05 * s))
+            check.addLine(to: CGPoint(x: Double(c.x) - 0.15 * s, y: Double(c.y) + 0.45 * s))
+            check.addLine(to: CGPoint(x: Double(c.x) + 0.60 * s, y: Double(c.y) - 0.40 * s))
+            ctx.stroke(check.trimmedPath(from: 0, to: checkP), with: .color(ink),
+                       style: StrokeStyle(lineWidth: 2.4, lineCap: .round, lineJoin: .round))
         }
     }
 }

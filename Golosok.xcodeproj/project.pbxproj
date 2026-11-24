@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		C4F2FF3F30166DA8006F9170 /* README.md in Resources */ = {isa = PBXBuildFile; fileRef = C4F2FF3E30166DA1006F9170 /* README.md */; };
+		C4F2FF4C30167000006F9170 /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = C4F2FF4B30167000006F9170 /* Sparkle */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -57,6 +58,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				C4F2FF4C30167000006F9170 /* Sparkle in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -126,6 +128,7 @@
 			);
 			name = Golosok;
 			packageProductDependencies = (
+				C4F2FF4B30167000006F9170 /* Sparkle */,
 			);
 			productName = Golosok;
 			productReference = C4F2FEF930165037006F9170 /* Golosok.app */;
@@ -210,6 +213,7 @@
 			mainGroup = C4F2FEF030165037006F9170;
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
+				C4F2FF4A30167000006F9170 /* XCRemoteSwiftPackageReference "Sparkle" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = C4F2FEFA30165037006F9170 /* Products */;
@@ -425,7 +429,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				MARKETING_VERSION = 1.13.11;
+				MARKETING_VERSION = 1.14.0;
 				PRODUCT_BUNDLE_IDENTIFIER = "kozak-developer.Golosok";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
@@ -453,7 +457,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				MARKETING_VERSION = 1.13.11;
+				MARKETING_VERSION = 1.14.0;
 				PRODUCT_BUNDLE_IDENTIFIER = "kozak-developer.Golosok";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
@@ -566,6 +570,25 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		C4F2FF4A30167000006F9170 /* XCRemoteSwiftPackageReference "Sparkle" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/sparkle-project/Sparkle.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 2.6.4;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		C4F2FF4B30167000006F9170 /* Sparkle */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = C4F2FF4A30167000006F9170 /* XCRemoteSwiftPackageReference "Sparkle" */;
+			productName = Sparkle;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = C4F2FEF130165037006F9170 /* Project object */;
 }

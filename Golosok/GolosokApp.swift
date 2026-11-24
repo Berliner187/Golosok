@@ -4,6 +4,19 @@ import AppKit
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // Один экземпляр на пользователя: два процесса дублируют горячую клавишу
+        // и каждый рисует свой островок, из-за чего панель «пропадает».
+        let pid = ProcessInfo.processInfo.processIdentifier
+        if let running = NSWorkspace.shared.runningApplications.first(where: {
+            $0.bundleIdentifier == Bundle.main.bundleIdentifier && $0.processIdentifier != pid
+        }) {
+            AppLogger.shared.warn("App", "Уже запущен другой экземпляр — активирую его и завершаюсь",
+                                  details: "pid \(running.processIdentifier)")
+            running.activate(from: .current, options: [.activateAllWindows])
+            NSApp.terminate(nil)
+            return
+        }
+
         let mic = PermissionManager.shared.isMicGranted
         let ax = PermissionManager.shared.isAccessibilityGranted
         AppLogger.shared.info("App", "Запуск Golosok",
@@ -31,6 +44,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 struct GolosokApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     @ObservedObject var audioCapture = AudioCapture.shared
+    @ObservedObject var theme = ThemeSettings.shared
+    @StateObject private var updater = AppUpdater()
 
     init() {
         LanguageSettings.shared.apply()
@@ -40,6 +55,8 @@ struct GolosokApp: App {
         WindowGroup {
             ContentView()
                 .frame(minWidth: 990, minHeight: 710)
+                .environmentObject(updater)
+                .preferredColorScheme(theme.current.colorScheme)
         }
         
         .commands {
