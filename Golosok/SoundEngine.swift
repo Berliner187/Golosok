@@ -1,5 +1,6 @@
 import Foundation
 import AVFoundation
+import CoreAudio
 
 // MARK: - Воспроизведение
 
@@ -15,7 +16,7 @@ final class SoundEngine: @unchecked Sendable {
     /// Рендерим на 12 кГц: в звуках нет ничего выше ~1 кГц, а считать в 4 раза меньше сэмплов
     /// критично для Debug-сборки. Приведение к частоте выхода делает миксер AVAudioEngine.
     private let sampleRate = 12_000.0
-    private let engine = AVAudioEngine()
+    private var engine = AVAudioEngine()          // var: пересоздаётся при смене устройства вывода
     private lazy var format = AVAudioFormat(standardFormatWithSampleRate: 12_000, channels: 2)!
     private var players: [AVAudioPlayerNode] = []
     private var busyUntil: [TimeInterval] = []
@@ -24,6 +25,12 @@ final class SoundEngine: @unchecked Sendable {
     private var pendingStartupOrigin: Date?
     private var warmedUp = false
     private var configured = false
+    private var restartWork: DispatchWorkItem?
+    private var configObserver: NSObjectProtocol?
+    private var startFailures = 0
+    private var boundOutputDevice: AudioObjectID = 0     // устройство вывода, к которому привязан текущий движок
+    private var deviceListener: AudioObjectPropertyListenerBlock?
+    private var startupPlayer: Int?                 // индекс плеера, на котором играет стартовый звук
 
     private init() {}
 
@@ -38,10 +45,18 @@ final class SoundEngine: @unchecked Sendable {
         DispatchQueue.global(qos: .userInteractive).async { [weak self] in
             let startup = Synth().renderStartup()
             DispatchQueue.main.async { self?.storeStartup(startup) }
-            DispatchQueue.global(qos: .utility).async {
-                for cue in Cue.allCases {
+            // Звуки записи нужны первыми (запись можно включить сразу после запуска), остальные — тихо в фоне,
+            // чтобы рендер не отбирал процессор у запуска записи.
+            DispatchQueue.global(qos: .userInitiated).async {
+                for cue in [Cue.start, Cue.stop] {
                     let sound = Synth().render(cue)
                     DispatchQueue.main.async { self?.store(cue, sound) }
+                }
+                DispatchQueue.global(qos: .background).async {
+                    for cue in Cue.allCases where cue != .start && cue != .stop {
+                        let sound = Synth().render(cue)
+                        DispatchQueue.main.async { self?.store(cue, sound) }
+                    }
                 }
             }
         }
@@ -82,9 +97,9 @@ final class SoundEngine: @unchecked Sendable {
         let offset = Date().timeIntervalSince(origin)
         if offset > 1.25 { return }          // удар «замка» (1.15 с) уже прошёл — в середину не вступаем
         if offset < 0.03 {
-            schedule(buf)
+            schedule(buf, startup: true)
         } else if let tail = suffix(of: buf, from: offset) {
-            schedule(tail)
+            schedule(tail, startup: true)
         }
     }
 
@@ -120,6 +135,43 @@ final class SoundEngine: @unchecked Sendable {
     private func configureIfNeeded() {
         guard !configured else { return }
         configured = true
+        observeOutputDevice()
+        buildGraph()
+    }
+
+    // MARK: Устройство вывода (наушники вынули / вставили)
+
+    private static func defaultOutputDevice() -> AudioObjectID {
+        var id = AudioObjectID(0)
+        var size = UInt32(MemoryLayout<AudioObjectID>.size)
+        var addr = AudioObjectPropertyAddress(mSelector: kAudioHardwarePropertyDefaultOutputDevice,
+                                              mScope: kAudioObjectPropertyScopeGlobal,
+                                              mElement: kAudioObjectPropertyElementMain)
+        _ = AudioObjectGetPropertyData(AudioObjectID(kAudioObjectSystemObject), &addr, 0, nil, &size, &id)
+        return id
+    }
+
+    /// Независимый от AVAudioEngine триггер: CoreAudio сам сообщает, что системное устройство вывода сменилось.
+    /// Уведомление движка о смене конфигурации приходит не всегда (при вынутых наушниках он может остаться
+    /// «запущенным», но привязанным к ушедшему устройству — и звук пропадает насовсем).
+    private func observeOutputDevice() {
+        var addr = AudioObjectPropertyAddress(mSelector: kAudioHardwarePropertyDefaultOutputDevice,
+                                              mScope: kAudioObjectPropertyScopeGlobal,
+                                              mElement: kAudioObjectPropertyElementMain)
+        let block: AudioObjectPropertyListenerBlock = { [weak self] _, _ in
+            AppLogger.shared.warn("Sound", "Устройство вывода звука сменилось — пересоздаю движок")
+            self?.scheduleRebuild(after: 0.3)
+        }
+        deviceListener = block
+        AudioObjectAddPropertyListenerBlock(AudioObjectID(kAudioObjectSystemObject), &addr, DispatchQueue.main, block)
+    }
+
+    /// Граф: 6 плееров → миксер → выход. Собирается при старте и при каждом пересоздании движка.
+    private func buildGraph() {
+        boundOutputDevice = SoundEngine.defaultOutputDevice()
+        players.removeAll()
+        busyUntil.removeAll()
+        startupPlayer = nil
         for _ in 0..<6 {
             let p = AVAudioPlayerNode()
             engine.attach(p)
@@ -127,28 +179,68 @@ final class SoundEngine: @unchecked Sendable {
             players.append(p)
             busyUntil.append(0)
         }
-        // Смена устройства вывода (наушники, AirPods, HDMI) останавливает движок — запускаем заново.
-        NotificationCenter.default.addObserver(
+        // Запас по уровню: когда звуки накладываются, сумма не должна доходить до 0 dBFS (клиппинг = хрип).
+        engine.mainMixerNode.outputVolume = 0.8
+
+        configObserver = NotificationCenter.default.addObserver(
             forName: .AVAudioEngineConfigurationChange, object: engine, queue: .main
-        ) { [weak self] _ in
-            guard let self else { return }
-            self.busyUntil = self.busyUntil.map { _ in 0 }
-            self.ensureRunning()
+        ) { [weak self] _ in self?.handleConfigurationChange() }
+    }
+
+    /// Смена устройства/формата (наушники вынули или вставили, AirPods, включение микрофона).
+    /// Уведомления приходят пачкой, пока устройство перестраивается, — реагируем один раз, с паузой.
+    private func handleConfigurationChange() {
+        AppLogger.shared.warn("Sound", "Аудио-конфигурация изменилась — пересоздаю движок звука",
+                              details: "AVAudioEngineConfigurationChange")
+        scheduleRebuild(after: 0.3)
+    }
+
+    private func scheduleRebuild(after delay: TimeInterval) {
+        restartWork?.cancel()
+        let work = DispatchWorkItem { [weak self] in self?.rebuildEngine() }
+        restartWork = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: work)
+    }
+
+    /// Полностью пересоздаёт движок. После смены устройства вывода старый граф остаётся привязанным
+    /// к ушедшему устройству: простой `start()` не помогает, и звук пропадает насовсем.
+    private func rebuildEngine() {
+        if let o = configObserver {
+            NotificationCenter.default.removeObserver(o)
+            configObserver = nil
+        }
+        for p in players { p.stop() }
+        engine.stop()
+        engine = AVAudioEngine()
+        buildGraph()
+        startEngine()
+    }
+
+    private func startEngine() {
+        engine.prepare()
+        do {
+            try engine.start()
+            startFailures = 0
+        } catch {
+            AppLogger.shared.warn("Sound", "Не удалось запустить аудиодвижок",
+                                  details: error.localizedDescription)
+            startFailures += 1
+            if startFailures <= 5 { scheduleRebuild(after: 0.5) }   // устройство ещё перестраивается — пробуем снова
         }
     }
 
     private func ensureRunning() {
         configureIfNeeded()
-        guard !engine.isRunning else { return }
-        engine.prepare()
-        do { try engine.start() }
-        catch {
-            AppLogger.shared.warn("Sound", "Не удалось запустить аудиодвижок",
-                                  details: error.localizedDescription)
+        // Страховка: если устройство вывода сменилось, а уведомления не пришли, — пересоздаём движок прямо сейчас.
+        if boundOutputDevice != SoundEngine.defaultOutputDevice() {
+            rebuildEngine()
+            return
         }
+        guard !engine.isRunning else { return }
+        startEngine()
     }
 
-    private func schedule(_ buf: AVAudioPCMBuffer) {
+    private func schedule(_ buf: AVAudioPCMBuffer, startup: Bool = false) {
         ensureRunning()
         guard engine.isRunning else { return }
         let now = ProcessInfo.processInfo.systemUptime
@@ -159,8 +251,32 @@ final class SoundEngine: @unchecked Sendable {
         }
         guard let i = idx else { return }
         busyUntil[i] = now + Double(buf.frameLength) / sampleRate
+        players[i].volume = 1
+
+        // Наложение: если стартовый звук ещё звучит, а включается другой, плавно приглушаем стартовый хвост —
+        // иначе сумма клиппирует, и это слышно как хрип.
+        if startup {
+            startupPlayer = i
+        } else if startupPlayer == i {
+            startupPlayer = nil
+        }
         players[i].scheduleBuffer(buf, at: nil, options: .interrupts, completionHandler: nil)
         players[i].play()
+    }
+
+    /// Плавно (≈150 мс) опускает громкость плеера до 25 %.
+    private func duck(_ index: Int) {
+        guard players.indices.contains(index) else { return }
+        let player = players[index]
+        let from = player.volume
+        guard from > 0.3 else { return }
+        for step in 1...10 {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.015 * Double(step)) { [weak self, weak player] in
+                guard let self, let player, self.players.indices.contains(index),
+                      self.players[index] === player, self.startupPlayer == index else { return }
+                player.volume = from + (0.25 - from) * Float(step) / 10
+            }
+        }
     }
 }
 
@@ -532,7 +648,7 @@ private final class Synth {
 
     /// Старт: набор → глубокий удар двери + доводчик → низкий «гул салона» → выдох. Совпадает с SplashTime.
     func renderStartup() -> RenderedSound {
-        var b = Mix(seconds: 4.2, sr: sr)
+        var b = Mix(seconds: 5.6, sr: sr)             // с запасом: хвост доживает до тишины, а не обрубается
         b.add(pluck(d(Synth.D3), tau: 0.06, attack: 0.006, maxDur: 0.5, partials: low), at: 0.10, gain: 0.10)  // точка
 
         for (s, pan) in riser(dur: 1.0, fStart: d(Synth.D2), octaves: 1.0, fc0: d(140), fc1: d(520), harm: 8) { // 0.15 → 1.15
@@ -549,13 +665,13 @@ private final class Synth {
                     partials: [(1, 1, 1), (2, 0.5, 0.7)]), at: T, gain: 0.55)                              // саб D1 (фиксированный)
         b.add(thock(f0: d(250), f1: d(185), tau: 0.02, noiseFc: d(500), noiseAmt: 0.25, click: 0), at: T + 0.09, gain: 0.28) // защёлка
         b.add(sweep(dur: 0.2, f0: d(70), f1: d(115)) { p in pow(sin(Double.pi * p), 2) }, at: T + 0.12, gain: 0.14)         // тяга
-        b.add(pad([d(Synth.D2), d(Synth.A2), d(Synth.D3), d(Synth.A3)], dur: 2.8, attack: 0.5, tau: 1.4, h2: 0.4),
+        b.add(pad([d(Synth.D2), d(Synth.A2), d(Synth.D3), d(Synth.A3)], dur: 4.2, attack: 0.5, tau: 1.1, h2: 0.4),
               at: T, gain: 0.55)
 
         let exhale = air(dur: 0.55, fc0: d(420), fc1: d(120), q: 0.8) { p in pow(sin(Double.pi * p), 1.5) }
         b.add(exhale, at: 3.05, gain: 0.16)            // выдох на уходе сплэша
 
-        return deepMaster(b, peak: 0.45, rt60: 2.0, wet: 0.30, fadeOut: 0.4)
+        return deepMaster(b, peak: 1.0, rt60: 1.8, wet: 0.30, fadeOut: 1.4)
     }
 
     func render(_ cue: SoundEngine.Cue) -> RenderedSound {

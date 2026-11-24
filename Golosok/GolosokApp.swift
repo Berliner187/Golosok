@@ -21,6 +21,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let ax = PermissionManager.shared.isAccessibilityGranted
         AppLogger.shared.info("App", "Запуск Golosok",
                               details: "версия \(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "?"), микрофон: \(mic), доступ AX: \(ax)")
+
+        // Прогрев на запуске (пока идёт сплэш): первый клик по «Борду» и «Настройкам» не тормозит.
+        DashboardStatsStore.shared.refresh(history: AudioCapture.shared.history)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
+            _ = MicrophoneStore.shared
+            _ = ModelStore.shared
+        }
+
         let hotKey = NativeHotKeyManager.shared
         hotKey.onHotKeyPressed = {
             if hotKey.mode == .pushToTalk {
@@ -37,6 +45,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }
         hotKey.register()
+    }
+
+    func applicationWillTerminate(_ notification: Notification) {
+        AudioCapture.shared.flushHistorySave()
     }
 }
 

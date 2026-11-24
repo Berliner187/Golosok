@@ -3,6 +3,7 @@ import AVFoundation
 import AppKit
 import UniformTypeIdentifiers
 import ServiceManagement
+import Observation
 
 // MARK: - Кастомная акустическая айдентика
 struct SoundEffect {
@@ -52,6 +53,15 @@ struct SubtitleCue: Equatable {
     let text: String
 }
 
+/// Состояние плеера отдельно от AudioCapture: тик playhead (10 Гц) не должен
+/// инвалидировать всех, кто подписан на AudioCapture.
+@Observable
+final class PlaybackState {
+    var playingItemId: UUID? = nil
+    var playheadTime: Double = 0
+    var isPlayerPlaying: Bool = false
+}
+
 class AudioCapture: NSObject, ObservableObject {
     static let shared = AudioCapture()
 
@@ -78,14 +88,24 @@ class AudioCapture: NSObject, ObservableObject {
     @Published var isDownloadingUpdate = false
     @Published var updateProgressText: String = ""
     private var downloadTask: URLSessionDownloadTask?
-
-    @Published var playingItemId: UUID? = nil
-    @Published var playheadTime: Double = 0
+    
+    let playback = PlaybackState()
+    var playingItemId: UUID? {
+        get { playback.playingItemId }
+        set { playback.playingItemId = newValue }
+    }
+    var playheadTime: Double {
+        get { playback.playheadTime }
+        set { playback.playheadTime = newValue }
+    }
+    var isPlayerPlaying: Bool {
+        get { playback.isPlayerPlaying }
+        set { playback.isPlayerPlaying = newValue }
+    }
+    
     private var audioPlayer: AVAudioPlayer?
     private var playbackTimer: Timer?
     private var preloadedPlayerId: UUID?
-
-    @Published var isPlayerPlaying: Bool = false
 
     private var meterSamples: [Float] = Array(repeating: 0.15, count: 18)
 
@@ -1298,10 +1318,34 @@ func checkUpdates(force: Bool = false) {
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         return dir.appendingPathComponent("history.json")
     }
+    
+    private let historySaveQueue = DispatchQueue(label: "com.golosok.history.save", qos: .utility)
+    private var pendingHistorySave: DispatchWorkItem?
+
     private func saveHistory() {
-        guard let url = historyStoreURL(), let data = try? JSONEncoder().encode(history) else { return }
-        try? data.write(to: url, options: .atomic)
+        guard let url = historyStoreURL() else { return }
+        let snapshot = history   // копия по значению, дёшево
+        pendingHistorySave?.cancel()
+        let work = DispatchWorkItem {
+            guard let data = try? JSONEncoder().encode(snapshot) else { return }
+            try? data.write(to: url, options: .atomic)
+        }
+        pendingHistorySave = work
+        historySaveQueue.asyncAfter(deadline: .now() + 0.4, execute: work)
     }
+
+    /// Дописать на диск немедленно (вызывается при выходе из приложения).
+    func flushHistorySave() {
+        guard let url = historyStoreURL() else { return }
+        pendingHistorySave?.cancel()
+        pendingHistorySave = nil
+        let snapshot = history
+        historySaveQueue.sync {
+            guard let data = try? JSONEncoder().encode(snapshot) else { return }
+            try? data.write(to: url, options: .atomic)
+        }
+    }
+    
     private func loadHistory() {
         guard let url = historyStoreURL() else { return }
         var items: [TranscriptionItem] = []

@@ -316,8 +316,19 @@ struct DashboardView: View {
     
     private func apply() {
         let store = DashboardStatsStore.shared
-        let s = store.value(for: audioCapture.history, range: chartRange)
-        if s != stats { stats = s }
+        if let s = store.cached(for: chartRange) {
+            if s != stats { stats = s }
+        } else {
+            // Кэш ещё не готов: считаем в фоне, главный поток не блокируем.
+            let history = audioCapture.history
+            let range = chartRange
+            DispatchQueue.global(qos: .userInitiated).async {
+                let s = DashboardCalculator.calculate(from: history, range: range)
+                DispatchQueue.main.async {
+                    if range == chartRange { stats = s }
+                }
+            }
+        }
         store.refresh(history: audioCapture.history)
     }
 }
@@ -327,6 +338,7 @@ final class DashboardStatsStore: ObservableObject {
     @Published private(set) var byRange: [StatsRange: DashboardCalculator] = [:]
     private var computedSignature = 0
     private let queue = DispatchQueue(label: "golosok.dashboard.calc", qos: .utility)
+    func cached(for range: StatsRange) -> DashboardCalculator? { byRange[range] }
 
     func value(for history: [TranscriptionItem], range: StatsRange) -> DashboardCalculator {
         if let s = byRange[range] { return s }

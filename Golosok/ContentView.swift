@@ -64,8 +64,9 @@ struct NativeTextView: NSViewRepresentable {
         let scrollView = NSTextView.scrollableTextView()
         guard let textView = scrollView.documentView as? NSTextView else { return scrollView }
         textView.isEditable = false; textView.isSelectable = true; textView.drawsBackground = false
-        textView.font = NSFont.systemFont(ofSize: 15, weight: .regular); textView.textColor = NSColor(Color.uiInk)
-        textView.textContainerInset = NSSize(width: 0, height: 10)
+        textView.font = NoteTypography.font; textView.textColor = NSColor(Color.uiInk)
+        textView.defaultParagraphStyle = NoteTypography.paragraphStyle
+        textView.textContainerInset = NSSize(width: 0, height: 12)
         textView.unregisterDraggedTypes()
         textView.delegate = context.coordinator
         context.coordinator.onSelectionChange = onSelectionChange
@@ -80,6 +81,8 @@ struct NativeTextView: NSViewRepresentable {
         if textChanged {
             textView.string = text
             textView.textColor = NSColor(Color.uiInk)
+            textView.textStorage?.addAttribute(.paragraphStyle, value: NoteTypography.paragraphStyle,
+                                               range: NSRange(location: 0, length: (text as NSString).length))
             coordinator.appliedSearchRanges.removeAll()
             coordinator.lastSearchRanges = []
             coordinator.lastMatchPosition = -1
@@ -182,29 +185,18 @@ struct SyncedPlayerView: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 10) {
-                Button(action: { audioCapture.toggleSyncedPlayback(for: itemID) }) {
-                    Image(systemName: isPlaying ? "pause.fill" : "play.fill")
-                        .font(.system(size: 12, weight: .bold))
-                        .frame(width: 26, height: 26)
-                }
-                .buttonStyle(.borderedProminent)
-                .tint(.blue)
-
-                Text(formatTime(playhead))
-                    .font(.system(size: 11, weight: .medium, design: .monospaced))
-                    .foregroundColor(.uiMidGray)
-
-                UISeekSlider(value: Binding(
+        VStack(alignment: .leading, spacing: 16) {
+            NotePlayerBar(
+                isPlaying: isPlaying,
+                playhead: Binding(
                     get: { playhead },
                     set: { audioCapture.seekSynced(to: $0, for: itemID) }
-                ), range: 0...max(audioDuration, 0.01))
-
-                Text(formatTime(audioDuration))
-                    .font(.system(size: 11, weight: .medium, design: .monospaced))
-                    .foregroundColor(.uiMidGray)
-            }
+                ),
+                duration: audioDuration,
+                playheadText: formatTime(playhead),
+                durationText: formatTime(audioDuration),
+                onToggle: { audioCapture.toggleSyncedPlayback(for: itemID) }
+            )
 
             SyncedTextView(text: text, words: words, currentWordIndex: currentWordIndex,
                            searchMatchWordIndices: searchMatchWordIndices,
@@ -213,6 +205,7 @@ struct SyncedPlayerView: View {
                 audioCapture.seekSynced(to: time, for: itemID)
             }
         }
+        .frame(maxWidth: NoteTypography.maxReadingWidth, alignment: .leading)
     }
 
     private func formatTime(_ seconds: Double) -> String {
@@ -239,9 +232,10 @@ struct SyncedTextView: NSViewRepresentable {
         textView.isSelectable = true
         textView.drawsBackground = false
         textView.isAutomaticLinkDetectionEnabled = false
-        textView.font = NSFont.systemFont(ofSize: 15, weight: .regular)
+        textView.font = NoteTypography.font
         textView.textColor = NSColor(Color.uiInk)
-        textView.textContainerInset = NSSize(width: 0, height: 10)
+        textView.defaultParagraphStyle = NoteTypography.paragraphStyle
+        textView.textContainerInset = NSSize(width: 0, height: 12)
         textView.linkTextAttributes = [
             .foregroundColor: NSColor(Color.uiInk),
             .underlineStyle: 0,
@@ -268,8 +262,9 @@ struct SyncedTextView: NSViewRepresentable {
             coordinator.yellowedWordIndices.removeAll()
 
             let attributed = NSMutableAttributedString(string: text, attributes: [
-                .font: NSFont.systemFont(ofSize: 15, weight: .regular),
-                .foregroundColor: NSColor(Color.uiInk)
+                .font: NoteTypography.font,
+                .foregroundColor: NSColor(Color.uiInk),
+                .paragraphStyle: NoteTypography.paragraphStyle
             ])
             for (i, range) in coordinator.cachedRanges.enumerated() where i < words.count && range.location != NSNotFound {
                 let url = URL(string: "golosok://seek/\(words[i].start)")
@@ -803,9 +798,9 @@ struct ContentView: View {
                             let formattedDate = DateFormattingHelper.formatRussianDate(selected.date)
                             let dateHeader: () -> AnyView = {
                                 AnyView(
-                                    HStack(alignment: .firstTextBaseline, spacing: 6) {
-                                        Text(formattedDate.date).font(UIStyleFont.display(size: 16, weight: .bold)).foregroundColor(.uiInk).lineLimit(1)
-                                        if !formattedDate.time.isEmpty { Text(formattedDate.time).font(UIStyleFont.body(size: 11, weight: .medium)).foregroundColor(.uiMidGray).padding(.horizontal, 6).padding(.vertical, 2).background(Color.uiCanvas).cornerRadius(6) }
+                                    HStack(alignment: .firstTextBaseline, spacing: 8) {
+                                        Text(formattedDate.date).font(UIStyleFont.display(size: 18, weight: .semibold)).foregroundColor(.uiInk).lineLimit(1)
+                                        if !formattedDate.time.isEmpty { Text(formattedDate.time).font(UIStyleFont.body(size: 13, weight: .regular)).foregroundColor(.uiMidGray).monospacedDigit() }
                                     }
                                 )
                             }
@@ -813,8 +808,10 @@ struct ContentView: View {
                                 AnyView(
                                     HStack(spacing: 8) {
                                         CopyFeedbackButton(textToCopy: selected.text)
-                                        EditToggleButton(isEditing: isEditing) {
-                                            if isEditing { commitEditing(for: selected) } else { beginEditing(selected) }
+                                        if isEditing {
+                                            EditToggleButton(isEditing: true) { commitEditing(for: selected) }
+                                        } else {
+                                            NoteIconButton(icon: "square.and.pencil", help: "Редактировать") { beginEditing(selected) }
                                         }
                                         UIDropdownMenu(items: {
                                             var arr: [UIDropdownItem] = promptStore.templates.map { t in
@@ -844,10 +841,11 @@ struct ContentView: View {
                                             .action("Субтитры (.srt)") { audioCapture.exportTranscription(selected, format: "srt") },
                                             .action("Субтитры (.vtt)") { audioCapture.exportTranscription(selected, format: "vtt") }
                                         ]) {
-                                            HStack(spacing: 4) { Image(systemName: "square.and.arrow.up").font(.system(size: 11, weight: .medium)); Text("Экспорт").font(UIStyleFont.body(size: 13, weight: .medium)); Image(systemName: "chevron.down").font(.system(size: 8, weight: .bold)).foregroundColor(.uiMidGray) }
-                                            .lineLimit(1).foregroundColor(.uiInk).padding(.vertical, 8).padding(.horizontal, 14).background(Color.uiPaper).cornerRadius(18).overlay(RoundedRectangle(cornerRadius: 18).stroke(Color.uiHairline, lineWidth: 1))
-                                        }.fixedSize(horizontal: true, vertical: false)
-                                        UIDestructiveButton(title: "Удалить") { itemToDelete = selected.id; showingDeleteAlert = true }
+                                            NoteIconLabel(icon: "square.and.arrow.up")
+                                        }
+                                        .fixedSize(horizontal: true, vertical: false)
+                                        .help(String(localized: "Экспорт"))
+                                        NoteIconButton(icon: "trash", help: "Удалить", tint: .uiMidGray, hoverTint: .uiEmber) { itemToDelete = selected.id; showingDeleteAlert = true }
                                     }.fixedSize(horizontal: true, vertical: false).layoutPriority(1)
                                 )
                             }
@@ -866,43 +864,23 @@ struct ContentView: View {
                                 }
                             }
                             
-                            HStack(spacing: 8) {
-                                MetadataPill(icon: "waveform", text: selected.duration, color: Color.blue)
-                                MetadataPill(icon: "bolt.fill", text: selected.formattedSpeedup, color: Color.orange)
-                                MetadataPill(icon: "text.alignleft", text: "\(selected.text.count) " + String(localized: "зн"), color: Color(hex: "#10B981"))
+                            HStack(spacing: 12) {
                                 let readMin = max(1, selected.text.count / 900)
-                                MetadataPill(icon: "book.fill", text: "~\(readMin) " + String(localized: "мин чтения"), color: Color.purple)
+                                NoteMetaLine(
+                                    parts: (selectedTimings == nil ? [selected.duration] : []) + ["\(selected.text.count) " + String(localized: "зн")],
+                                    tooltip: "\(selected.duration)  ·  \(selected.formattedSpeedup)  ·  ~\(readMin) " + String(localized: "мин чтения")
+                                )
                                 if selectedTimings == nil && audioCapture.hasAudioFile(for: selected) {
-                                    Button(action: { audioCapture.toggleAudioPlayback(for: selected) }) {
-                                        HStack(spacing: 4) { Image(systemName: audioCapture.playingItemId == selected.id ? "pause.fill" : "play.fill").font(.system(size: 9, weight: .bold)); Text(audioCapture.playingItemId == selected.id ? LocalizedStringKey("Пауза") : LocalizedStringKey("Слушать голос")).font(.system(size: 10, weight: .bold, design: .rounded)) }
-                                        .foregroundColor(.blue).padding(.horizontal, 8).padding(.vertical, 4).background(Color.blue.opacity(0.12)).cornerRadius(6)
-                                    }.buttonStyle(.plain)
+                                    NoteListenButton(isPlaying: audioCapture.playingItemId == selected.id) {
+                                        audioCapture.toggleAudioPlayback(for: selected)
+                                    }
                                 }
                                 Spacer(minLength: 8)
                                 if !isEditing && !isSearchBarVisible {
-                                    Button(action: toggleSearchBar) {
-                                        HStack(spacing: 5) {
-                                            Image(systemName: "magnifyingglass")
-                                                .font(.system(size: 9, weight: .semibold))
-                                            Text(LocalizedStringKey("Поиск"))
-                                                .font(.system(size: 10, weight: .medium, design: .rounded))
-                                            Text("⌘F")
-                                                .font(.system(size: 9, weight: .semibold, design: .rounded))
-                                                .foregroundColor(.uiMidGray)
-                                                .padding(.horizontal, 5).padding(.vertical, 1)
-                                                .background(Color.uiCanvas)
-                                                .cornerRadius(4)
-                                                .overlay(RoundedRectangle(cornerRadius: 4).stroke(Color.uiHairline, lineWidth: 0.5))
-                                        }
-                                        .foregroundColor(.uiMidGray)
-                                        .contentShape(Rectangle())
-                                    }
-                                    .buttonStyle(.plain)
-                                    .help(String(localized: "Поиск по стенограмме (⌘F)"))
+                                    NoteSearchHint(action: toggleSearchBar)
                                 }
                             }
-                            
-                            Divider().background(Color.uiHairline).padding(.vertical, 4)
+
                             if isSearchBarVisible && !isEditing {
                                 transcriptSearchBar
                                     .transition(.move(edge: .top).combined(with: .opacity))
@@ -935,6 +913,7 @@ struct ContentView: View {
                                                onSelectionChange: { range, rect in
                                     handleNoteSelectionChange(range: range, screenRect: rect)
                                 })
+                                .frame(maxWidth: NoteTypography.maxReadingWidth, alignment: .leading)
                             }
                         }
                     }
@@ -1449,21 +1428,27 @@ struct HistoryCard: View {
     let isSelected: Bool
     
     var body: some View {
+        let unread = item.isUnread == true
+        let formatted = DateFormattingHelper.formatRussianDate(item.date)
         VStack(alignment: .leading, spacing: 6) {
-            HStack(alignment: .firstTextBaseline) {
-                // СИНЯЯ ТОЧКА НЕПРОЧИТАННОГО!
-                if item.isUnread == true {
-                    Circle()
-                        .fill(Color.blue)
-                        .frame(width: 6, height: 6)
-                }
-                
-                let formatted = DateFormattingHelper.formatRussianDate(item.date)
+            HStack(alignment: .firstTextBaseline, spacing: 0) {
+                // Синяя точка непрочитанного. Она не пропадает из вёрстки, а плавно схлопывается:
+                // гаснет и сжимается, а дата за ней так же плавно съезжает влево.
+                Circle()
+                    .fill(Color.blue)
+                    .frame(width: 6, height: 6)
+                    .scaleEffect(unread ? 1 : 0.3)
+                    .opacity(unread ? 1 : 0)
+                    .frame(width: unread ? 6 : 0, alignment: .leading)
+                    .padding(.trailing, unread ? 8 : 0)
                 Text(formatted.date).font(UIStyleFont.body(size: 12, weight: .semibold)).foregroundColor(isSelected ? .uiInk : .uiInkSoft)
-                if !formatted.time.isEmpty { Text(formatted.time).font(UIStyleFont.body(size: 10, weight: .regular)).foregroundColor(isSelected ? .uiMidGray : .uiMidGray.opacity(0.8)) }
-                Spacer()
+                if !formatted.time.isEmpty {
+                    Text(formatted.time).font(UIStyleFont.body(size: 10, weight: .regular)).foregroundColor(isSelected ? .uiMidGray : .uiMidGray.opacity(0.8)).padding(.leading, 8)
+                }
+                Spacer(minLength: 8)
                 Text(item.duration).font(UIStyleFont.body(size: 10, weight: .regular)).foregroundColor(.uiMidGray)
             }
+            .animation(.spring(response: 0.38, dampingFraction: 0.86), value: unread)
             Text(item.text).font(UIStyleFont.body(size: 13, weight: .regular)).foregroundColor(isSelected ? .uiInk : .uiInkSoft).lineLimit(2)
         }
         .padding(12).background(isSelected ? Color.uiPaper : Color.clear).cornerRadius(12)
