@@ -49,6 +49,7 @@ struct GolosokApp: App {
 
     init() {
         LanguageSettings.shared.apply()
+        SoundEngine.shared.warmUp()
     }
     
     var body: some Scene {

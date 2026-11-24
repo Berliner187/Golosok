@@ -12,6 +12,7 @@ struct SoundEffect {
     static func playCopy() { LuxurySoundSynth.shared.playCopy() }
     static func playDelete() { LuxurySoundSynth.shared.playDelete() }
     static func playWarning() { LuxurySoundSynth.shared.playWarning() }
+    static func playStop() { LuxurySoundSynth.shared.playStop() }
 }
 
 struct UpdateInfo: Codable {
@@ -292,6 +293,7 @@ class AudioCapture: NSObject, ObservableObject {
         timer?.invalidate()
         timer = nil
         teardownCaptureSession()
+        SoundEffect.playStop()
 
         let durationSec = Date().timeIntervalSince(startTime ?? Date())
 

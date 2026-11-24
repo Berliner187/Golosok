@@ -460,6 +460,7 @@
       }
     },
     "APPLE SILICON • GIGAAM V3 • NEURAL ENGINE" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -1450,6 +1451,22 @@
         }
       }
     },
+    "Всё время" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "All time"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Всё время"
+          }
+        }
+      }
+    },
     "Все сохраненные транскрипции будут удалены безвозвратно. Это действие нельзя отменить." : {
       "localizations" : {
         "en" : {
@@ -1478,22 +1495,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "ВСЕГО ЗАМЕТОК"
-          }
-        }
-      }
-    },
-    "Всё время" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "All time"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Всё время"
           }
         }
       }
@@ -1612,6 +1613,7 @@
       }
     },
     "Г О Л О С О К" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -1644,6 +1646,7 @@
       }
     },
     "Голосовой ввод и транскрибация на Вашем Mac" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {

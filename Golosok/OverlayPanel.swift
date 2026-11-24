@@ -331,34 +331,37 @@ struct FloatingWidgetView: View {
 
     private static let cardRadius: CGFloat = 28
 
-    private var isCard: Bool {
-        if case .warning = state.phase { return false }
-        return true
-    }
-
     private var cardWidth: CGFloat {
         switch state.phase {
         case .recording, .processing: return 168
+        case .warning: return 232
         default: return 104
         }
     }
 
     var body: some View {
         phaseContent
-            .padding(.horizontal, isCard ? 0 : OverlayMetrics.horizontalPadding)
-            .frame(width: isCard ? cardWidth : 240,
-                   height: isCard ? OverlayMetrics.cardHeight : OverlayMetrics.pillHeight)
-            .background { islandBackground }
-            .overlay { islandBorder }
+            .frame(width: cardWidth, height: OverlayMetrics.cardHeight)
+            .background {
+                RoundedRectangle(cornerRadius: Self.cardRadius, style: .continuous)
+                    .fill(.ultraThinMaterial)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: Self.cardRadius, style: .continuous)
+                            .fill((scheme == .dark ? Color.black : Color.white).opacity(OverlayMetrics.cardTint))
+                    )
+            }
+            .overlay {
+                RoundedRectangle(cornerRadius: Self.cardRadius, style: .continuous)
+                    .stroke((scheme == .dark ? Color.white : Color.black).opacity(0.10), lineWidth: 0.8)
+            }
             .animation(.spring(response: 0.45, dampingFraction: 0.82), value: cardWidth)
-            .animation(.spring(response: 0.45, dampingFraction: 0.82), value: isCard)
             .scaleEffect(state.isShown ? 1 : 0.72, anchor: .top)
             .offset(y: state.isShown ? 0 : -10)
             .opacity(state.isShown ? 1 : 0)
             .animation(
                 state.isShown
                     ? .spring(response: 0.42, dampingFraction: 0.68)
-                    : .easeIn(duration: 0.22),
+                    : .easeInOut(duration: 0.3),
                 value: state.isShown
             )
             .frame(width: OverlayMetrics.panelSize.width,
@@ -367,38 +370,10 @@ struct FloatingWidgetView: View {
     }
 
     @ViewBuilder
-    private var islandBackground: some View {
-        if isCard {
-            RoundedRectangle(cornerRadius: Self.cardRadius, style: .continuous)
-                .fill(.ultraThinMaterial)
-                .overlay(
-                    RoundedRectangle(cornerRadius: Self.cardRadius, style: .continuous)
-                        .fill((scheme == .dark ? Color.black : Color.white).opacity(OverlayMetrics.cardTint))
-                )
-        } else {
-            PillGlassBackground()
-        }
-    }
-
-    @ViewBuilder
-    private var islandBorder: some View {
-        if isCard {
-            RoundedRectangle(cornerRadius: Self.cardRadius, style: .continuous)
-                .stroke((scheme == .dark ? Color.white : Color.black).opacity(0.10), lineWidth: 0.8)
-        } else {
-            PillBorder(phase: state.phase)
-        }
-    }
-
-    @ViewBuilder
     private var phaseContent: some View {
-        switch state.phase {
-        case .idle:
+        if case .idle = state.phase {
             EmptyView()
-        case .warning(let message):
-            WarningOverlayContent(message: message)
-                .transition(.opacity)
-        default:
+        } else {
             OrbCardContent(state: state)
         }
     }
@@ -448,7 +423,7 @@ private struct PillBorder: View {
         }
     }
 }
-private enum OrbMode: Equatable { case listening, thinking, done }
+private enum OrbMode: Equatable { case listening, thinking, done, failed }
 
 private struct OrbCardContent: View {
     let state: OverlayPanelState
@@ -462,15 +437,17 @@ private struct OrbCardContent: View {
         switch state.phase {
         case .recording: return .listening
         case .success: return .done
+        case .warning: return .failed
         default: return .thinking
         }
     }
 
-    /// Средняя громкость 0...1 (нижний порог метеринга — 0.15).
+    /// Громкость только во время записи; в остальных фазах метеринг не нужен.
     private var level: Double {
-        guard !state.samples.isEmpty else { return 0 }
+        guard state.phase == .recording, !state.samples.isEmpty else { return 0 }
         let avg = state.samples.reduce(0, +) / Float(state.samples.count)
-        return Double(min(max((avg - 0.15) / 0.85, 0), 1))
+        let raw = min(max((avg - 0.15) / 0.85, 0), 1)
+        return pow(Double(raw), 0.6)
     }
 
     var body: some View {
@@ -499,6 +476,15 @@ private struct OrbCardContent: View {
                 .contentTransition(.numericText(value: progress))
                 .frame(width: 56, alignment: .leading)
                 .transition(.opacity)
+        case .warning(let message):
+            Text(message)
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(ink.opacity(0.9))
+                .lineLimit(2)
+                .multilineTextAlignment(.leading)
+                .frame(width: 150, alignment: .leading)
+                .padding(.trailing, 10)
+                .transition(.opacity)
         default:
             EmptyView()
         }
@@ -512,29 +498,43 @@ private struct OrbCardContent: View {
 // MARK: - Sphere
 
 private final class OrbDriver {
-    var level = 0.0      // сглаженная громкость
-    var think = 0.0      // 0...1 — режим обработки
-    var collapse = 0.0   // 0...1 — схлопывание в точку
-    var doneT = 0.0      // секунд с начала успеха
-    var yaw = 0.0        // накопленный угол вращения (без рывков при смене скорости)
+    var level = 0.0
+    var think = 0.0
+    var collapse = 0.0
+    var doneT = 0.0
+    var failT = 0.0
+    var flat = 0.0       // 0...1 — сплющивание в линию
+    var yaw = 0.0
     private var last = 0.0
     private var doneStart: Double?
+    private var failStart: Double?
 
     func step(target: Double, mode: OrbMode, now: Double, calm: Bool) {
         let dt = min(max(now - last, 0), 0.1)
         last = now
-        // Быстрая атака, медленное затухание.
-        level += (target - level) * (1 - exp(-(target > level ? 14.0 : 5.0) * dt))
+        level += (target - level) * (1 - exp(-(target > level ? 22.0 : 5.0) * dt))
         think += ((mode == .thinking ? 1.0 : 0.0) - think) * (1 - exp(-4 * dt))
-        if !calm { yaw += dt * (0.42 + 0.9 * think) }
+        if !calm { yaw += dt * (0.42 + 0.9 * think) * (mode == .failed ? 0.3 : 1) }
+
         if mode == .done {
             if doneStart == nil { doneStart = now }
             doneT = now - (doneStart ?? now)
-            collapse = min(1, doneT / 0.4)
+            collapse = min(1, doneT / 0.22)
         } else {
             doneStart = nil
             doneT = 0
             collapse += (0 - collapse) * (1 - exp(-8 * dt))
+        }
+
+        if mode == .failed {
+            if failStart == nil { failStart = now }
+            failT = now - (failStart ?? now)
+            let u = min(max((failT - 0.15) / 0.5, 0), 1)
+            flat = 1 - pow(1 - u, 3)
+        } else {
+            failStart = nil
+            failT = 0
+            flat += (0 - flat) * (1 - exp(-8 * dt))
         }
     }
 }
@@ -617,6 +617,9 @@ private struct SphereOrb: View {
         let twist = think * 1.5 * sin(tt * 1.1)      // скручивание в спираль
         let sweep = sin(tt * 1.7)                    // положение полосы-сканера
         let shrink = 1 - pow(collapse, 2)
+        
+        let flat = d.flat
+        let shake = calm ? 0 : sin(d.failT * 38) * 3.5 * exp(-d.failT * 5)
 
         var layers = [Path](repeating: Path(), count: 4)
         if collapse < 0.98 {
@@ -640,15 +643,21 @@ private struct SphereOrb: View {
 
                 let depth = min(max((z2 / max(rad, 0.001) + 1) / 2, 0), 1)
                 let persp = 1 + 0.18 * z2
-                let px = Double(c.x) + x1 * R * persp
-                let py = Double(c.y) + y2 * R * persp
+                let yf = y2 * (1 - 0.95 * flat) + flat * 0.05 * sin(x1 * 6 + tt * 2.6)
+                let xf = x1 * (1 + 0.4 * flat)
+                let px = Double(c.x) + xf * R * persp + shake
+                let py = Double(c.y) + yf * R * persp
                 let dia = (1.1 + 1.3 * depth) * (0.4 + 0.6 * local) * (1 + 0.9 * band) * (1 - 0.5 * collapse)
                 let bucket = min(3, Int(depth * 4) + (band > 0.4 ? 1 : 0))
                 layers[bucket].addEllipse(in: CGRect(x: px - dia / 2, y: py - dia / 2, width: dia, height: dia))
             }
         }
         let alphas = [0.22, 0.40, 0.65, 0.95]
-        for i in 0..<4 { ctx.fill(layers[i], with: .color(ink.opacity(alphas[i]))) }
+        let amber = Color(hex: "#F59E0B")
+        for i in 0..<4 {
+            ctx.fill(layers[i], with: .color(ink.opacity(alphas[i] * (1 - flat))))
+            if flat > 0.01 { ctx.fill(layers[i], with: .color(amber.opacity(alphas[i] * flat))) }
+        }
 
         // Точка-логотип: в начале растворяется в сферу, в конце — собирается обратно.
         let checkP = easeOut(clamp01((d.doneT - 0.4) / 0.35))
@@ -783,23 +792,6 @@ private struct LiquidWaveform: View {
                 )
                 previous = CGPoint(x: x, y: y)
             }
-        }
-    }
-}
-
-private struct WarningOverlayContent: View {
-    let message: String
-
-    var body: some View {
-        HStack(spacing: 7) {
-            Image(systemName: "exclamationmark.triangle.fill")
-                .font(.system(size: 13, weight: .bold))
-                .foregroundStyle(Color(hex: "#F59E0B"))
-
-            Text(message)
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(.primary)
-                .lineLimit(1)
         }
     }
 }

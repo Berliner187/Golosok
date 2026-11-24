@@ -15,5 +15,9 @@
 			</dict>
 		</dict>
 	</dict>
+	<key>SUEnableAutomaticChecks</key>
+	<true/>
+	<key>SUFeedURL</key>
+	<string>https://golosok.space/appcast.xml</string>
 </dict>
 </plist>
