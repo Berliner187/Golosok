@@ -35,9 +35,17 @@ final class MicrophoneStore: ObservableObject {
         }
     }
 
+    /// Перечисление устройств (CoreMediaIO) занимает десятки–сотни мс. На главном потоке во время
+    /// запуска оно роняло кадры сплэша. DiscoverySession потокобезопасна — считаем в фоне.
     func refreshDevices() {
-        let session = AVCaptureDevice.DiscoverySession(deviceTypes: [.microphone, .externalUnknown], mediaType: .audio, position: .unspecified)
-        devices = session.devices
+        DispatchQueue.global(qos: .utility).async { [weak self] in
+            let found = Self.discoverDevices()
+            DispatchQueue.main.async { self?.devices = found }
+        }
+    }
+
+    private static func discoverDevices() -> [AVCaptureDevice] {
+        AVCaptureDevice.DiscoverySession(deviceTypes: [.microphone, .externalUnknown], mediaType: .audio, position: .unspecified).devices
     }
 
     // MARK: CoreAudio: transport type и UID (совпадает с AVCaptureDevice.uniqueID)
@@ -86,6 +94,8 @@ final class MicrophoneStore: ObservableObject {
     // MARK: Разрешение устройства для записи
 
     func resolveDevice() -> AVCaptureDevice? {
+        // Фоновая загрузка списка ещё не успела (очень ранний вызов) — один раз считаем синхронно.
+        if devices.isEmpty { devices = Self.discoverDevices() }
         let defaultDevice = AVCaptureDevice.default(for: .audio)
         switch mode {
         case .systemDefault:

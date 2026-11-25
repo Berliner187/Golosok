@@ -20,7 +20,7 @@
     " • 2026" : {
 
     },
-    "/ %lld" : {
+    "—" : {
 
     },
     "%.0f мин" : {
@@ -89,7 +89,18 @@
         }
       }
     },
+    "%@ · заметок: %d" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ · заметок: %2$d"
+          }
+        }
+      }
+    },
     "%@ %lld %@ %@" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -101,6 +112,16 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "%1$@ %2$lld %3$@ %4$@"
+          }
+        }
+      }
+    },
+    "%d слов · ≈ %d стр. А4" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$d слов · ≈ %2$d стр. А4"
           }
         }
       }
@@ -117,6 +138,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%lld"
+          }
+        }
+      }
+    },
+    "%lld / %lld" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$lld / %2$lld"
+          }
+        }
+      }
+    },
+    "%lld из %lld" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$lld из %2$lld"
           }
         }
       }
@@ -149,6 +190,9 @@
           }
         }
       }
+    },
+    "×%lld" : {
+
     },
     "⌘ + O" : {
       "localizations" : {
@@ -568,6 +612,7 @@
       }
     },
     "Design by Kozak" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -1014,6 +1059,7 @@
       }
     },
     "WPM (ТЕМП)" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -1193,6 +1239,16 @@
         }
       }
     },
+    "Активных дней: %d из %d" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Активных дней: %1$d из %2$d"
+          }
+        }
+      }
+    },
     "Акустический отклик при активации, копировании и ошибках" : {
       "localizations" : {
         "en" : {
@@ -1257,6 +1313,9 @@
         }
       }
     },
+    "больше" : {
+
+    },
     "Больше" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -1306,6 +1365,9 @@
         }
       }
     },
+    "быстрее речи" : {
+
+    },
     "Быстрый ввод" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -1324,6 +1386,7 @@
       }
     },
     "ВАШ ТЕМП" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -1340,6 +1403,7 @@
       }
     },
     "ВЕЧЕР" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -1436,7 +1500,11 @@
         }
       }
     },
+    "ВРЕМЯ РЕЧИ" : {
+
+    },
     "ВС" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -1485,6 +1553,7 @@
       }
     },
     "ВСЕГО ЗАМЕТОК" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -1553,6 +1622,7 @@
       }
     },
     "ВТ" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -1569,6 +1639,7 @@
       }
     },
     "ВЫ ДОСТИГЛИ ВЕРШИНЫ" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -1583,6 +1654,9 @@
           }
         }
       }
+    },
+    "ВЫВОДЫ" : {
+
     },
     "Выдайте доступ в Универсальном доступе macOS" : {
       "localizations" : {
@@ -1794,9 +1868,6 @@
         }
       }
     },
-    "Дата" : {
-
-    },
     "Дашборд" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -1864,6 +1935,7 @@
       }
     },
     "День" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -1880,6 +1952,7 @@
       }
     },
     "ДЕНЬ" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -1896,6 +1969,7 @@
       }
     },
     "ДИАПАЗОН" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -1948,6 +2022,7 @@
       }
     },
     "ДО" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -1994,6 +2069,9 @@
           }
         }
       }
+    },
+    "за всё время" : {
+
     },
     "Завершить" : {
       "localizations" : {
@@ -2099,6 +2177,7 @@
       }
     },
     "Заметки" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -2244,6 +2323,9 @@
           }
         }
       }
+    },
+    "Здесь появится статистика после первой диктовки" : {
+
     },
     "зн" : {
       "localizations" : {
@@ -2456,6 +2538,9 @@
         }
       }
     },
+    "к прошлому периоду" : {
+
+    },
     "Кастомные промпты" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -2618,6 +2703,9 @@
         }
       }
     },
+    "меньше" : {
+
+    },
     "Меньше" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -2653,6 +2741,9 @@
           }
         }
       }
+    },
+    "мин" : {
+
     },
     "мин чтения" : {
       "localizations" : {
@@ -2739,6 +2830,7 @@
 
     },
     "МОЩНОСТЬ ИИ" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -2754,7 +2846,14 @@
         }
       }
     },
+    "На %d%% больше слов, чем в предыдущем периоде" : {
+
+    },
+    "На %d%% меньше слов, чем в предыдущем периоде" : {
+
+    },
     "НАГОВОРИЛИ (МИН)" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -2802,6 +2901,9 @@
           }
         }
       }
+    },
+    "Надиктуйте первую заметку — здесь появятся выводы" : {
+
     },
     "Нажимая «Начать использовать», вы принимаете [Условия лицензии](https://golosok.space/docs/public-offer/) и [Политику конфиденциальности](https://golosok.space/docs/privacy-policy/)." : {
       "localizations" : {
@@ -2861,6 +2963,7 @@
       }
     },
     "НАЧАЛО ПЕРИОДА" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -2921,6 +3024,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Не подключён"
+          }
+        }
+      }
+    },
+    "Не распознано: %lld из %lld" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Не распознано: %1$lld из %2$lld"
           }
         }
       }
@@ -2991,6 +3104,7 @@
       }
     },
     "НЕДЕЛЬНЫЙ ТРЕНД" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -3039,6 +3153,7 @@
       }
     },
     "НЕТ ДАННЫХ" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -3168,10 +3283,8 @@
         }
       }
     },
-    "Номер" : {
-
-    },
     "НОЧЬ" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -3405,6 +3518,7 @@
       }
     },
     "ОСТАЛОСЬ" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -3766,6 +3880,7 @@
       }
     },
     "ПИК" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -3782,6 +3897,7 @@
       }
     },
     "ПИК АКТИВНОСТИ" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -3797,7 +3913,11 @@
         }
       }
     },
+    "Пик: %@" : {
+
+    },
     "ПН" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -4027,6 +4147,7 @@
       }
     },
     "Показатель" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -4059,6 +4180,7 @@
       }
     },
     "ПОСЛЕДНИЕ ЗАМЕТКИ" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -4170,6 +4292,7 @@
       }
     },
     "ПРОГРЕСС К УРОВНЮ" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -4235,6 +4358,7 @@
       }
     },
     "ПТ" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -4283,6 +4407,7 @@
       }
     },
     "РАЗМЕР ЗАМЕТКИ" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -4345,6 +4470,9 @@
           }
         }
       }
+    },
+    "Распознавание в среднем в %d× быстрее речи" : {
+
     },
     "Расшифровать файл" : {
       "localizations" : {
@@ -4444,6 +4572,9 @@
         }
       }
     },
+    "рекорд %d" : {
+
+    },
     "Релизы" : {
       "localizations" : {
         "en" : {
@@ -4477,6 +4608,7 @@
       }
     },
     "РИТМ НЕДЕЛИ" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -4559,7 +4691,11 @@
         }
       }
     },
+    "Самый активный день — %@" : {
+
+    },
     "СБ" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -4643,6 +4779,7 @@
       }
     },
     "СЕЙЧАС" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -4674,6 +4811,12 @@
         }
       }
     },
+    "СЕРИЯ" : {
+
+    },
+    "Серия: %d дн. подряд" : {
+
+    },
     "Сетевая ошибка" : {
       "localizations" : {
         "en" : {
@@ -4691,6 +4834,7 @@
       }
     },
     "СИМВОЛОВ" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -4707,6 +4851,7 @@
       }
     },
     "Символы" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -4842,7 +4987,13 @@
         }
       }
     },
+    "СКОРОСТЬ РАСПОЗНАВАНИЯ" : {
+
+    },
     "Следующее совпадение (⌘G)" : {
+
+    },
+    "СЛОВ НАДИКТОВАНО" : {
 
     },
     "Слушайте исходный звук прямо в заметке, чтобы проверить соответствие с текстом" : {
@@ -4995,6 +5146,7 @@
       }
     },
     "СР" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -5108,6 +5260,7 @@
       }
     },
     "СТРАНИЦ А4" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -5156,6 +5309,9 @@
           }
         }
       }
+    },
+    "СЭКОНОМЛЕНО ВРЕМЕНИ" : {
+
     },
     "Текст (.txt)" : {
       "extractionState" : "stale",
@@ -5433,6 +5589,7 @@
       }
     },
     "УТРО" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -5447,6 +5604,9 @@
           }
         }
       }
+    },
+    "ч" : {
+
     },
     "ЧАСОВ" : {
       "extractionState" : "stale",
@@ -5466,6 +5626,7 @@
       }
     },
     "ЧАСОВ СОХРАНЕНО" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -5481,10 +5642,8 @@
         }
       }
     },
-    "Часы" : {
-
-    },
     "ЧАЩЕ" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -5500,7 +5659,11 @@
         }
       }
     },
+    "Чаще всего вы диктуете с %@" : {
+
+    },
     "ЧТ" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {

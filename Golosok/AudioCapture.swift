@@ -79,6 +79,8 @@ class AudioCapture: NSObject, ObservableObject {
     private var escMonitor: Any?
     private var escLocalMonitor: Any?
     private var pasteTarget: NSRunningApplication?
+    /// Очередь импорта: файлы, которые не удалось распознать (имя, причина). Только main.
+    private var queueFailures: [(name: String, reason: String)] = []
     
     @Published var isRecording = false
     @Published var isProcessingFile = false
@@ -220,6 +222,7 @@ class AudioCapture: NSObject, ObservableObject {
     }
 
     func startRecording() {
+        guard !SplashGate.shared.isActive else { return }
         guard !isProcessingFile, !isRecording, captureSession == nil else { return }
         
         switch AVCaptureDevice.authorizationStatus(for: .audio) {
@@ -399,7 +402,10 @@ class AudioCapture: NSObject, ObservableObject {
         guard !media.isEmpty else { return }
         DispatchQueue.main.async {
             self.isProcessingFile = true
-            OverlayPanelPresenter.showProcessing(progress: 0)
+            self.queueFailures = []
+            OverlayPanelPresenter.showProcessing(
+                progress: 0,
+                file: OverlayFileContext(name: media[0].lastPathComponent, index: 1, total: media.count))
         }
         DispatchQueue.global(qos: .utility).async {
             self.processQueue(media)
@@ -414,20 +420,45 @@ class AudioCapture: NSObject, ObservableObject {
         guard index < urls.count else {
             DispatchQueue.main.async {
                 self.isProcessingFile = false
-                OverlayPanelPresenter.scheduleHide(after: 0.8)
+                self.presentQueueResult(total: urls.count)
             }
             return
         }
         let url = urls[index]
+        let context = OverlayFileContext(name: url.lastPathComponent, index: index + 1, total: urls.count)
         DispatchQueue.main.async {
             self.isProcessingFile = true
-            OverlayPanelPresenter.showProcessing(progress: 0)
+            OverlayPanelPresenter.showProcessing(progress: Double(index) / Double(urls.count), file: context)
         }
         Task.detached(priority: .utility) { [weak self] in
             guard let self else { return }
-            await self.processLongFileInChunks(fileURL: url, isFileImport: true, audioDurationSec: 0) {
-                DispatchQueue.main.async { self.processNextInQueue(urls, index: index + 1) }
+            await self.processLongFileInChunks(fileURL: url, isFileImport: true, audioDurationSec: 0, fileContext: context) { failure in
+                DispatchQueue.main.async {
+                    if let failure { self.queueFailures.append((name: url.lastPathComponent, reason: failure)) }
+                    self.processNextInQueue(urls, index: index + 1)
+                }
             }
+        }
+    }
+
+    /// Единый итог по очереди: раньше таймер скрытия от последнего файла (0,8 с) перезаписывал
+    /// предупреждение, и ошибка мигала секунду. Теперь итог показывается один раз и держится дольше.
+    private func presentQueueResult(total: Int) {
+        guard let first = queueFailures.first else {
+            OverlayPanelPresenter.showSuccess(file: OverlayFileContext(name: "", index: total, total: total))
+            SoundEffect.playSuccess()
+            OverlayPanelPresenter.scheduleHide(after: OverlayTiming.fileSuccessHold)
+            return
+        }
+        let context = OverlayFileContext(name: first.name, index: total, total: total)
+        if total == 1 {
+            OverlayPanelPresenter.showWarning(message: first.reason, detail: first.name, file: context)
+        } else {
+            let more = queueFailures.count > 1 ? " +\(queueFailures.count - 1)" : ""
+            OverlayPanelPresenter.showWarning(
+                message: String(localized: "Не распознано: \(queueFailures.count) из \(total)"),
+                detail: first.name + more,
+                file: context)
         }
     }
     
@@ -441,16 +472,30 @@ class AudioCapture: NSObject, ObservableObject {
         return false
     }
     
-    private func processLongFileInChunks(fileURL: URL, isFileImport: Bool, audioDurationSec: Double, completion: (() -> Void)? = nil) async {
+    private func processLongFileInChunks(fileURL: URL, isFileImport: Bool, audioDurationSec: Double,
+                                         fileContext: OverlayFileContext? = nil,
+                                         completion: ((String?) -> Void)? = nil) async {
         let processStartTime = Date()
         let tempWavURL = FileManager.default.temporaryDirectory.appendingPathComponent("temp_file_full.wav")
         let sourceURL = isFileImport ? tempWavURL : fileURL
         
-        func finish() {
+        /// `failure` — причина неудачи (только импорт файла); nil — успех.
+        func finish(failure: String? = nil) {
             if let completion {
-                completion()
+                completion(failure)
             } else {
                 DispatchQueue.main.async { self.isProcessingFile = false }
+            }
+        }
+        
+        /// Импорт: причину покажет очередь одним итогом после последнего файла.
+        /// Диктовка: предупреждение сразу.
+        func fail(_ reason: String) {
+            if isFileImport {
+                finish(failure: reason)
+            } else {
+                OverlayPanelPresenter.showWarning(message: reason)
+                finish()
             }
         }
         
@@ -461,15 +506,13 @@ class AudioCapture: NSObject, ObservableObject {
             if !conversionSuccess { conversionSuccess = convertAudioTo16kHzWav(inputURL: fileURL, outputURL: tempWavURL) }
             
             if !conversionSuccess {
-                OverlayPanelPresenter.showWarning(message: String(localized: "Не удалось извлечь аудио"))
-                finish()
+                fail(String(localized: "Не удалось извлечь аудио"))
                 return
             }
         }
 
         guard let inputFile = try? AVAudioFile(forReading: sourceURL) else {
-            OverlayPanelPresenter.showWarning(message: String(localized: "Ошибка чтения файла"))
-            finish()
+            fail(String(localized: "Ошибка чтения файла"))
             return
         }
         
@@ -511,8 +554,11 @@ class AudioCapture: NSObject, ObservableObject {
                 }
                 
                 if isFileImport {
-                    let progress = Double(chunkIndex + 1) / Double(totalChunks)
-                    OverlayPanelPresenter.showProcessing(progress: progress)
+                    // Общий прогресс по всей очереди: кольцо идёт плавно через все файлы.
+                    let fileProgress = Double(chunkIndex + 1) / Double(totalChunks)
+                    let context = fileContext ?? OverlayFileContext(name: fileURL.lastPathComponent, index: 1, total: 1)
+                    let overall = (Double(context.index - 1) + fileProgress) / Double(context.total)
+                    OverlayPanelPresenter.showProcessing(progress: overall, file: context)
                 }
             }
         }
@@ -521,12 +567,13 @@ class AudioCapture: NSObject, ObservableObject {
         let prettyFormattedText = TextFormatter.formatIntoParagraphs(rawText)
         let processingTimeSecs = Date().timeIntervalSince(processStartTime)
         let calculatedSpeedup = max(1.0, realAudioSecs / max(0.1, processingTimeSecs))
+        let noSpeechReason: String? = prettyFormattedText.isEmpty ? String(localized: "Речь не распознана") : nil
         
         DispatchQueue.main.async {
-            if prettyFormattedText.isEmpty {
+            if let noSpeechReason {
                 AppLogger.shared.warn("Recognition", "Речь не распознана", details: String(format: "аудио %.1f с", realAudioSecs))
                 Telemetry.shared.event("dictation_failed", ["audio_duration_sec": realAudioSecs])
-                OverlayPanelPresenter.showWarning(message: String(localized: "Речь не распознана"))
+                if !isFileImport { OverlayPanelPresenter.showWarning(message: noSpeechReason) }
             } else {
                 let formatter = DateFormatter()
                 formatter.dateFormat = "dd.MM.yyyy, HH:mm"
@@ -545,22 +592,21 @@ class AudioCapture: NSObject, ObservableObject {
                 NSPasteboard.general.clearContents()
                 NSPasteboard.general.setString(prettyFormattedText, forType: .string)
 
-                OverlayPanelPresenter.showSuccess()
-
-                if !isFileImport && self.autoPasteEnabled {
-                    self.pasteToActiveApp()
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { SoundEffect.playSuccess() }
-                } else {
-                    SoundEffect.playSuccess()
-                }
-
-                if completion == nil {
-                    OverlayPanelPresenter.scheduleHide(after: 0.8)
+                // Импорт: итог и звук показывает очередь после последнего файла (presentQueueResult).
+                if !isFileImport {
+                    OverlayPanelPresenter.showSuccess()
+                    if self.autoPasteEnabled {
+                        self.pasteToActiveApp()
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { SoundEffect.playSuccess() }
+                    } else {
+                        SoundEffect.playSuccess()
+                    }
+                    OverlayPanelPresenter.scheduleHide(after: OverlayTiming.dictationSuccessHold)
                 }
             }
 
             self.sendTelemetry(eventType: isFileImport ? "file_import" : "dictation", audioDurationSec: realAudioSecs, characterCount: rawText.count, speedup: calculatedSpeedup)
-            finish()
+            finish(failure: isFileImport ? noSpeechReason : nil)
         }
     }
     

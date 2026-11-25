@@ -5,11 +5,39 @@ import Foundation
 private enum OverlayMetrics {
     /// Panel and pill share the same bounds — no transparent margins,
     /// so nothing stray can cast a shadow.
-    static let cardHeight: CGFloat = 72
-    static let cardTint: Double = 0.45
-    static let panelSize = NSSize(width: 240, height: cardHeight + 2)
+    static let cardHeight: CGFloat = 56
+    static let cardTint: Double = 0.28
+    static let panelSize = NSSize(width: 280, height: cardHeight + 2)   // запас по бокам под тряску
     static let pillHeight: CGFloat = 40
     static let horizontalPadding: CGFloat = 14
+}
+
+/// Сколько островок остаётся на экране после результата.
+enum OverlayTiming {
+    static let dictationSuccessHold: TimeInterval = 1.2   // успеть доиграть схлопывание волны
+    static let dictationWarningHold: TimeInterval = 3.5
+    static let fileSuccessHold: TimeInterval = 2.0
+    static let fileWarningHold: TimeInterval = 6.0        // успеть прочитать причину и имя файла
+}
+
+enum OverlayStyle {
+    /// Диктовка с микрофона: пока идёт запись — сфера. После остановки (расшифровка, успех, ошибка) —
+    /// волна из точек. false — сфера на всех этапах, как раньше.
+    static let dictationUsesWave = true
+
+    /// Закрепление окна в отдельном Space через приватный SkyLight: островок не пропадает при
+    /// переключении полноэкранных Space и жестах трекпада. Аварийно выключить:
+    /// defaults write <bundle id> overlayPinnedSpace -bool NO
+    static var usesPinnedSpace: Bool {
+        UserDefaults.standard.object(forKey: "overlayPinnedSpace") as? Bool ?? true
+    }
+}
+
+/// Какой файл обрабатывается и какой он по счёту в очереди (index с 1).
+struct OverlayFileContext: Equatable {
+    let name: String
+    let index: Int
+    let total: Int
 }
 
 enum OverlayPhase: Equatable {
@@ -29,10 +57,18 @@ final class OverlayPanelState {
     private(set) var phase: OverlayPhase = .idle
     private(set) var elapsedSeconds = 0
     private(set) var samples: [Float] = Array(repeating: 0.15, count: 18)
+    /// Не nil — идёт работа с файлом (кольцо); nil — диктовка с микрофона (волна).
+    private(set) var file: OverlayFileContext?
+    /// Вторая строка под предупреждением (имя файла).
+    private(set) var detail: String?
+    /// Растёт при каждой ошибке: запускает пружинную тряску карточки.
+    private(set) var shakeTick = 0
     /// Управляет появлением/исчезновением в SwiftUI. Окно само всегда alpha 1.
     var isShown = false
 
     func showRecording() {
+        file = nil
+        detail = nil
         phase = .recording
         elapsedSeconds = 0
         samples = Array(repeating: 0.15, count: 18)
@@ -49,27 +85,166 @@ final class OverlayPanelState {
     }
 
     func showTranscribing() {
+        file = nil
+        detail = nil
         phase = .transcribing
     }
 
-    func showProcessing(progress: Double) {
+    func showProcessing(progress: Double, file: OverlayFileContext) {
+        if self.file != file { self.file = file }
+        detail = nil
         let clamped = min(max(progress, 0), 1)
         if case .processing(let current) = phase, abs(current - clamped) < 0.001 { return }
         phase = .processing(progress: clamped)
     }
 
-    func showWarning(_ message: String) {
+    func showWarning(_ message: String, detail: String?, file: OverlayFileContext?) {
+        self.file = file
+        self.detail = detail
         phase = .warning(message)
     }
 
-    func showSuccess() {
+    func showSuccess(file: OverlayFileContext?) {
+        self.file = file
+        detail = nil
         phase = .success
+    }
+
+    func triggerShake() {
+        shakeTick &+= 1
     }
 
     func reset() {
         phase = .idle
+        file = nil
+        detail = nil
         elapsedSeconds = 0
         samples = Array(repeating: 0.15, count: 18)
+    }
+}
+
+// MARK: - Отдельный Space (SkyLight)
+
+/// Приватный API WindowServer. Обычное окно с `canJoinAllSpaces` в момент переключения между
+/// полноэкранными Space (жест трекпада, Ctrl+стрелки) на время пропадает. Окно, которое целиком
+/// переехало в собственное «пространство» с максимальным абсолютным уровнем, остаётся на экране всегда.
+/// Все символы берутся через dlsym: если их нет (другая версия macOS) — тихий откат на обычное окно.
+/// Закрепление каждый раз ПРОВЕРЯЕТСЯ (в каких Space сейчас окно), а не принимается на веру.
+@MainActor
+private enum PinnedSpace {
+    private typealias MainConnectionFn = @convention(c) () -> Int32
+    private typealias SpaceCreateFn = @convention(c) (Int32, Int, CFDictionary?) -> Int
+    private typealias SetLevelFn = @convention(c) (Int32, Int, Int32) -> Int32
+    private typealias ShowSpacesFn = @convention(c) (Int32, CFArray) -> Void
+    private typealias AddWindowsFn = @convention(c) (Int32, CFArray, CFArray) -> Void
+    private typealias RemoveWindowsFn = @convention(c) (Int32, CFArray, CFArray) -> Void
+    private typealias AddRemoveFn = @convention(c) (Int32, Int, CFArray, Int32) -> Int32
+    private typealias CopySpacesFn = @convention(c) (Int32, Int32, CFArray) -> Unmanaged<CFArray>?
+
+    private static var connection: Int32 = 0
+    private static var space = 0
+    private static var setLevel: SetLevelFn?
+    private static var showSpaces: ShowSpacesFn?
+    private static var addWindows: AddWindowsFn?
+    private static var removeWindows: RemoveWindowsFn?
+    private static var addAndRemove: AddRemoveFn?
+    private static var copySpaces: CopySpacesFn?
+    private static var prepared = false
+    private(set) static var isUnavailable = false
+    /// Результат последней проверки — для лога.
+    private(set) static var diagnostics = ""
+
+    private static func symbol<T>(_ handle: UnsafeMutableRawPointer, _ names: [String], as type: T.Type) -> T? {
+        for name in names {
+            if let pointer = dlsym(handle, name) { return unsafeBitCast(pointer, to: T.self) }
+        }
+        return nil
+    }
+
+    private static func giveUp(_ reason: String) -> Bool {
+        isUnavailable = true
+        AppLogger.shared.warn("Overlay", "SkyLight недоступен — островок остаётся обычным окном", details: reason)
+        return false
+    }
+
+    /// Создаёт Space заранее (на запуске): раньше он создавался в тот же момент, когда в него клали
+    /// первое окно, и первые записи после запуска закреплялись не всегда.
+    @discardableResult
+    static func warmUp() -> Bool { prepare() }
+
+    private static func prepare() -> Bool {
+        if prepared { return true }
+        if isUnavailable { return false }
+
+        let paths = ["/System/Library/PrivateFrameworks/SkyLight.framework/Versions/A/SkyLight",
+                     "/System/Library/PrivateFrameworks/SkyLight.framework/SkyLight"]
+        guard let handle = paths.lazy.compactMap({ dlopen($0, RTLD_LAZY) }).first else {
+            return giveUp("не удалось загрузить SkyLight")
+        }
+        guard let mainConnection = symbol(handle, ["SLSMainConnectionID", "CGSMainConnectionID"], as: MainConnectionFn.self),
+              let create = symbol(handle, ["SLSSpaceCreate", "CGSSpaceCreate"], as: SpaceCreateFn.self),
+              let level = symbol(handle, ["SLSSpaceSetAbsoluteLevel", "CGSSpaceSetAbsoluteLevel"], as: SetLevelFn.self),
+              let show = symbol(handle, ["SLSShowSpaces", "CGSShowSpaces"], as: ShowSpacesFn.self)
+        else {
+            return giveUp("не найдены базовые символы")
+        }
+        addAndRemove = symbol(handle, ["SLSSpaceAddWindowsAndRemoveFromSpaces"], as: AddRemoveFn.self)
+        addWindows = symbol(handle, ["SLSAddWindowsToSpaces", "CGSAddWindowsToSpaces"], as: AddWindowsFn.self)
+        removeWindows = symbol(handle, ["SLSRemoveWindowsFromSpaces", "CGSRemoveWindowsFromSpaces"], as: RemoveWindowsFn.self)
+        copySpaces = symbol(handle, ["SLSCopySpacesForWindows", "CGSCopySpacesForWindows"], as: CopySpacesFn.self)
+        guard addAndRemove != nil || addWindows != nil else {
+            return giveUp("нет функции добавления окон в Space")
+        }
+
+        let cid = mainConnection()
+        let newSpace = create(cid, 1, nil)
+        guard newSpace != 0 else { return giveUp("не удалось создать Space") }
+        _ = level(cid, newSpace, Int32.max)
+        show(cid, [newSpace] as CFArray)
+
+        connection = cid
+        space = newSpace
+        setLevel = level
+        showSpaces = show
+        prepared = true
+        AppLogger.shared.info("Overlay", "Создан отдельный Space для островка (SkyLight)",
+                              details: "space \(newSpace), проверка окна: \(copySpaces != nil), перенос: \(addAndRemove != nil ? "AddAndRemove" : "Add+Remove")")
+        return true
+    }
+
+    private static func spaces(of windowNumber: Int) -> [Int]? {
+        guard let copySpaces,
+              let result = copySpaces(connection, 7, [windowNumber] as CFArray)?.takeRetainedValue() else { return nil }
+        return (result as NSArray).compactMap { ($0 as? NSNumber)?.intValue }
+    }
+
+    /// Переносит окно целиком в закреплённый Space и проверяет результат.
+    /// true — команда переноса выполнена; false — SkyLight недоступен.
+    static func pin(windowNumber: Int) -> Bool {
+        guard windowNumber > 0, prepare(), let setLevel, let showSpaces else { return false }
+        // Систему могли «передёрнуть» (сон, смена экранов): подтверждаем уровень и показ каждый раз.
+        _ = setLevel(connection, space, Int32.max)
+        showSpaces(connection, [space] as CFArray)
+
+        let windows = [windowNumber] as CFArray
+        if let addAndRemove {
+            // Окно добавляется в наш Space и УДАЛЯЕТСЯ из обычных (маска 7: текущий, другие, пользовательские).
+            _ = addAndRemove(connection, space, windows, 7)
+        } else if let addWindows {
+            let before = spaces(of: windowNumber) ?? []
+            addWindows(connection, windows, [space] as CFArray)
+            let others = before.filter { $0 != space }
+            if let removeWindows, !others.isEmpty { removeWindows(connection, windows, others as CFArray) }
+        }
+
+        guard let after = spaces(of: windowNumber) else {
+            diagnostics = "окно \(windowNumber), проверка недоступна"
+            return true
+        }
+        // Только для лога. Раньше от этого зависело «закреплено / нет», и проверка давала ложный минус
+        // (наш Space не виден по этой маске) — окно считалось «пропавшим» и пересоздавалось в цикле.
+        diagnostics = "окно \(windowNumber), Space по маске 7: \(after), наш: \(space)"
+        return true
     }
 }
 
@@ -80,26 +255,66 @@ final class OverlayPanelManager {
     private let state = OverlayPanelState()
     private var panel: NSPanel?
     private var hideTask: Task<Void, Never>?
+    private var burstTask: Task<Void, Never>?
+    private var watchdog: Timer?
     private var observers: [NSObjectProtocol] = []
+    private var workspaceObservers: [NSObjectProtocol] = []
+    private var panelObservers: [NSObjectProtocol] = []
     /// Растёт при каждом present()/hide(). Отложенные действия сверяются с ним
     /// и молча отменяются, если за это время случилось что-то новое.
     private var presentGeneration: UInt64 = 0
+    /// Идёт штатное исчезновение (280 мс): сторож в это время не вмешивается.
+    private var isHiding = false
+    private var unhealthyTicks = 0
+    private var lastHealLog = Date.distantPast
+    /// Номер окна, уже положенного в закреплённый Space (0 — не закреплено).
+    private var pinnedWindowNumber = 0
+    private var pinAttempts = 0
+    private var lastPinAt = Date.distantPast
+    private var lastRebuildAt = Date.distantPast
+
+    /// Выше полноэкранных окон и меню-бара.
+    private static let overlayLevel = NSWindow.Level.screenSaver
+    /// Зазор между нижней границей чёлки и островком.
+    private static let notchGap: CGFloat = 8
+    private static let overlayBehavior: NSWindow.CollectionBehavior = [
+        .canJoinAllSpaces, .fullScreenAuxiliary, .stationary, .ignoresCycle
+    ]
 
     private init() {}
 
+    private var isIdle: Bool {
+        if case .idle = state.phase { return true }
+        return false
+    }
+
+    /// В этих фазах отложенное скрытие игнорируется: устаревший scheduleHide
+    /// от прошлой записи не должен убирать островок текущей.
+    private var isHideBlocked: Bool {
+        switch state.phase {
+        case .recording, .transcribing: return true
+        default: return false
+        }
+    }
+
+    // MARK: - API
+
     func showRecording() {
+        // Каждая запись — чистое окно: старое могло «протухнуть» в WindowServer
+        // (сон, смена Space, полноэкранные приложения, смена мониторов).
+        hideTask?.cancel()
+        hideTask = nil
+        isHiding = false
+        state.isShown = false
+        destroyPanel()
         state.showRecording()
         present()
     }
 
     func updateRecording(elapsedSeconds: Int, samples: [Float]) {
         state.updateRecording(elapsedSeconds: elapsedSeconds, samples: samples)
-        // Самолечение: идёт запись, а панели на экране нет.
-        if state.phase == .recording, panel?.isVisible != true {
-            AppLogger.shared.warn("Overlay", "панель пропала во время записи — возвращаю",
-                                  details: "visible \(panel?.isVisible ?? false), shown \(state.isShown)")
-            present()
-        }
+        // Запись идёт, а сторож по какой-то причине остановлен — поднимаем всё заново.
+        if case .recording = state.phase, watchdog == nil { present() }
     }
 
     func showTranscribing() {
@@ -107,74 +322,94 @@ final class OverlayPanelManager {
         present()
     }
 
-    func showProcessing(progress: Double) {
-        state.showProcessing(progress: progress)
+    func showProcessing(progress: Double, file: OverlayFileContext) {
+        state.showProcessing(progress: progress, file: file)
         present()
     }
 
-    func showWarning(message: String) {
-        state.showWarning(message)
+    func showWarning(message: String, detail: String?, file: OverlayFileContext?) {
+        state.showWarning(message, detail: detail, file: file)
         SoundEffect.playWarning()
         present()
-        scheduleHide(after: 3.5)
+        scheduleHide(after: file == nil ? OverlayTiming.dictationWarningHold : OverlayTiming.fileWarningHold)
+
+        // Тряска чуть позже появления, когда карточка уже видна и ошибка начала проявляться.
+        let generation = presentGeneration
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(nanoseconds: 250_000_000)
+            guard let self, generation == self.presentGeneration, case .warning = self.state.phase else { return }
+            self.state.triggerShake()
+        }
     }
 
-    func showSuccess() {
-        state.showSuccess()
+    func showSuccess(file: OverlayFileContext?) {
+        state.showSuccess(file: file)
         present()
     }
 
     func scheduleHide(after delay: TimeInterval) {
+        guard !isHideBlocked else { return }
         hideTask?.cancel()
+        let generation = presentGeneration
         let nanoseconds = UInt64(max(delay, 0) * 1_000_000_000)
         hideTask = Task { [weak self] in
             try? await Task.sleep(nanoseconds: nanoseconds)
-            guard !Task.isCancelled else { return }
-            self?.hideOverlay()
+            guard let self, !Task.isCancelled,
+                  generation == self.presentGeneration,
+                  !self.isHideBlocked else { return }
+            self.hideOverlay()
         }
     }
 
+    /// Явное скрытие (отмена записи и т.п.) — выполняется всегда.
     func hideOverlay() {
         hideTask?.cancel()
         hideTask = nil
+        burstTask?.cancel()
+        burstTask = nil
         presentGeneration &+= 1
         let generation = presentGeneration
 
         guard let panel, panel.isVisible else {
+            isHiding = false
             state.isShown = false
             state.reset()
+            stopWatchdog()
             return
         }
 
+        isHiding = true
         state.isShown = false   // SwiftUI проигрывает исчезновение
         hideTask = Task { [weak self] in
             try? await Task.sleep(nanoseconds: 280_000_000)
             guard let self, !Task.isCancelled, generation == self.presentGeneration else { return }
             self.panel?.orderOut(nil)
             self.state.reset()
+            self.isHiding = false
+            self.stopWatchdog()
             self.hideTask = nil
         }
     }
 
+    // MARK: - Показ
+
     private func present() {
         hideTask?.cancel()
         hideTask = nil
+        isHiding = false
         presentGeneration &+= 1
         let generation = presentGeneration
 
         if panel == nil { createPanel() }
 
-        guard let panel, let screen = currentTargetScreen() else {
+        let wasVisible = panel?.isVisible ?? false
+        guard bringToFront() else {
             AppLogger.shared.error("Overlay", "present: нет панели или экрана",
                                    details: "screens: \(NSScreen.screens.count), phase \(state.phase)")
             return
         }
-
-        let wasVisible = panel.isVisible
-        let targetFrame = preferredFrame(on: screen)
-        if panel.frame != targetFrame { panel.setFrame(targetFrame, display: true) }
-        panel.alphaValue = 1
-        panel.orderFrontRegardless()
+        startWatchdog()
+        scheduleReassertBurst()
 
         guard !state.isShown else { return }
         if wasVisible {
@@ -188,13 +423,140 @@ final class OverlayPanelManager {
         }
     }
 
-    /// Вернуть панель на экран после сна, смены Space или конфигурации экранов.
-    private func reassert() {
-        guard let panel, state.phase != .idle, state.isShown,
-              let screen = currentTargetScreen() else { return }
-        panel.setFrame(preferredFrame(on: screen), display: true)
+    /// Ставит окно на экран с курсором, на максимальный уровень, поверх всех Space.
+    @discardableResult
+    private func bringToFront() -> Bool {
+        guard let panel, let screen = currentTargetScreen() else { return false }
+        let target = preferredFrame(on: screen)
+        if panel.frame != target { panel.setFrame(target, display: true) }
+        if panel.level != Self.overlayLevel { panel.level = Self.overlayLevel }
+        if panel.collectionBehavior != Self.overlayBehavior { panel.collectionBehavior = Self.overlayBehavior }
         panel.alphaValue = 1
         panel.orderFrontRegardless()
+        pinIfNeeded()
+        return true
+    }
+
+    /// Один раз на каждое окно (после первого показа, когда у него уже есть реальный номер).
+    /// Три переноса на окно с паузой ≥0,35 с: сразу после показа и ещё два раза на тиках сторожа
+    /// (повторный перенос безвреден и страхует от гонки при первом показе).
+    private func pinIfNeeded() {
+        guard OverlayStyle.usesPinnedSpace, !PinnedSpace.isUnavailable, let panel,
+              panel.windowNumber > 0, pinAttempts < 3 else { return }
+        let now = Date()
+        if pinAttempts > 0, now.timeIntervalSince(lastPinAt) < 0.35 { return }
+        pinAttempts += 1
+        lastPinAt = now
+        guard PinnedSpace.pin(windowNumber: panel.windowNumber) else { return }
+        pinnedWindowNumber = panel.windowNumber
+        if pinAttempts == 3 {
+            AppLogger.shared.info("Overlay", "Островок закреплён в отдельном Space", details: PinnedSpace.diagnostics)
+        }
+    }
+
+    /// Подготовить закреплённый Space заранее, на запуске приложения.
+    func warmUp() {
+        if OverlayStyle.usesPinnedSpace { PinnedSpace.warmUp() }
+    }
+
+    // MARK: - Живучесть
+
+    private var isHealthy: Bool {
+        guard let panel else { return false }
+        guard panel.alphaValue > 0.99, panel.level == Self.overlayLevel else { return false }
+        // Окно в закреплённом Space: isVisible и isOnActiveSpace для него ненадёжны,
+        // по ним нельзя судить, что окно «пропало».
+        if pinnedWindowNumber == panel.windowNumber { return true }
+        return panel.isVisible && panel.isOnActiveSpace
+    }
+
+    private func startWatchdog() {
+        guard watchdog == nil else { return }
+        let timer = Timer(timeInterval: 0.4, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated { self?.watchdogTick() }
+        }
+        RunLoop.main.add(timer, forMode: .common)
+        watchdog = timer
+    }
+
+    private func stopWatchdog() {
+        watchdog?.invalidate()
+        watchdog = nil
+        unhealthyTicks = 0
+    }
+
+    /// Работает независимо от аудио: пока фаза не idle, окно обязано быть на экране.
+    private func watchdogTick() {
+        guard !isIdle else { stopWatchdog(); return }
+        guard !isHiding else { return }
+        pinIfNeeded()
+        if isHealthy { unhealthyTicks = 0; return }
+
+        unhealthyTicks += 1
+        if Date().timeIntervalSince(lastHealLog) > 5 {
+            lastHealLog = Date()
+            AppLogger.shared.warn("Overlay", "островок пропал — возвращаю",
+                                  details: "visible \(panel?.isVisible ?? false), activeSpace \(panel?.isOnActiveSpace ?? false), " +
+                                           "pinned \(pinnedWindowNumber != 0), " +
+                                           "level \(panel?.level.rawValue ?? -1), tick \(unhealthyTicks), phase \(state.phase)")
+        }
+        // Пересоздание окна заново запускает анимацию сферы/волны, поэтому — только если
+        // bringToFront несколько тиков подряд не помог, и не чаще раза в 10 с.
+        if unhealthyTicks >= 3, Date().timeIntervalSince(lastRebuildAt) > 10 {
+            lastRebuildAt = Date()
+            rebuildKeepingState()
+        } else {
+            bringToFront()
+        }
+    }
+
+    /// Пересоздаёт окно, не трогая состояние записи (секундомер и фаза продолжаются).
+    private func rebuildKeepingState() {
+        destroyPanel()
+        createPanel()
+        state.isShown = true
+        unhealthyTicks = 0
+        bringToFront()
+        scheduleReassertBurst()
+    }
+
+    /// Смена Space, пробуждение, активация приложения: система в этот момент
+    /// перестраивает окна, поэтому возвращаем островок сразу и ещё несколько раз.
+    private func reassert() {
+        guard panel != nil, !isIdle, !isHiding else { return }
+        bringToFront()
+        scheduleReassertBurst()
+    }
+
+    private func nudgeIfNeeded() {
+        guard !isIdle, !isHiding, !isHealthy else { return }
+        bringToFront()
+    }
+
+    private func scheduleReassertBurst() {
+        burstTask?.cancel()
+        burstTask = Task { [weak self] in
+            for step in [150, 250, 400, 800] as [UInt64] {
+                try? await Task.sleep(nanoseconds: step * 1_000_000)
+                guard !Task.isCancelled, let self, !self.isIdle, !self.isHiding else { return }
+                self.bringToFront()
+            }
+        }
+    }
+
+    // MARK: - Окно
+
+    private func destroyPanel() {
+        for o in panelObservers { NotificationCenter.default.removeObserver(o) }
+        panelObservers.removeAll()
+        pinnedWindowNumber = 0
+        pinAttempts = 0
+        lastPinAt = .distantPast
+        guard let old = panel else { return }
+        old.orderOut(nil)
+        old.contentView = nil
+        old.close()
+        panel = nil
     }
 
     private func createPanel() {
@@ -209,11 +571,15 @@ final class OverlayPanelManager {
         newPanel.backgroundColor = .clear
         newPanel.hasShadow = false
         newPanel.hidesOnDeactivate = false
+        newPanel.canHide = false              // не прячется при Cmd+H и сворачивании приложения
+        newPanel.worksWhenModal = true        // виден поверх модальных окон (NSOpenPanel)
         newPanel.isReleasedWhenClosed = false
-        newPanel.level = .statusBar
+        newPanel.isMovable = false
+        newPanel.animationBehavior = .none
+        newPanel.level = Self.overlayLevel
         newPanel.isFloatingPanel = true
         newPanel.ignoresMouseEvents = true
-        newPanel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]
+        newPanel.collectionBehavior = Self.overlayBehavior
         newPanel.contentMinSize = size
         newPanel.contentMaxSize = size
         newPanel.setContentSize(size)
@@ -228,6 +594,18 @@ final class OverlayPanelManager {
         newPanel.contentView = hostingView
 
         panel = newPanel
+
+        let nudge: @Sendable (Notification) -> Void = { [weak self] _ in
+            Task { @MainActor in self?.nudgeIfNeeded() }
+        }
+        panelObservers = [
+            NotificationCenter.default.addObserver(
+                forName: NSWindow.didChangeOcclusionStateNotification,
+                object: newPanel, queue: .main, using: nudge),
+            NotificationCenter.default.addObserver(
+                forName: NSWindow.didChangeScreenNotification,
+                object: newPanel, queue: .main, using: nudge)
+        ]
         installObservers()
     }
 
@@ -240,12 +618,16 @@ final class OverlayPanelManager {
             forName: NSApplication.didChangeScreenParametersNotification,
             object: nil, queue: .main, using: reassertBlock))
         let ws = NSWorkspace.shared.notificationCenter
-        observers.append(ws.addObserver(
-            forName: NSWorkspace.didWakeNotification,
-            object: nil, queue: .main, using: reassertBlock))
-        observers.append(ws.addObserver(
-            forName: NSWorkspace.activeSpaceDidChangeNotification,
-            object: nil, queue: .main, using: reassertBlock))
+        for name in [
+            NSWorkspace.didWakeNotification,
+            NSWorkspace.screensDidWakeNotification,
+            NSWorkspace.activeSpaceDidChangeNotification,
+            NSWorkspace.didActivateApplicationNotification,
+            NSWorkspace.sessionDidBecomeActiveNotification
+        ] {
+            workspaceObservers.append(ws.addObserver(
+                forName: name, object: nil, queue: .main, using: reassertBlock))
+        }
     }
 
     /// Экран с курсором; запасной вариант — главный.
@@ -259,11 +641,13 @@ final class OverlayPanelManager {
 
     private func preferredFrame(on screen: NSScreen) -> NSRect {
         let size = OverlayMetrics.panelSize
-        let hasCameraHousing = screen.safeAreaInsets.top > 0
-        let topInset = hasCameraHousing ? 6.0 : 4.0
+        let notchHeight = screen.safeAreaInsets.top
+        let hasCameraHousing = notchHeight > 0
+        // С чёлкой: отсчёт от нижней границы выреза, а не от верха экрана.
+        // Без чёлки: как раньше, под меню-баром.
         let topEdge = hasCameraHousing
-            ? screen.frame.maxY - topInset
-            : screen.visibleFrame.maxY + topInset
+            ? screen.frame.maxY - notchHeight - Self.notchGap
+            : screen.visibleFrame.maxY + 4.0
 
         return NSRect(
             x: screen.frame.midX - (size.width / 2),
@@ -274,37 +658,32 @@ final class OverlayPanelManager {
     }
 }
 
+/// Все вызовы идут через main.async — строго по порядку (FIFO), из любого потока.
+/// Раньше `Task { @MainActor }` не гарантировал порядок, и «hide» от прошлой записи
+/// мог обогнать «show» новой.
 enum OverlayPanelPresenter {
     static func showRecording() {
         perform { OverlayPanelManager.shared.showRecording() }
     }
 
     static func updateRecording(elapsedSeconds: Int, samples: [Float]) {
-        if Thread.isMainThread {
-            MainActor.assumeIsolated {
-                OverlayPanelManager.shared.updateRecording(elapsedSeconds: elapsedSeconds, samples: samples)
-            }
-        } else {
-            Task { @MainActor in
-                OverlayPanelManager.shared.updateRecording(elapsedSeconds: elapsedSeconds, samples: samples)
-            }
-        }
+        perform { OverlayPanelManager.shared.updateRecording(elapsedSeconds: elapsedSeconds, samples: samples) }
     }
 
     static func showTranscribing() {
         perform { OverlayPanelManager.shared.showTranscribing() }
     }
 
-    static func showProcessing(progress: Double) {
-        perform { OverlayPanelManager.shared.showProcessing(progress: progress) }
+    static func showProcessing(progress: Double, file: OverlayFileContext) {
+        perform { OverlayPanelManager.shared.showProcessing(progress: progress, file: file) }
     }
 
-    static func showWarning(message: String) {
-        perform { OverlayPanelManager.shared.showWarning(message: message) }
+    static func showWarning(message: String, detail: String? = nil, file: OverlayFileContext? = nil) {
+        perform { OverlayPanelManager.shared.showWarning(message: message, detail: detail, file: file) }
     }
 
-    static func showSuccess() {
-        perform { OverlayPanelManager.shared.showSuccess() }
+    static func showSuccess(file: OverlayFileContext? = nil) {
+        perform { OverlayPanelManager.shared.showSuccess(file: file) }
     }
 
     static func scheduleHide(after delay: TimeInterval) {
@@ -316,10 +695,8 @@ enum OverlayPanelPresenter {
     }
 
     private static func perform(_ operation: @escaping @MainActor () -> Void) {
-        if Thread.isMainThread {
+        DispatchQueue.main.async {
             MainActor.assumeIsolated(operation)
-        } else {
-            Task { @MainActor in operation() }
         }
     }
 }
@@ -328,14 +705,16 @@ struct FloatingWidgetView: View {
     let state: OverlayPanelState
 
     @Environment(\.colorScheme) private var scheme
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    private static let cardRadius: CGFloat = 28
+    private static let cardRadius: CGFloat = 22
 
     private var cardWidth: CGFloat {
         switch state.phase {
-        case .recording, .processing: return 168
+        case .recording, .processing: return 132
         case .warning: return 232
-        default: return 104
+        case .success: return state.file == nil ? 84 : 132
+        default: return 84
         }
     }
 
@@ -364,6 +743,15 @@ struct FloatingWidgetView: View {
                     : .easeInOut(duration: 0.3),
                 value: state.isShown
             )
+            // Ошибка: резкий толчок и пружинное затухание — пользователь видит её действием, а не только цветом.
+            .keyframeAnimator(initialValue: 0.0, trigger: state.shakeTick) { content, x in
+                content.offset(x: reduceMotion ? 0 : x)
+            } keyframes: { _ in
+                KeyframeTrack {
+                    CubicKeyframe(-12.0, duration: 0.07)
+                    SpringKeyframe(0.0, duration: 0.9, spring: Spring(response: 0.3, dampingRatio: 0.25))
+                }
+            }
             .frame(width: OverlayMetrics.panelSize.width,
                    height: OverlayMetrics.panelSize.height,
                    alignment: .top)
@@ -379,50 +767,6 @@ struct FloatingWidgetView: View {
     }
 }
 
-private struct PillGlassBackground: View {
-    var body: some View {
-        Capsule()
-            .fill(.white.opacity(0.08))
-            .modifier(PillGlassModifier())
-    }
-}
-
-private struct PillGlassModifier: ViewModifier {
-    func body(content: Content) -> some View {
-        if #available(macOS 26.0, iOS 26.0, *) {
-            content.glassEffect(.regular, in: .capsule)
-        } else {
-            content.background(.ultraThinMaterial, in: .capsule)
-        }
-    }
-}
-
-private struct PillBorder: View {
-    let phase: OverlayPhase
-
-    var body: some View {
-        if #available(macOS 26.0, iOS 26.0, *) {
-            Capsule()
-                .stroke(.white.opacity(0.42), lineWidth: 0.8)
-        } else {
-            switch phase {
-            case .warning:
-                Capsule().stroke(Color(hex: "#F59E0B").opacity(0.72), lineWidth: 1.1)
-            case .success:
-                Capsule().stroke(Color(hex: "#34D399").opacity(0.82), lineWidth: 1.1)
-            default:
-                Capsule().stroke(
-                    LinearGradient(
-                        colors: [.white.opacity(0.78), .white.opacity(0.16)],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    ),
-                    lineWidth: 1
-                )
-            }
-        }
-    }
-}
 private enum OrbMode: Equatable { case listening, thinking, done, failed }
 
 private struct OrbCardContent: View {
@@ -433,6 +777,9 @@ private struct OrbCardContent: View {
 
     private var ink: Color { scheme == .dark ? .white : Color(white: 0.04) }
 
+    private static let labelTransition = AnyTransition.opacity
+        .animation(.easeOut(duration: 0.3).delay(0.25))
+
     private var mode: OrbMode {
         switch state.phase {
         case .recording: return .listening
@@ -440,6 +787,11 @@ private struct OrbCardContent: View {
         case .warning: return .failed
         default: return .thinking
         }
+    }
+
+    private var fileProgress: Double {
+        if case .processing(let progress) = state.phase { return progress }
+        return 0
     }
 
     /// Громкость только во время записи; в остальных фазах метеринг не нужен.
@@ -452,9 +804,34 @@ private struct OrbCardContent: View {
 
     var body: some View {
         HStack(spacing: 4) {
+            glyph
+            trailing
+        }
+        // Запись → расшифровка: сфера плавно растворяется, на её месте проявляется волна.
+        .animation(.easeInOut(duration: 0.25), value: showsSphere)
+    }
+
+    /// Сфера — только пока идёт запись с микрофона (или всегда, если волна выключена).
+    private var showsSphere: Bool {
+        if state.file != nil { return false }
+        if case .recording = state.phase { return true }
+        return !OverlayStyle.dictationUsesWave
+    }
+
+    @ViewBuilder
+    private var glyph: some View {
+        if state.file != nil {
+            RingGlyph(progress: fileProgress, mode: mode, ink: ink, calm: reduceMotion)
+                .frame(width: OverlayMetrics.cardHeight, height: OverlayMetrics.cardHeight)
+                .transition(.opacity)
+        } else if showsSphere {
             SphereOrb(level: level, mode: mode, ink: ink, calm: reduceMotion)
                 .frame(width: OverlayMetrics.cardHeight, height: OverlayMetrics.cardHeight)
-            trailing
+                .transition(.opacity)
+        } else {
+            WaveGlyph(samples: state.samples, mode: mode, ink: ink, calm: reduceMotion)
+                .frame(width: 64, height: OverlayMetrics.cardHeight)
+                .transition(.opacity)
         }
     }
 
@@ -463,28 +840,61 @@ private struct OrbCardContent: View {
         switch state.phase {
         case .recording:
             Text(verbatim: Self.format(state.elapsedSeconds))
-                .font(.system(size: 17, weight: .medium, design: .rounded))
+                .font(.system(size: 15, weight: .medium, design: .rounded))
                 .monospacedDigit()
                 .foregroundStyle(ink.opacity(0.85))
-                .frame(width: 56, alignment: .leading)
+                .frame(width: 46, alignment: .leading)
                 .transition(.opacity)
         case .processing(let progress):
-            Text("\(Int(progress * 100))%")
-                .font(.system(size: 17, weight: .medium, design: .rounded))
-                .monospacedDigit()
-                .foregroundStyle(ink.opacity(0.85))
-                .contentTransition(.numericText(value: progress))
+            VStack(alignment: .leading, spacing: 1) {
+                Text("\(Int(progress * 100))%")
+                    .font(.system(size: 15, weight: .medium, design: .rounded))
+                    .monospacedDigit()
+                    .foregroundStyle(ink.opacity(0.85))
+                    .contentTransition(.numericText(value: progress))
+                if let file = state.file, file.total > 1 {
+                    Text("\(file.index) из \(file.total)")
+                        .font(.system(size: 11))
+                        .monospacedDigit()
+                        .foregroundStyle(ink.opacity(0.55))
+                }
+            }
+            .frame(width: 56, alignment: .leading)
+            .transition(.opacity)
+        case .success:
+            if let file = state.file {
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("Готово")
+                        .font(.system(size: 15, weight: .medium, design: .rounded))
+                        .foregroundStyle(ink.opacity(0.85))
+                    if file.total > 1 {
+                        Text("\(file.total) из \(file.total)")
+                            .font(.system(size: 11))
+                            .monospacedDigit()
+                            .foregroundStyle(ink.opacity(0.55))
+                    }
+                }
                 .frame(width: 56, alignment: .leading)
-                .transition(.opacity)
+                .transition(Self.labelTransition)
+            }
         case .warning(let message):
-            Text(message)
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(ink.opacity(0.9))
-                .lineLimit(2)
-                .multilineTextAlignment(.leading)
-                .frame(width: 150, alignment: .leading)
-                .padding(.trailing, 10)
-                .transition(.opacity)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(message)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(ink.opacity(0.9))
+                    .lineLimit(state.detail == nil ? 2 : 1)
+                    .multilineTextAlignment(.leading)
+                if let detail = state.detail {
+                    Text(detail)
+                        .font(.system(size: 11))
+                        .foregroundStyle(ink.opacity(0.6))
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                }
+            }
+            .frame(width: 146, alignment: .leading)
+            .padding(.trailing, 10)
+            .transition(Self.labelTransition)
         default:
             EmptyView()
         }
@@ -704,118 +1114,247 @@ private struct SphereOrb: View {
     }
 }
 
-private struct ProcessingOverlayContent: View {
-    let progress: Double?
+// MARK: - Общие помощники для глифов
 
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+private func ovClamp(_ x: Double) -> Double { min(max(x, 0), 1) }
+private func ovEaseOut(_ x: Double) -> Double { 1 - pow(1 - x, 3) }
 
-    var body: some View {
-        HStack(spacing: 10) {
-            if let progress {
-                Text("\(Int(progress * 100))%")
-                    .font(.system(size: 13, weight: .semibold, design: .monospaced))
-                    .foregroundStyle(.secondary)
-                    .monospacedDigit()
-                    .contentTransition(.numericText(value: progress))
-                    .frame(height: 20)
+private let ovAmber = Color(hex: "#F59E0B")
 
-                Spacer(minLength: 12)
+/// Точка с плавным переходом цвета «чернила → янтарь» (mix 0...1).
+private func ovDot(_ ctx: inout GraphicsContext, x: Double, y: Double, r: Double,
+                   alpha: Double, mix: Double, ink: Color) {
+    guard alpha > 0.01, r > 0 else { return }
+    let path = Path(ellipseIn: CGRect(x: x - r, y: y - r, width: r * 2, height: r * 2))
+    if mix < 1 { ctx.fill(path, with: .color(ink.opacity(alpha * (1 - mix)))) }
+    if mix > 0 { ctx.fill(path, with: .color(ovAmber.opacity(alpha * mix))) }
+}
 
-                LiquidWaveform(isAnimated: !reduceMotion)
-                    .frame(width: 92, height: 18)
-            } else {
-                Spacer(minLength: 0)
-                LiquidWaveform(isAnimated: !reduceMotion)
-                    .frame(width: 128, height: 18)
-                Spacer(minLength: 0)
-            }
+// MARK: - Кольцо (обработка файла)
+
+/// Прогресс-кольцо из точек. Успех: кольцо схлопывается в точку-логотип. Ошибка: часть точек
+/// осыпается, остальные гаснут в янтарный (плюс пружинная тряска карточки снаружи).
+private final class RingDriver {
+    var progress = 0.0        // сглаженный: прогресс приходит кусками по чанкам
+    var doneU = 0.0           // 0...1 — схлопывание
+    var failU = 0.0           // 0...1 — осыпание
+    var failing = false
+    private var last = 0.0
+    private var doneStart: Double?
+    private var failStart: Double?
+
+    func step(target: Double, mode: OrbMode, now: Double) {
+        let dt = min(max(now - last, 0), 0.1)
+        last = now
+        failing = mode == .failed
+
+        switch mode {
+        case .failed: break
+        case .done: progress += (1 - progress) * (1 - exp(-16 * dt))
+        default: progress += (target - progress) * (1 - exp(-6 * dt))
+        }
+
+        if mode == .done, progress > 0.985 {
+            if doneStart == nil { doneStart = now }
+            doneU = min(1, (now - (doneStart ?? now)) / 0.9)
+        } else if mode != .done {
+            doneStart = nil
+            doneU = 0
+        }
+
+        if mode == .failed {
+            if failStart == nil { failStart = now }
+            failU = min(1, (now - (failStart ?? now)) / 1.0)
+        } else {
+            failStart = nil
+            failU = 0
         }
     }
 }
 
-/// Three flowing sine ribbons in the Siri palette — blue, violet, mint —
-/// drifting and breathing inside the pill. The amplitude envelope fades to
-/// zero at both ends, so the wave dissolves softly instead of being clipped.
-private struct LiquidWaveform: View {
-    let isAnimated: Bool
+private struct RingGlyph: View {
+    let progress: Double
+    let mode: OrbMode
+    let ink: Color
+    let calm: Bool
 
-    private let waves: [(hue: Double, phaseOffset: Double)] = [
-        (0.58, 0.0),
-        (0.76, 2.1),
-        (0.47, 4.2)
-    ]
+    @State private var born = Date()
+    @State private var driver = RingDriver()
 
     var body: some View {
-        TimelineView(.periodic(from: Date(), by: 1.0 / 30.0)) { timeline in
+        TimelineView(.animation(minimumInterval: 1.0 / 60.0)) { timeline in
             Canvas { context, size in
-                drawWaves(
-                    context: &context,
-                    size: size,
-                    time: isAnimated ? timeline.date.timeIntervalSince1970 : 0
-                )
+                let t = max(timeline.date.timeIntervalSince(born), 0)
+                driver.step(target: progress, mode: mode, now: t)
+                Self.draw(&context, size: size, t: t, d: driver, ink: ink, calm: calm)
             }
         }
+        .onAppear { born = Date() }
     }
 
-    private func drawWaves(context: inout GraphicsContext, size: CGSize, time: TimeInterval) {
-        guard size.width > 0, size.height > 0 else { return }
-        let midY = size.height / 2
-        let segments = max(12, Int(size.width / 3))
-        let stepX = size.width / CGFloat(segments)
+    private static func draw(_ ctx: inout GraphicsContext, size: CGSize, t: Double,
+                             d: RingDriver, ink: Color, calm: Bool) {
+        let n = 36
+        let sc = Double(min(size.width, size.height)) / 80
+        let radius = 22 * sc
+        let cx = Double(size.width) / 2, cy = Double(size.height) / 2
+        let head = d.failing ? Double(n) : d.progress * Double(n)
+        let u = max(d.doneU, d.failU)
+        let mix = d.failing ? ovEaseOut(ovClamp(d.failU * 1.5)) : 0
 
-        for (index, wave) in waves.enumerated() {
-            let speed = 2.1 + (Double(index) * 0.55)
-            let phase = (time * speed) + wave.phaseOffset
-            let amplitude = Double(midY) * (0.6 + (0.32 * sin((time * 1.1) + (Double(index) * 1.7))))
-            let frequency = 2.3 + (Double(index) * 0.5)
+        for i in 0..<n {
+            let fi = Double(i)
+            let angle = -Double.pi / 2 + fi / Double(n) * 2 * Double.pi
+            var rr = radius * (1 + (calm ? 0 : 0.025 * sin(t * 3 + fi * 0.6)))
+            var dotSize = 1.5 * sc
+            var alpha = 0.22
+            var dy = 0.0
 
-            var previous = CGPoint(x: 0, y: midY)
-            for segment in 1...segments {
-                let x = CGFloat(segment) * stepX
-                let progress = Double(x / size.width)
-                let envelope = sin(.pi * progress)
-                let y = midY + CGFloat(
-                    amplitude * envelope * sin((progress * frequency * 2 * .pi) - phase)
-                )
+            if fi < head { dotSize = 2.3 * sc; alpha = 1 }
+            if fi < head, fi > head - 2.5, !d.failing, d.doneU == 0 { dotSize = 3.1 * sc }
 
-                var path = Path()
-                path.move(to: previous)
-                path.addLine(to: CGPoint(x: x, y: y))
-                context.stroke(
-                    path,
-                    with: .color(Color(
-                        hue: wave.hue + (0.05 * sin(progress * .pi)),
-                        saturation: 0.72,
-                        brightness: 0.98
-                    ).opacity(0.3 + (0.6 * envelope))),
-                    style: StrokeStyle(lineWidth: 2.1, lineCap: .round)
-                )
-                previous = CGPoint(x: x, y: y)
+            if d.doneU > 0 {
+                let l = ovClamp((u - fi / Double(n) * 0.35) / 0.65)
+                rr = radius * (1 - ovEaseOut(l))
+                dotSize = 2.3 * sc * (1 - 0.35 * l)
+                alpha = 1 - ovClamp((l - 0.75) / 0.25)
+            } else if d.failing {
+                let falls = i >= 8 && i <= 15
+                dotSize = 2.3 * sc
+                alpha = falls ? 1 : 0.55
+                if falls, d.failU > 0 {
+                    let l = ovClamp((d.failU - 0.15 - Double(i - 8) * 0.03) / 0.6)
+                    dy = l * l * (26 + Double(i % 3) * 8) * sc
+                    alpha = 1 - l
+                }
             }
+            ovDot(&ctx, x: cx + cos(angle) * rr, y: cy + sin(angle) * rr + dy,
+                  r: dotSize, alpha: alpha, mix: mix, ink: ink)
+        }
+
+        // Точка-логотип: кольцо схлопнулось — она вырастает и один раз пульсирует.
+        if d.doneU > 0.5 {
+            let k = ovEaseOut(ovClamp((u - 0.55) / 0.4))
+            let pulse = u > 0.8 ? 0.25 * max(0, sin((u - 0.8) * 16)) : 0
+            ovDot(&ctx, x: cx, y: cy, r: 5.5 * sc * k * (1 + pulse), alpha: 1, mix: 0, ink: ink)
         }
     }
 }
 
-private struct SuccessCheckView: View {
-    @State private var appeared = false
+// MARK: - Волна (диктовка с микрофона)
+
+/// Ряд точек-волна. Запись: высота точек следует за голосом. Обработка: бегущий блик.
+/// Успех: волна выравнивается и сходится в точку-логотип. Ошибка: линия разрывается и провисает.
+private final class WaveDriver {
+    static let count = 19
+    var amps = [Double](repeating: 0, count: 19)
+    var think = 0.0
+    var doneU = 0.0
+    var failU = 0.0
+    private var last = 0.0
+    private var doneStart: Double?
+    private var failStart: Double?
+
+    func step(samples: [Float], mode: OrbMode, now: Double) {
+        let dt = min(max(now - last, 0), 0.1)
+        last = now
+        think += ((mode == .listening ? 0.0 : 1.0) - think) * (1 - exp(-5 * dt))
+
+        for i in 0..<Self.count {
+            var target = 0.0
+            if mode == .listening, samples.count > 1 {
+                let pos = Double(i) / Double(Self.count - 1) * Double(samples.count - 1)
+                let lo = Int(pos.rounded(.down))
+                let hi = min(lo + 1, samples.count - 1)
+                let f = pos - Double(lo)
+                let s = Double(samples[lo]) * (1 - f) + Double(samples[hi]) * f
+                target = min(max((s - 0.15) / 0.85, 0), 1)
+            }
+            amps[i] += (target - amps[i]) * (1 - exp(-(target > amps[i] ? 24.0 : 7.0) * dt))
+        }
+
+        if mode == .done {
+            if doneStart == nil { doneStart = now }
+            doneU = min(1, (now - (doneStart ?? now)) / 0.85)
+        } else {
+            doneStart = nil
+            doneU = 0
+        }
+
+        if mode == .failed {
+            if failStart == nil { failStart = now }
+            failU = min(1, (now - (failStart ?? now)) / 1.0)
+        } else {
+            failStart = nil
+            failU = 0
+        }
+    }
+}
+
+private struct WaveGlyph: View {
+    let samples: [Float]
+    let mode: OrbMode
+    let ink: Color
+    let calm: Bool
+
+    @State private var born = Date()
+    @State private var driver = WaveDriver()
 
     var body: some View {
-        ZStack {
-            Circle()
-                .stroke(Color(hex: "#34D399").opacity(0.48), lineWidth: 2)
-                .frame(width: 24, height: 24)
-            Image(systemName: "checkmark")
-                .font(.system(size: 13, weight: .bold))
-                .foregroundStyle(.primary)
-        }
-        .scaleEffect(appeared ? 1 : 0.2)
-        .offset(y: appeared ? 0 : -8)
-        .opacity(appeared ? 1 : 0)
-        .onAppear {
-            appeared = false
-            withAnimation(.spring(response: 0.38, dampingFraction: 0.54)) {
-                appeared = true
+        TimelineView(.animation(minimumInterval: 1.0 / 60.0)) { timeline in
+            Canvas { context, size in
+                let t = max(timeline.date.timeIntervalSince(born), 0)
+                driver.step(samples: samples, mode: mode, now: t)
+                Self.draw(&context, size: size, t: t, d: driver, ink: ink, calm: calm)
             }
+        }
+        .onAppear { born = Date() }
+    }
+
+    private static func draw(_ ctx: inout GraphicsContext, size: CGSize, t: Double,
+                             d: WaveDriver, ink: Color, calm: Bool) {
+        let n = WaveDriver.count
+        let mid = n / 2
+        let cx = Double(size.width) / 2, cy = Double(size.height) / 2
+        let span = Double(size.width) - 14
+        let step = span / Double(n - 1)
+        let tt = calm ? 0 : t
+        let think = d.think
+        let u = max(d.doneU, d.failU)
+        let flat = u > 0 ? 1 - ovEaseOut(ovClamp(u / 0.35)) : 1
+        let mix = d.failU > 0 ? ovEaseOut(ovClamp(d.failU * 1.5)) : 0
+        let sweep = (tt * 14).truncatingRemainder(dividingBy: Double(n + 8)) - 4
+
+        for i in 0..<n {
+            let fi = Double(i)
+            let env = 0.45 + 0.55 * sin(Double.pi * (fi + 0.5) / Double(n))
+            let live = 1.5 + 11.0 * d.amps[i]
+            let synth = 5.5 * (0.5 + 0.5 * sin(tt * 2.2 + fi * 0.5))
+            let amp = (live * (1 - think) + synth * think) * env * flat
+
+            var x = cx - span / 2 + step * fi
+            var y = cy + amp * sin(tt * 6.5 + fi * 0.8)
+            let glint = exp(-pow((fi - sweep) / 2.6, 2))
+            var alpha = (1 - 0.55 * think) + 0.55 * think * glint
+            var r = 1.3 * (1 + 0.35 * think * glint)
+
+            if d.doneU > 0 {
+                let s = ovEaseOut(ovClamp((d.doneU - 0.3) / 0.6))
+                x += (cx - x) * s
+                if i == mid {
+                    alpha = 1
+                    r = 1.3 + 2.3 * s
+                    if d.doneU > 0.8 { r *= 1 + 0.25 * max(0, sin((d.doneU - 0.8) * 16)) }
+                } else {
+                    alpha *= 1 - ovClamp((s - 0.8) / 0.2)
+                }
+            } else if d.failU > 0 {
+                let g = ovEaseOut(ovClamp((d.failU - 0.35) / 0.4))
+                x += (i < mid ? -1.0 : (i > mid ? 1.0 : 0.0)) * 2.6 * g
+                y += 2.4 * g * sin(fi / Double(n - 1) * Double.pi)
+                if i == mid { alpha *= 1 - g }
+            }
+            ovDot(&ctx, x: x, y: y, r: r, alpha: alpha, mix: mix, ink: ink)
         }
     }
 }

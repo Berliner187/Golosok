@@ -45,6 +45,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }
         hotKey.register()
+
+        // Закреплённый Space для островка создаём заранее, а не в момент первой записи.
+        OverlayPanelManager.shared.warmUp()
     }
 
     func applicationWillTerminate(_ notification: Notification) {

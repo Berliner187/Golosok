@@ -6,6 +6,7 @@ import SwiftUI
 //  0.15  точка «раскрывается» в сферу    (звук: разгон + воздух)
 //  1.15  сфера собрана — «замок»         (звук: глухой удар + аккорд D)
 //  1.30  буквы проявляются по очереди; сфера плавно поднимается
+//  2.20  внизу тихо проявляется подпись «Design & Development by Kozak»
 //  3.05  уход: лёгкое увеличение и растворение (звук: выдох)
 //  3.60  переход в приложение
 private enum SplashTime {
@@ -14,7 +15,11 @@ private enum SplashTime {
     static let bloomLength = 1.0
     static let hit = 1.15
     static let letters = 1.30
+    static let credit = 1.2
     static let exit = 3.05
+    /// Когда буквы и подпись полностью проявились: дальше их вход константа, SwiftUI не пересчитывает их кадры.
+    static let lettersDone = 2.3
+    static let creditDone = 2.05
     static let total = 3.6
 }
 
@@ -48,38 +53,26 @@ private enum SplashGeometry {
     }()
 }
 
-// MARK: - Сцена
+// MARK: - Статичные части сцены
 
-private struct SplashScene: View {
+/// Блюр на весь экран включаем только на выходе: радиус 0 всё равно гонял бы offscreen-проход каждый кадр.
+private struct ExitBlur: ViewModifier {
+    let radius: Double
+    @ViewBuilder func body(content: Content) -> some View {
+        if radius > 0.01 { content.blur(radius: radius) } else { content }
+    }
+}
+
+private struct SplashLetters: View {
     let t: Double
-
-    @Environment(\.colorScheme) private var scheme
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
     private let letters = Array("GOLOSOK")
-    private var ink: Color { scheme == .dark ? .white : Color(white: 0.04) }
 
     var body: some View {
-        let lift = easeInOut(clamp01((t - SplashTime.hit) / 1.0))
-        let exit = clamp01((t - SplashTime.exit) / 0.5)
-
-        ZStack {
-            Canvas { context, size in
-                Self.drawSphere(&context, size: size, t: t, ink: ink, calm: reduceMotion)
+        HStack(spacing: 58) {
+            ForEach(0..<letters.count, id: \.self) { i in
+                letter(i)
             }
-            .frame(width: 340, height: 340)
-            .offset(y: -62 * lift)
-
-            HStack(spacing: 58) {          // интервал как в исходном «Г О Л О С О К» (≈0.9 em)
-                ForEach(0..<letters.count, id: \.self) { i in
-                    letter(i)
-                }
-            }
-            .offset(y: 116)
         }
-        .scaleEffect(1 + 0.04 * exit * exit)
-        .blur(radius: 8 * exit)
-        .opacity(1 - exit)
     }
 
     private func letter(_ i: Int) -> some View {
@@ -91,6 +84,59 @@ private struct SplashScene: View {
             .opacity(e)
             .blur(radius: (1 - e) * 14)
             .offset(y: (1 - e) * 18)
+    }
+}
+
+/// Подпись автора: тонкая, приглушённая, с широким трекингом; имя — чуть ярче остального текста.
+private struct SplashCredit: View {
+    let t: Double
+
+    var body: some View {
+        let e = easeOut(clamp01((t - SplashTime.credit) / 0.8))
+        return (Text("Design & Development by ").foregroundColor(.uiMidGray) + Text("Kozak").foregroundColor(.uiInk))
+            .font(Font.custom("HelveticaNeue-Light", size: 11))
+            .tracking(1.2)
+            .opacity(e * 0.9)
+            .offset(y: (1 - e) * 6)
+            .padding(.bottom, 34)
+    }
+}
+
+// MARK: - Сцена
+
+private struct SplashScene: View {
+    let t: Double
+
+    @Environment(\.colorScheme) private var scheme
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    private var ink: Color { scheme == .dark ? .white : Color(white: 0.04) }
+
+    var body: some View {
+        let lift = easeInOut(clamp01((t - SplashTime.hit) / 1.0))
+        let exit = clamp01((t - SplashTime.exit) / 0.5)
+
+        let sphereInk = ink
+        let calm = reduceMotion
+        let now = t
+
+        ZStack {
+            // rendersAsynchronously: отрисовка 1100 точек идёт не на главном потоке.
+            // Замыкание чистое: только захваченные значения и статическая функция.
+            Canvas(rendersAsynchronously: true) { context, size in
+                Self.drawSphere(&context, size: size, t: now, ink: sphereInk, calm: calm)
+            }
+            .frame(width: 340, height: 340)
+            .offset(y: -62 * lift)
+
+            SplashLetters(t: min(t, SplashTime.lettersDone))     // интервал как в исходном «Г О Л О С О К»
+                .offset(y: 116)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .overlay(alignment: .bottom) { SplashCredit(t: min(t, SplashTime.creditDone)) }
+        .scaleEffect(1 + 0.04 * exit * exit)
+        .modifier(ExitBlur(radius: 8 * exit))
+        .opacity(1 - exit)
     }
 
     /// Накопленный угол вращения: плавный разгон до удара, затем быстрое торможение.

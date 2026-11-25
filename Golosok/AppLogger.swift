@@ -121,39 +121,43 @@ final class AppLogger: ObservableObject {
 
     private func appendLine(_ line: Data) {
         guard let fileURL else { return }
+        var payload = line
+        payload.append(0x0A)
         do {
-            var handle = fileHandle
-            if handle == nil {
+            if fileHandle == nil {
                 if !FileManager.default.fileExists(atPath: fileURL.path) {
                     FileManager.default.createFile(atPath: fileURL.path, contents: nil, attributes: nil)
                 }
                 let h = try FileHandle(forWritingTo: fileURL)
-                h.seekToEndOfFile()
-                handle = h
+                try h.seekToEnd()
                 fileHandle = h
             }
-            let size = (try? FileManager.default.attributesOfItem(atPath: fileURL.path)[.size] as? Int) ?? 0
-            if size > maxFileBytes { resetAndReopen() }
-            handle?.seekToEndOfFile()
-            handle?.write(line)
-            handle?.write(Data([0x0A]))
+            // Размер берём из самого handle — без stat на каждую строку.
+            if let size = try fileHandle?.offset(), size > UInt64(maxFileBytes) { resetAndReopen() }
+            // Берём handle ПОСЛЕ возможного сброса: раньше писали в уже закрытый
+            // старый handle, и это било NSException (краш при достижении 2 МБ).
+            guard let handle = fileHandle else { return }
+            try handle.seekToEnd()
+            try handle.write(contentsOf: payload)
         } catch {
-            try? (line + Data([0x0A])).write(to: fileURL, options: .atomic)
+            // Не перезаписываем весь лог одной строкой — просто переоткроем файл при следующей записи.
+            try? fileHandle?.close()
+            fileHandle = nil
         }
     }
 
     private func resetAndReopen() {
-        fileHandle?.closeFile()
+        try? fileHandle?.close()
         fileHandle = nil
         guard let fileURL else { return }
         try? FileManager.default.removeItem(at: fileURL)
         FileManager.default.createFile(atPath: fileURL.path, contents: nil, attributes: nil)
         fileHandle = try? FileHandle(forWritingTo: fileURL)
-        fileHandle?.seekToEndOfFile()
+        try? fileHandle?.seekToEnd()
     }
 
     private func resetFile() {
-        fileHandle?.closeFile()
+        try? fileHandle?.close()
         fileHandle = nil
         guard let fileURL else { return }
         try? FileManager.default.removeItem(at: fileURL)
